@@ -2,23 +2,55 @@
 
 import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, Ring, Sphere } from '@react-three/drei';
+import { Float, Ring, Sphere, Line } from '@react-three/drei';
 import * as THREE from 'three';
 
-function CoreOrb() {
+const AGENT_NAMES = [
+  'Research',
+  'Gmail',
+  'Calendar',
+  'Finance',
+  'Memory',
+  'Learning',
+  'Business',
+  'Drive'
+];
+
+function OrbitingAgentNode({ angle, radius, color, label }: { angle: number; radius: number; color: string; label: string }) {
+  const nodeRef = useRef<THREE.Group>(null!);
+
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime() * 0.3 + angle;
+    const x = Math.cos(t) * radius;
+    const z = Math.sin(t) * radius;
+    const y = Math.sin(t * 2) * 0.35;
+    if (nodeRef.current) {
+      nodeRef.current.position.set(x, y, z);
+    }
+  });
+
+  return (
+    <group ref={nodeRef}>
+      <Sphere args={[0.09, 16, 16]}>
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} />
+      </Sphere>
+    </group>
+  );
+}
+
+function CoreScene() {
   const meshRef = useRef<THREE.Mesh>(null!);
   const outerRingRef = useRef<THREE.Group>(null!);
   const innerRingRef = useRef<THREE.Group>(null!);
   const particlesRef = useRef<THREE.Points>(null!);
 
-  // Particle positions
-  const particleCount = 180;
+  const particleCount = 220;
   const positions = useMemo(() => {
     const pos = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i++) {
       const theta = THREE.MathUtils.randFloat(0, Math.PI * 2);
       const phi = THREE.MathUtils.randFloatSpread(Math.PI);
-      const distance = THREE.MathUtils.randFloat(1.6, 2.8);
+      const distance = THREE.MathUtils.randFloat(1.8, 3.2);
 
       pos[i * 3] = distance * Math.sin(theta) * Math.cos(phi);
       pos[i * 3 + 1] = distance * Math.sin(theta) * Math.sin(phi);
@@ -29,53 +61,68 @@ function CoreOrb() {
 
   useFrame((state, delta) => {
     if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.4;
-      meshRef.current.rotation.x += delta * 0.2;
+      meshRef.current.rotation.y += delta * 0.35;
+      meshRef.current.rotation.x += delta * 0.15;
     }
     if (outerRingRef.current) {
-      outerRingRef.current.rotation.z += delta * 0.3;
-      outerRingRef.current.rotation.x += delta * 0.15;
+      outerRingRef.current.rotation.z += delta * 0.25;
+      outerRingRef.current.rotation.x += delta * 0.1;
     }
     if (innerRingRef.current) {
-      innerRingRef.current.rotation.y -= delta * 0.5;
+      innerRingRef.current.rotation.y -= delta * 0.4;
       innerRingRef.current.rotation.z -= delta * 0.2;
     }
     if (particlesRef.current) {
-      particlesRef.current.rotation.y += delta * 0.1;
+      particlesRef.current.rotation.y += delta * 0.08;
     }
   });
 
   return (
     <group>
       {/* Central Floating AI Core */}
-      <Float speed={2.5} rotationIntensity={0.6} floatIntensity={0.8}>
+      <Float speed={2} rotationIntensity={0.5} floatIntensity={0.7}>
         <Sphere ref={meshRef} args={[0.85, 32, 32]}>
           <meshStandardMaterial
             color="#00f2fe"
-            emissive="#4facfe"
-            emissiveIntensity={0.8}
-            roughness={0.15}
-            metalness={0.9}
+            emissive="#00f2fe"
+            emissiveIntensity={0.65}
+            roughness={0.2}
+            metalness={0.8}
             wireframe={true}
           />
         </Sphere>
       </Float>
 
-      {/* Inner Holographic Ring */}
+      {/* Holographic Ring 1 */}
       <group ref={innerRingRef}>
-        <Ring args={[1.2, 1.25, 48]}>
-          <meshBasicMaterial color="#a18cd1" side={THREE.DoubleSide} transparent opacity={0.6} wireframe />
+        <Ring args={[1.25, 1.28, 48]}>
+          <meshBasicMaterial color="#8b5cf6" side={THREE.DoubleSide} transparent opacity={0.6} wireframe />
         </Ring>
       </group>
 
-      {/* Outer Tactical Orbital Ring */}
+      {/* Holographic Ring 2 */}
       <group ref={outerRingRef}>
-        <Ring args={[1.7, 1.74, 64]}>
+        <Ring args={[1.75, 1.78, 64]}>
           <meshBasicMaterial color="#00f2fe" side={THREE.DoubleSide} transparent opacity={0.5} wireframe />
         </Ring>
       </group>
 
-      {/* Ambient Neural Particles */}
+      {/* Orbiting Agent Nodes */}
+      {AGENT_NAMES.map((name, i) => {
+        const angle = (i / AGENT_NAMES.length) * Math.PI * 2;
+        const color = i % 2 === 0 ? '#00f2fe' : '#a78bfa';
+        return (
+          <OrbitingAgentNode
+            key={name}
+            angle={angle}
+            radius={2.1}
+            color={color}
+            label={name}
+          />
+        );
+      })}
+
+      {/* Ambient Neural Particle Cloud */}
       <points ref={particlesRef}>
         <bufferGeometry>
           <bufferAttribute
@@ -89,7 +136,7 @@ function CoreOrb() {
           size={0.035}
           color="#00f2fe"
           transparent
-          opacity={0.7}
+          opacity={0.65}
           blending={THREE.AdditiveBlending}
         />
       </points>
@@ -101,15 +148,14 @@ export default function MentraCore3D({ className = 'h-[360px] w-full' }: { class
   return (
     <div className={`relative ${className} flex items-center justify-center overflow-hidden`}>
       <Canvas
-        camera={{ position: [0, 0, 4.2], fov: 45 }}
+        camera={{ position: [0, 0, 4.5], fov: 45 }}
         gl={{ antialias: true, alpha: true }}
       >
-        <ambientLight intensity={0.4} />
-        <pointLight position={[10, 10, 10]} intensity={1.2} color="#00f2fe" />
-        <pointLight position={[-10, -10, -10]} intensity={0.8} color="#8a2be2" />
-        <CoreOrb />
+        <ambientLight intensity={0.5} />
+        <pointLight position={[10, 10, 10]} intensity={1.4} color="#00f2fe" />
+        <pointLight position={[-10, -10, -10]} intensity={0.9} color="#8b5cf6" />
+        <CoreScene />
       </Canvas>
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#090a0f] via-transparent to-transparent opacity-80" />
     </div>
   );
 }

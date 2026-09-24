@@ -9,47 +9,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        dark: {
-          950: '#090a0f',
-          900: '#0f111a',
-          850: '#141824',
-          800: '#1c2233',
-          700: '#2a334d',
-          600: '#3d4b6e',
-          500: '#586b99',
-          400: '#7c8eb8',
-          300: '#a6b5d9',
-          200: '#d0daf0',
-          100: '#edf2fa',
-        },
-        brand: {
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          accent: '#ec4899',
-          cyan: '#06b6d4',
-          emerald: '#10b981',
+        background: '#07090e',
+        foreground: '#f8fafc',
+        mentra: {
+          deep: '#07090e',
+          graphite: '#0d1017',
+          charcoal: '#141824',
+          cyan: '#00f2fe',
+          'cyan-lit': '#38bdf8',
+          violet: '#8b5cf6',
+          'violet-lit': '#a78bfa',
           amber: '#f59e0b',
-        },
+          emerald: '#10b981',
+          rose: '#f43f5e'
+        }
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+      fontFamily: {
+        display: ['Inter Tight', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       animation: {
-        'fade-in': 'fadeIn 0.3s ease-out forwards',
-        'pulse-glow': 'pulseGlow 2s infinite',
-      },
-      keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0', transform: 'translateY(6px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        pulseGlow: {
-          '0%, 100%': { opacity: '0.6', transform: 'scale(1)' },
-          '50%': { opacity: '1', transform: 'scale(1.05)' },
-        },
-      },
+        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'spin-slow': 'spin 12s linear infinite',
+      }
     },
   },
   plugins: [],
