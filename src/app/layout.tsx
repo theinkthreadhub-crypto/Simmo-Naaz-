@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
 
 export const metadata: Metadata = {
-  title: 'MENTRA — AI Super-Platform',
-  description: 'AI Super-Platform combining Mind & Wellness, Career Mentorship, Fashion Design Studio, and E-Commerce.',
+  title: 'MENTRA — Personal AI Operating System',
+  description: 'Futuristic Personal AI Operating System, Life RPG & AI Agent Command Center.',
 };
 
 export default function RootLayout({
@@ -14,12 +14,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen flex flex-col bg-dark-950 text-dark-100 selection:bg-brand-500 selection:text-white">
+    <html lang="en">
+      <head>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="preload" as="video" href="/hero-loop.mp4" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Instrument+Serif:ital@1&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="min-h-screen bg-[#120400] text-white antialiased">
+        <a className="skip-link" href="#main">Skip to content</a>
         <Navbar />
-        <main className="flex-1">
+        <div id="main">
           {children}
-        </main>
+        </div>
         <Footer />
       </body>
     </html>
