@@ -21,17 +21,18 @@ interface AuthContextType {
   completeOnboarding: (displayName: string, primaryGoal: string, priorities: string[]) => Promise<boolean>;
   refreshUserData: () => Promise<void>;
   setDemoUser: (name?: string) => void;
+  isDemoAllowed: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Helper to strictly gate demo mode to explicit dev environments
-const isDevDemoAllowed = () => {
-  return process.env.NODE_ENV !== 'production' && 
-    (process.env.NEXT_PUBLIC_MENTRA_DEMO_MODE === 'true' || process.env.MENTRA_DEMO_MODE === 'true');
-};
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({
+  children,
+  allowDemo = false,
+}: {
+  children: React.ReactNode;
+  allowDemo?: boolean;
+}) {
   const [user, setUser] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [progress, setProgress] = useState<PlayerProgress | null>(null);
@@ -66,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initAuth = async () => {
       try {
         // Check localStorage for offline demo session only if explicitly allowed in development
-        if (isDevDemoAllowed()) {
+        if (allowDemo) {
           const savedDemo = localStorage.getItem('mentra_demo_session');
           if (savedDemo) {
             const parsed = JSON.parse(savedDemo);
@@ -101,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session.user);
         await loadUserData(session.user.id);
       } else {
-        if (!isDevDemoAllowed() || !localStorage.getItem('mentra_demo_session')) {
+        if (!allowDemo || !localStorage.getItem('mentra_demo_session')) {
           setUser(null);
           setProfile(null);
           setProgress(null);
@@ -121,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        if (isDevDemoAllowed() && (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key'))) {
+        if (allowDemo && (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key'))) {
           setDemoUser(email.split('@')[0]);
           setIsLoading(false);
           return {};
@@ -136,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return {};
     } catch (err: any) {
-      if (isDevDemoAllowed()) {
+      if (allowDemo) {
         setDemoUser(email.split('@')[0]);
         setIsLoading(false);
         return {};
@@ -157,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
       if (error) {
-        if (isDevDemoAllowed() && (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key'))) {
+        if (allowDemo && (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key'))) {
           setDemoUser(displayName || email.split('@')[0]);
           setIsLoading(false);
           return {};
@@ -173,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return {};
     } catch (err: any) {
-      if (isDevDemoAllowed()) {
+      if (allowDemo) {
         setDemoUser(displayName || email.split('@')[0]);
         setIsLoading(false);
         return {};
@@ -192,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
       if (error) {
-        if (isDevDemoAllowed()) {
+        if (allowDemo) {
           setDemoUser('Google Operator');
           return {};
         }
@@ -200,7 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return {};
     } catch (err: any) {
-      if (isDevDemoAllowed()) {
+      if (allowDemo) {
         setDemoUser('Google Operator');
         return {};
       }
@@ -209,7 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setDemoUser = (name = 'Operator Naaz') => {
-    if (!isDevDemoAllowed()) {
+    if (!allowDemo) {
       console.warn('[AUTH] Demo user bypass rejected: production mode active.');
       return;
     }
@@ -348,7 +349,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         completeOnboarding,
         refreshUserData,
-        setDemoUser
+        setDemoUser,
+        isDemoAllowed: allowDemo
       }}
     >
       {children}
