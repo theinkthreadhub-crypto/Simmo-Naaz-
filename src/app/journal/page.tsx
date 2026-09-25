@@ -1,208 +1,285 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BookOpen, Sparkles, Send, Calendar, Check, Brain, Tag, Smile, Meh, Frown, Zap, CheckSquare, ArrowRight } from 'lucide-react';
 import { useMentraStore } from '@/lib/store/mentraStore';
-import HUDOverlay from '@/components/mentra/HUDOverlay';
-import CommandBar from '@/components/mentra/CommandBar';
-import SidebarNav from '@/components/navigation/SidebarNav';
-import MobileNav from '@/components/navigation/MobileNav';
-import { BookOpen, Sparkles, Calendar, CheckCircle2 } from 'lucide-react';
+import { JournalEntry } from '@/types/mentra';
 
 export default function JournalPage() {
-  const journalEntries = useMentraStore((state) => state.journalEntries);
-  const addJournalEntry = useMentraStore((state) => state.addJournalEntry);
-
-  const [rawContent, setRawContent] = useState('');
-  const [win, setWin] = useState('');
-  const [lesson, setLesson] = useState('');
-  const [decision, setDecision] = useState('');
-  const [mood, setMood] = useState<'PEAK' | 'PRODUCTIVE' | 'NEUTRAL' | 'EXHAUSTED' | 'REFLECTIVE'>('PEAK');
+  const { journalEntries, addJournalEntry } = useMentraStore();
+  const [content, setContent] = useState('');
+  const [wins, setWins] = useState('');
+  const [problems, setProblems] = useState('');
+  const [decisions, setDecisions] = useState('');
+  const [ideas, setIdeas] = useState('');
+  const [lessons, setLessons] = useState('');
+  const [tomorrowActions, setTomorrowActions] = useState('');
+  const [mood, setMood] = useState<JournalEntry['mood']>('PEAK');
+  const [convertToMemories, setConvertToMemories] = useState(true);
+  const [convertActionsToQuests, setConvertActionsToQuests] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
-  const handleSaveJournal = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rawContent.trim()) return;
+    if (!content.trim()) return;
 
-    addJournalEntry({
-      rawContent,
-      summary: rawContent.slice(0, 120) + '...',
-      wins: win ? [win] : ['Completed daily deep focus cycles'],
-      problems: [],
-      decisions: decision ? [decision] : [],
-      lessons: lesson ? [lesson] : [],
-      tomorrowActions: ['Execute morning priority mission'],
-      mood,
-      tags: ['DailyLog', 'Reflection', 'Discipline']
-    });
+    setIsSubmitting(true);
+    try {
+      const winsArray = wins ? wins.split('\n').map(s => s.trim()).filter(Boolean) : ['Executed daily focus protocol'];
+      const problemsArray = problems ? problems.split('\n').map(s => s.trim()).filter(Boolean) : [];
+      const decisionsArray = decisions ? decisions.split('\n').map(s => s.trim()).filter(Boolean) : [];
+      const ideasArray = ideas ? ideas.split('\n').map(s => s.trim()).filter(Boolean) : [];
+      const lessonsArray = lessons ? lessons.split('\n').map(s => s.trim()).filter(Boolean) : ['Consistent reflection preserves clarity'];
+      const actionsArray = tomorrowActions ? tomorrowActions.split('\n').map(s => s.trim()).filter(Boolean) : ['Review weekly agent throughput'];
 
-    setRawContent('');
-    setWin('');
-    setLesson('');
-    setDecision('');
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+      const res = await fetch('/api/journal/entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          mood,
+          wins: winsArray,
+          problems: problemsArray,
+          decisions: decisionsArray,
+          ideas: ideasArray,
+          lessons: lessonsArray,
+          tomorrowActions: actionsArray,
+          tags: ['DailyLog', 'Reflection'],
+          convertToMemories,
+          convertActionsToQuests
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.entry) {
+        addJournalEntry(data.entry);
+      } else {
+        // Local fallback
+        addJournalEntry({
+          rawContent: content,
+          summary: content.slice(0, 120) + (content.length > 120 ? '...' : ''),
+          wins: winsArray,
+          problems: problemsArray,
+          decisions: decisionsArray,
+          ideas: ideasArray,
+          lessons: lessonsArray,
+          tomorrowActions: actionsArray,
+          mood,
+          tags: ['DailyLog', 'Reflection']
+        });
+      }
+
+      setContent('');
+      setWins('');
+      setProblems('');
+      setDecisions('');
+      setIdeas('');
+      setLessons('');
+      setTomorrowActions('');
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 4000);
+    } catch (err) {
+      console.error('Failed to submit journal:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col pb-16 lg:pb-0">
-      <HUDOverlay />
-
-      <div className="flex flex-1">
-        <SidebarNav />
-
-        <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8 flex-1 w-full space-y-6">
-          <div className="border-b border-white/10 pb-6">
-            <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs uppercase tracking-widest font-semibold mb-1">
-              <BookOpen className="w-4 h-4" /> MENTRA NEURAL JOURNAL
-            </div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">Daily Reflection & Synthesis</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Log raw thoughts or voice memos. MENTRA synthesizes lessons, extracts permanent memory anchors, and rewards +60 XP.
-            </p>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 animate-in fade-in duration-300">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase tracking-widest">
+            <BookOpen className="w-4 h-4 text-mentra-orange" />
+            <span>DAILY NEURAL REFLECTION</span>
           </div>
+          <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white mt-1">
+            Operator Daily Journal
+          </h1>
+        </div>
 
-          <CommandBar />
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-7 space-y-4">
-              <form
-                onSubmit={handleSaveJournal}
-                className="p-6 sm:p-8 rounded-3xl bg-[#0d1017]/90 border border-white/10 backdrop-blur-xl space-y-5 shadow-2xl"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono text-white font-semibold flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-cyan-400" /> NEW REFLECTION ENTRY
-                  </span>
-                  <span className="text-xs font-mono text-slate-500">
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
-                  </span>
-                </div>
-
-                <div>
-                  <label className="text-xs font-mono text-slate-400 block mb-1.5">STATE OF MIND / MOOD</label>
-                  <div className="flex flex-wrap gap-2">
-                    {(['PEAK', 'PRODUCTIVE', 'NEUTRAL', 'REFLECTIVE', 'EXHAUSTED'] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setMood(m)}
-                        className={`text-xs font-mono px-3.5 py-1.5 rounded-xl border transition ${
-                          mood === m
-                            ? 'bg-cyan-950 text-cyan-300 border-cyan-500/60 shadow-sm shadow-cyan-500/20'
-                            : 'bg-slate-900 text-slate-400 border-white/5 hover:text-white'
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-mono text-slate-400 block mb-1.5">DAILY RAW TELEMETRY</label>
-                  <textarea
-                    rows={4}
-                    value={rawContent}
-                    onChange={(e) => setRawContent(e.target.value)}
-                    placeholder="What happened today? What was built? Where did energy flow? What felt high leverage?"
-                    required
-                    className="w-full p-4 rounded-2xl bg-slate-900/80 border border-white/10 text-white placeholder-slate-500 text-sm focus:border-cyan-400 focus:outline-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
-                  <div>
-                    <label className="text-emerald-400 block mb-1">Key Win</label>
-                    <input
-                      type="text"
-                      value={win}
-                      onChange={(e) => setWin(e.target.value)}
-                      placeholder="e.g. Scaled ROAS to 4.2x"
-                      className="w-full p-3 rounded-xl bg-slate-900/80 border border-white/10 text-white focus:border-emerald-400 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-amber-400 block mb-1">Key Lesson</label>
-                    <input
-                      type="text"
-                      value={lesson}
-                      onChange={(e) => setLesson(e.target.value)}
-                      placeholder="e.g. Direct calls save 3 days"
-                      className="w-full p-3 rounded-xl bg-slate-900/80 border border-white/10 text-white focus:border-amber-400 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-violet-400 block mb-1 text-xs font-mono">Strategic Decision Made</label>
-                  <input
-                    type="text"
-                    value={decision}
-                    onChange={(e) => setDecision(e.target.value)}
-                    placeholder="e.g. Set minimum supplier quality threshold at 280 GSM"
-                    className="w-full p-3 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs font-mono focus:border-violet-400 focus:outline-none"
-                  />
-                </div>
-
-                <div className="pt-2 flex items-center justify-between">
-                  <span className="text-xs font-mono text-cyan-400">+60 Discipline XP on Save</span>
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-mono font-bold text-xs shadow-md shadow-cyan-500/20 hover:opacity-90 transition flex items-center gap-1.5"
-                  >
-                    <Sparkles className="w-4 h-4" /> Save Journal Entry
-                  </button>
-                </div>
-
-                {isSaved && (
-                  <div className="p-3.5 rounded-2xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 text-xs font-mono flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    Journal logged and synthesized into neural memory vault (+60 XP)!
-                  </div>
-                )}
-              </form>
-            </div>
-
-            <div className="lg:col-span-5 space-y-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2 font-mono">
-                <Calendar className="w-4 h-4 text-cyan-400" /> Journal Vault Records
-              </h3>
-
-              <div className="space-y-4">
-                {journalEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="p-6 rounded-3xl bg-[#0d1017]/90 border border-white/10 backdrop-blur-xl space-y-3 shadow-2xl"
-                  >
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-400">{entry.date}</span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/40">
-                        {entry.mood}
-                      </span>
-                    </div>
-
-                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-sans">{entry.rawContent}</p>
-
-                    {entry.wins.length > 0 && (
-                      <div className="text-xs font-mono text-emerald-400">
-                        ✓ Win: {entry.wins.join(', ')}
-                      </div>
-                    )}
-
-                    {entry.lessons.length > 0 && (
-                      <div className="text-xs font-mono text-amber-400">
-                        ★ Lesson: {entry.lessons.join(', ')}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </main>
+        <div className="text-xs font-mono text-white/50">
+          LOG ENTRIES: <strong className="text-mentra-amber">{journalEntries.length}</strong>
+        </div>
       </div>
 
-      <MobileNav />
+      {/* Writing Pad */}
+      <div className="p-6 sm:p-8 rounded-3xl glass-panel-orange bg-black/70 border-white/15 space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* Mood Selector */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/10">
+            <span className="text-xs font-mono text-white/50 uppercase">ENERGY VALENCE / MOOD</span>
+            <div className="flex items-center gap-2">
+              {(['PEAK', 'PRODUCTIVE', 'NEUTRAL', 'EXHAUSTED', 'REFLECTIVE'] as const).map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMood(m)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-mono transition-all ${
+                    mood === m
+                      ? 'bg-mentra-orange text-white shadow-[0_0_10px_#ff4a00]'
+                      : 'bg-white/5 text-white/60 hover:text-white'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Raw Stream of Consciousness */}
+          <div>
+            <label className="block text-[11px] font-mono text-white/50 mb-2">
+              STREAM OF CONSCIOUSNESS // WHAT HAPPENED TODAY?
+            </label>
+            <textarea
+              rows={4}
+              required
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Reflect on key wins, bottlenecks, strategic decisions, and emotional focus..."
+              className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-2xl p-4 text-sm text-white placeholder-white/30 focus:outline-none transition-all resize-none leading-relaxed font-sans"
+            />
+          </div>
+
+          {/* Structured Prompts Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-mono text-emerald-400 mb-1">
+                TODAY&apos;S WINS (1 PER LINE)
+              </label>
+              <textarea
+                rows={2}
+                value={wins}
+                onChange={(e) => setWins(e.target.value)}
+                placeholder="e.g. Completed 60s speech practice with zero filler words..."
+                className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs text-white placeholder-white/30 focus:outline-none resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-rose-400 mb-1">
+                BOTTLENECKS / PROBLEMS (1 PER LINE)
+              </label>
+              <textarea
+                rows={2}
+                value={problems}
+                onChange={(e) => setProblems(e.target.value)}
+                placeholder="e.g. Speaking rate rushed above 160 WPM under adrenaline..."
+                className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs text-white placeholder-white/30 focus:outline-none resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-mentra-amber mb-1">
+                STRATEGIC DECISIONS (1 PER LINE)
+              </label>
+              <textarea
+                rows={2}
+                value={decisions}
+                onChange={(e) => setDecisions(e.target.value)}
+                placeholder="e.g. Will use PREP framework on tomorrow's team sync..."
+                className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs text-white placeholder-white/30 focus:outline-none resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-cyan-400 mb-1">
+                TOMORROW&apos;S PRIORITY ACTIONS (1 PER LINE)
+              </label>
+              <textarea
+                rows={2}
+                value={tomorrowActions}
+                onChange={(e) => setTomorrowActions(e.target.value)}
+                placeholder="e.g. Complete 5-minute live rehearsal presentation..."
+                className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs text-white placeholder-white/30 focus:outline-none resize-none"
+              />
+            </div>
+          </div>
+
+          {/* Action Conversions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 gap-3 text-xs font-mono">
+            <label className="flex items-center gap-2 cursor-pointer text-white/80">
+              <input
+                type="checkbox"
+                checked={convertToMemories}
+                onChange={(e) => setConvertToMemories(e.target.checked)}
+                className="rounded accent-mentra-orange w-4 h-4"
+              />
+              <span>Convert Decisions & Ideas → Memory Vault</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer text-white/80">
+              <input
+                type="checkbox"
+                checked={convertActionsToQuests}
+                onChange={(e) => setConvertActionsToQuests(e.target.checked)}
+                className="rounded accent-mentra-orange w-4 h-4"
+              />
+              <span>Convert Tomorrow Actions → Daily Quests</span>
+            </label>
+          </div>
+
+          {/* Submit */}
+          <div className="flex items-center justify-between pt-2">
+            <div className="text-xs font-mono text-white/40">
+              AWARD: <strong className="text-mentra-amber">+60 XP</strong> &amp; <strong className="text-emerald-400">Discipline +2</strong>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !content.trim()}
+              className="px-8 py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 active:scale-98 transition-all flex items-center gap-2 disabled:opacity-40"
+            >
+              <Send className="w-4 h-4" />
+              <span>{isSubmitting ? 'LOGGING...' : 'SAVE JOURNAL & CLAIM XP'}</span>
+            </button>
+          </div>
+
+          {isSaved && (
+            <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-mono text-center animate-in fade-in">
+              ✓ Reflection securely committed to neural database! XP awarded.
+            </div>
+          )}
+        </form>
+      </div>
+
+      {/* Recent Journal History */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-mono text-white/50 uppercase tracking-widest">
+          RECENT JOURNAL CHRONICLE
+        </h3>
+
+        <div className="space-y-4">
+          {journalEntries.map(entry => (
+            <div key={entry.id} className="p-6 rounded-3xl glass-panel bg-black/60 border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-mentra-amber font-bold">
+                  {entry.entry_date || entry.date}
+                </span>
+                <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/60">
+                  MOOD: {entry.mood}
+                </span>
+              </div>
+
+              <p className="text-sm text-white/90 font-sans leading-relaxed">
+                {entry.rawContent || entry.content}
+              </p>
+
+              {entry.wins && entry.wins.length > 0 && (
+                <div className="text-xs font-mono text-emerald-400">
+                  Wins: {entry.wins.join(' • ')}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }

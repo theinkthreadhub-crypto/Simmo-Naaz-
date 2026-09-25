@@ -1,204 +1,225 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useMentraStore } from '@/lib/store/mentraStore';
-import HUDOverlay from '@/components/mentra/HUDOverlay';
-import CommandBar from '@/components/mentra/CommandBar';
-import SidebarNav from '@/components/navigation/SidebarNav';
-import MobileNav from '@/components/navigation/MobileNav';
+import { HardDrive, Search, Plus, Tag, Sparkles, Filter, X } from 'lucide-react';
 import MemoryCard from '@/components/mentra/MemoryCard';
-import { MemoryType } from '@/types/mentra';
-import { Brain, Search, Plus } from 'lucide-react';
+import { useMentraStore } from '@/lib/store/mentraStore';
+import { MemoryItem, MemoryType } from '@/types/mentra';
 
 export default function MemoryPage() {
-  const memories = useMentraStore((state) => state.memories);
-  const addMemory = useMentraStore((state) => state.addMemory);
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState<string>('ALL');
-  const [showAddModal, setShowAddModal] = useState(false);
-
+  const { memories, addMemory } = useMentraStore();
+  const [search, setSearch] = useState('');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [type, setType] = useState<MemoryType>('DECISION');
-  const [source, setSource] = useState('Manual Entry');
+  const [importance, setImportance] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('HIGH');
   const [tagsInput, setTagsInput] = useState('');
 
-  const filteredMemories = memories.filter((mem) => {
-    if (selectedType !== 'ALL' && mem.type !== selectedType) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        mem.title.toLowerCase().includes(q) ||
-        mem.content.toLowerCase().includes(q) ||
-        mem.tags.some(t => t.toLowerCase().includes(q))
-      );
-    }
-    return true;
+  // Extract all unique tags
+  const allTags = Array.from(new Set(memories.flatMap(m => m.tags || [])));
+
+  const filteredMemories = memories.filter(m => {
+    const matchesSearch = 
+      m.title.toLowerCase().includes(search.toLowerCase()) ||
+      m.content.toLowerCase().includes(search.toLowerCase());
+    const matchesTag = selectedTag ? m.tags.includes(selectedTag) : true;
+    return matchesSearch && matchesTag;
   });
 
-  const handleCreateMemory = (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !content) return;
+    if (!title.trim() || !content.trim()) return;
+
     addMemory({
       title,
       content,
       type,
-      source,
-      importance: 'HIGH',
-      tags: tagsInput ? tagsInput.split(',').map(t => t.trim()) : ['Strategic']
+      importance,
+      source: 'Operator Direct Ingestion',
+      tags: tagsInput ? tagsInput.split(',').map(s => s.trim()) : ['ManualAnchor']
     });
+
     setTitle('');
     setContent('');
     setTagsInput('');
-    setShowAddModal(false);
+    setIsModalOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col pb-16 lg:pb-0">
-      <HUDOverlay />
-
-      <div className="flex flex-1">
-        <SidebarNav />
-
-        <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8 flex-1 w-full space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
-            <div>
-              <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs uppercase tracking-widest font-semibold mb-1">
-                <Brain className="w-4 h-4" /> MENTRA SECOND BRAIN
-              </div>
-              <h1 className="text-3xl font-extrabold text-white tracking-tight">Neural Memory Vault</h1>
-              <p className="text-slate-400 text-sm mt-1">
-                Long-term synthesized memory of core principles, past decisions, project briefs, and personal operating frameworks.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-mono font-bold shadow-lg shadow-cyan-500/20 hover:opacity-90 transition"
-            >
-              <Plus className="w-4 h-4" /> Synthesize Memory
-            </button>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-300">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase tracking-widest">
+            <HardDrive className="w-4 h-4 text-mentra-orange" />
+            <span>SECOND BRAIN NEURAL VAULT</span>
           </div>
+          <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white mt-1">
+            Memory & Knowledge Vault
+          </h1>
+        </div>
 
-          <CommandBar />
-
-          {/* Search & Filter Bar */}
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 rounded-2xl bg-[#0d1017]/90 border border-white/10 backdrop-blur-xl">
-            <div className="relative w-full md:w-96">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="What do you remember? (e.g. InkThread, GSM, Ads)"
-                className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:border-cyan-400 focus:outline-none"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-              {['ALL', 'DECISION', 'PROJECT', 'IDEA', 'USER_PREFERENCE'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setSelectedType(t)}
-                  className={`text-xs font-mono px-3.5 py-1 rounded-xl border transition ${
-                    selectedType === t
-                      ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50'
-                      : 'bg-white/5 text-slate-400 border-white/5 hover:text-white'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredMemories.map((mem) => (
-              <MemoryCard key={mem.id} memory={mem} />
-            ))}
-          </div>
-
-          {/* Add Modal */}
-          {showAddModal && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-              <div className="w-full max-w-md bg-[#0d1017] border border-cyan-500/40 rounded-3xl p-6 shadow-2xl space-y-4">
-                <h3 className="text-lg font-bold text-white font-mono">Synthesize Memory Anchor</h3>
-
-                <form onSubmit={handleCreateMemory} className="space-y-3 font-mono text-xs">
-                  <div>
-                    <label className="text-slate-400 block mb-1">Title / Anchor Name</label>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="e.g. Core Margin Rule"
-                      required
-                      className="w-full p-2.5 rounded-xl bg-slate-900 border border-white/10 text-white focus:border-cyan-400 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 block mb-1">Memory Type</label>
-                    <select
-                      value={type}
-                      onChange={(e) => setType(e.target.value as any)}
-                      className="w-full p-2.5 rounded-xl bg-slate-900 border border-white/10 text-white focus:border-cyan-400 focus:outline-none"
-                    >
-                      <option value="DECISION">DECISION</option>
-                      <option value="PROJECT">PROJECT</option>
-                      <option value="IDEA">IDEA</option>
-                      <option value="USER_PREFERENCE">USER_PREFERENCE</option>
-                      <option value="PEOPLE">PEOPLE</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 block mb-1">Content / Rule</label>
-                    <textarea
-                      rows={3}
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      placeholder="Describe the permanent memory item, decision rationale, or operating preference..."
-                      required
-                      className="w-full p-2.5 rounded-xl bg-slate-900 border border-white/10 text-white focus:border-cyan-400 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 block mb-1">Tags (comma separated)</label>
-                    <input
-                      type="text"
-                      value={tagsInput}
-                      onChange={(e) => setTagsInput(e.target.value)}
-                      placeholder="Quality, Brand, Strategy"
-                      className="w-full p-2.5 rounded-xl bg-slate-900 border border-white/10 text-white focus:border-cyan-400 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddModal(false)}
-                      className="px-4 py-2 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 rounded-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold shadow-md shadow-cyan-500/20 transition"
-                    >
-                      Save Memory Anchor
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-        </main>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 active:scale-95 transition-all self-start sm:self-auto"
+        >
+          <Plus className="w-4 h-4" />
+          <span>STORE NEURAL ANCHOR</span>
+        </button>
       </div>
 
-      <MobileNav />
+      {/* Instant Search & Tag Filter Bar */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search strategic decisions, principles, suppliers, ideas..."
+            className="w-full bg-black/60 border border-white/15 focus:border-mentra-orange rounded-2xl pl-11 pr-4 py-3 text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none transition-all glass-panel"
+          />
+        </div>
+
+        {allTags.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-mono scrollbar-none">
+            <span className="text-white/40 flex-shrink-0">TAGS:</span>
+            <button
+              onClick={() => setSelectedTag(null)}
+              className={`px-3 py-1 rounded-full text-[11px] transition-all flex-shrink-0 ${
+                selectedTag === null ? 'bg-mentra-orange text-white' : 'bg-white/5 text-white/60 hover:text-white'
+              }`}
+            >
+              ALL
+            </button>
+            {allTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                className={`px-3 py-1 rounded-full text-[11px] transition-all flex-shrink-0 ${
+                  selectedTag === tag ? 'bg-mentra-orange text-white shadow-[0_0_8px_#ff4a00]' : 'bg-white/5 text-white/60 hover:text-white'
+                }`}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Memory Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredMemories.map(mem => (
+          <MemoryCard key={mem.id} memory={mem} />
+        ))}
+      </div>
+
+      {/* Store Memory Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="w-full max-w-lg glass-panel-orange bg-black/90 border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <h2 className="text-lg font-display font-bold text-white flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-mentra-orange" />
+                <span>STORE NEURAL ANCHOR</span>
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreate} className="mt-5 space-y-4">
+              <div>
+                <label className="block text-[11px] font-mono text-white/50 mb-1">ANCHOR TITLE</label>
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Brand GSM Quality Standard"
+                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-white/50 mb-1">CORE CONTENT / PRINCIPLE</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="The timeless principle, supplier contact info, or decision context..."
+                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs text-white placeholder-white/30 focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-mono text-white/50 mb-1">TYPE</label>
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value as MemoryType)}
+                    className="w-full bg-[#180703] border border-white/15 focus:border-mentra-orange rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="DECISION">DECISION</option>
+                    <option value="IDEA">IDEA</option>
+                    <option value="PROJECT">PROJECT</option>
+                    <option value="PEOPLE">PEOPLE</option>
+                    <option value="USER_PREFERENCE">PREFERENCE</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono text-white/50 mb-1">IMPORTANCE</label>
+                  <select
+                    value={importance}
+                    onChange={(e) => setImportance(e.target.value as 'HIGH' | 'MEDIUM' | 'LOW')}
+                    className="w-full bg-[#180703] border border-white/15 focus:border-mentra-orange rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="HIGH">HIGH PRIORITY</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="LOW">LOW</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-white/50 mb-1">TAGS (COMMA SEPARATED)</label>
+                <input
+                  type="text"
+                  value={tagsInput}
+                  onChange={(e) => setTagsInput(e.target.value)}
+                  placeholder="e.g. Brand, SupplyChain, Quality"
+                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl px-4 py-2 text-xs text-white placeholder-white/30 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-3 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 text-white/70 text-xs font-medium hover:bg-white/10"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(255,74,0,0.4)]"
+                >
+                  <span>SAVE TO VAULT</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -1,41 +1,58 @@
 'use client';
 
 import React from 'react';
+import { LucideIcon, TrendingUp } from 'lucide-react';
 
 interface StatCardProps {
-  label: string;
+  title: string;
   value: string | number;
-  subtext?: string;
-  badge?: string;
-  color?: 'cyan' | 'violet' | 'emerald' | 'amber' | 'rose';
+  subtitle?: string;
+  icon: LucideIcon;
+  trend?: string;
+  highlight?: boolean;
 }
 
-export default function StatCard({ label, value, subtext, badge, color = 'cyan' }: StatCardProps) {
-  const colorMap = {
-    cyan: 'text-cyan-400 border-cyan-500/30 bg-cyan-950/20',
-    violet: 'text-violet-400 border-violet-500/30 bg-violet-950/20',
-    emerald: 'text-emerald-400 border-emerald-500/30 bg-emerald-950/20',
-    amber: 'text-amber-400 border-amber-500/30 bg-amber-950/20',
-    rose: 'text-rose-400 border-rose-500/30 bg-rose-950/20'
-  };
-
+export default function StatCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  trend,
+  highlight = false
+}: StatCardProps) {
   return (
-    <div className="p-4 sm:p-5 rounded-2xl bg-[#0d1017]/80 border border-white/10 backdrop-blur-xl shadow-xl flex flex-col justify-between">
-      <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-2">
-        <span className="uppercase tracking-wider">{label}</span>
-        {badge && (
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${colorMap[color]}`}>
-            {badge}
+    <div className={`p-4 sm:p-5 rounded-2xl transition-all relative overflow-hidden ${
+      highlight
+        ? 'glass-panel-orange bg-black/70 border-mentra-orange/40 shadow-[0_0_20px_rgba(255,74,0,0.15)]'
+        : 'glass-panel bg-black/60 border-white/10 hover:border-white/20'
+    }`}>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-mono uppercase tracking-wider text-white/50">
+          {title}
+        </span>
+        <div className={`p-2 rounded-xl border ${
+          highlight ? 'bg-mentra-orange/20 border-mentra-orange/40 text-mentra-amber' : 'bg-white/5 border-white/10 text-white/70'
+        }`}>
+          <Icon className="w-4 h-4" />
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-white">
+          {value}
+        </span>
+        {trend && (
+          <span className="text-xs font-mono font-medium text-mentra-amber flex items-center gap-0.5">
+            <TrendingUp className="w-3 h-3" />
+            {trend}
           </span>
         )}
       </div>
-      <div className={`text-2xl sm:text-3xl font-extrabold tracking-tight font-display ${colorMap[color].split(' ')[0]}`}>
-        {value}
-      </div>
-      {subtext && (
-        <div className="text-[11px] text-slate-500 mt-1 font-mono">
-          {subtext}
-        </div>
+
+      {subtitle && (
+        <p className="mt-1 text-xs text-white/60 font-sans">
+          {subtitle}
+        </p>
       )}
     </div>
   );

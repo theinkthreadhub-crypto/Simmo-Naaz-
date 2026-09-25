@@ -2,18 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1&family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
 :root {
-  --bg-deep: #07090e;
-  --bg-graphite: #0d1017;
-  --bg-charcoal: #141824;
-  --cyan: #00f2fe;
-  --cyan-glow: rgba(0, 242, 254, 0.4);
-  --violet: #8b5cf6;
-  --violet-glow: rgba(139, 92, 246, 0.4);
-  --hud-border: rgba(255, 255, 255, 0.1);
-  --hud-border-cyan: rgba(0, 242, 254, 0.3);
-  --glass: rgba(13, 16, 23, 0.7);
-  --glass-strong: rgba(20, 24, 36, 0.85);
+  --bg-deep: #100402;
+  --bg-dark: #1a0803;
+  --surface-warm: #271007;
+  --orange: #ff4a00;
+  --orange-glow: rgba(255, 74, 0, 0.45);
+  --amber: #ff8a1f;
+  --amber-soft: #ffb15a;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-muted: rgba(255, 255, 255, 0.46);
+  --hairline: rgba(255, 255, 255, 0.12);
+  --glass: rgba(56, 20, 6, 0.42);
+  --glass-strong: rgba(34, 11, 3, 0.68);
+  --hud-border-orange: rgba(255, 74, 0, 0.35);
 }
 
 *,
@@ -25,83 +30,82 @@
 body {
   min-height: 100svh;
   background-color: var(--bg-deep);
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Custom Thin HUD scrollbar */
+/* Custom Warm HUD scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #07090e;
+  background: #100402;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: rgba(255, 74, 0, 0.25);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--cyan);
+  background: var(--orange);
 }
 
-/* HUD Glass utility classes */
-.hud-panel {
+/* Glass Utility Classes with Molten Amber & Orange Accents */
+.glass-panel {
   background: var(--glass);
-  border: 1px solid var(--hud-border);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 18px;
 }
 
-.hud-panel-cyan {
+.glass-panel-orange {
   background: var(--glass);
-  border: 1px solid var(--hud-border-cyan);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 0 20px -5px var(--cyan-glow);
-}
-
-.hud-panel-strong {
-  background: var(--glass-strong);
-  border: 1px solid var(--hud-border);
+  border: 1px solid var(--hud-border-orange);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 0 30px -10px var(--orange-glow);
+  border-radius: 18px;
 }
 
-/* Futuristic HUD Corner Accents */
-.hud-corner {
-  position: relative;
-}
-.hud-corner::before,
-.hud-corner::after {
-  content: '';
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  border-color: var(--cyan);
-  pointer-events: none;
-}
-.hud-corner::before {
-  top: -1px;
-  left: -1px;
-  border-top: 2px solid var(--cyan);
-  border-left: 2px solid var(--cyan);
-}
-.hud-corner::after {
-  bottom: -1px;
-  right: -1px;
-  border-bottom: 2px solid var(--cyan);
-  border-right: 2px solid var(--cyan);
+.glass-panel-strong {
+  background: var(--glass-strong);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-radius: 20px;
 }
 
-@keyframes scanline {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(1000%); }
+.glass-pill {
+  background: rgba(34, 11, 3, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 9999px;
 }
 
-.animate-scanline {
-  animation: scanline 8s linear infinite;
+/* Editorial Serif Accent Class */
+.font-serif-accent {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+
+/* Subtle background energy grid */
+.bg-energy-horizon {
+  background: radial-gradient(circle at 50% 10%, rgba(255, 74, 0, 0.14) 0%, rgba(255, 138, 31, 0.05) 35%, transparent 70%),
+              radial-gradient(circle at 80% 80%, rgba(255, 74, 0, 0.06) 0%, transparent 50%),
+              #100402;
+}
+
+/* Reduced motion optimization */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

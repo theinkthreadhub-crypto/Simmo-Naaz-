@@ -1,51 +1,72 @@
 'use client';
 
 import React from 'react';
-import { Terminal, Shield, Zap, Sparkles } from 'lucide-react';
+import { Flame, Shield, Activity, Sparkles } from 'lucide-react';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { useMentraStore } from '@/lib/store/mentraStore';
 
-interface SystemStatusProps {
-  level: number;
-  xp: number;
-  nextLevelXp: number;
-  streakDays: number;
-  message?: string;
-}
+export default function SystemStatus() {
+  const { user, profile, progress } = useAuth();
+  const { quests, player } = useMentraStore();
 
-export default function SystemStatus({
-  level,
-  xp,
-  nextLevelXp,
-  streakDays,
-  message = 'Today you have 2 business missions, 1 finance task and 20 minutes of learning.'
-}: SystemStatusProps) {
-  const xpPercent = Math.min(100, Math.round((xp / nextLevelXp) * 100));
+  const activeQuests = quests.filter(q => q.status === 'ACTIVE');
+  const displayLevel = progress?.level ?? player.level;
+  const displayStreak = progress?.current_streak ?? player.streakDays;
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator Naaz';
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  };
 
   return (
-    <div className="w-full p-5 rounded-3xl bg-[#0d1017]/90 border border-white/10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
-      {/* Corner HUD accents */}
-      <div className="hud-corner" />
+    <div className="w-full glass-panel-strong p-4 sm:p-5 border-white/10 bg-black/60 relative overflow-hidden">
+      {/* Subtle ambient beam */}
+      <div className="absolute top-0 right-1/4 w-48 h-12 bg-mentra-orange/15 rounded-full blur-2xl pointer-events-none" />
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs uppercase tracking-widest font-semibold mb-1">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            MENTRA ONLINE • GOOD MORNING
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Left Greeting & Telemetry Message */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#10b981]" />
+            <span className="text-[11px] font-mono uppercase tracking-widest text-mentra-amber">
+              MENTRA ONLINE // TELEMETRY OPTIMAL
+            </span>
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">Personal Command Center</h2>
-          <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-            {message}
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-white flex items-center gap-2">
+            <span>{getGreeting()}, {displayName}</span>
+          </h2>
+          <p className="text-xs text-white/70 max-w-xl font-sans">
+            Today you have {activeQuests.length > 0 ? `${activeQuests.length} active missions` : 'no pending missions'}, 1 finance checkpoint and 20 minutes of autonomous skill progression ready.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 font-mono text-xs">
-          <div className="px-3.5 py-2 rounded-2xl bg-cyan-950/60 border border-cyan-500/40 text-cyan-300">
-            <span className="text-slate-400 block text-[10px]">LEVEL</span>
-            <span className="font-bold text-base text-cyan-400">LV.{level < 10 ? `0${level}` : level}</span>
+        {/* Right Status Metrics */}
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <div className="px-3.5 py-2 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2.5">
+            <Shield className="w-4 h-4 text-mentra-orange" />
+            <div>
+              <div className="text-[10px] uppercase font-mono text-white/40">LEVEL</div>
+              <div className="text-xs font-mono font-bold text-white">0{displayLevel}</div>
+            </div>
           </div>
-          <div className="px-3.5 py-2 rounded-2xl bg-amber-950/60 border border-amber-500/40 text-amber-300">
-            <span className="text-slate-400 block text-[10px]">STREAK</span>
-            <span className="font-bold text-base text-amber-400">{streakDays} DAYS</span>
+
+          <div className="px-3.5 py-2 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2.5">
+            <Flame className="w-4 h-4 text-mentra-amber" />
+            <div>
+              <div className="text-[10px] uppercase font-mono text-white/40">STREAK</div>
+              <div className="text-xs font-mono font-bold text-white">{displayStreak} Days</div>
+            </div>
+          </div>
+
+          <div className="px-3.5 py-2 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2.5">
+            <Activity className="w-4 h-4 text-emerald-400" />
+            <div>
+              <div className="text-[10px] uppercase font-mono text-white/40">KERNEL</div>
+              <div className="text-xs font-mono font-bold text-emerald-300">100% OK</div>
+            </div>
           </div>
         </div>
       </div>

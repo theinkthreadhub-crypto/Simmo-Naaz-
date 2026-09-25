@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import {
   PlayerProfile,
+  PlayerStats,
+  StatKey,
   Quest,
   Goal,
   SkillNode,
@@ -12,6 +14,14 @@ import {
   IntegrationConnection,
   MentraNotification
 } from '@/types/mentra';
+import { getUserQuests } from '@/lib/db/quests';
+import { getUserGoals } from '@/lib/db/goals';
+import { getUserSkills } from '@/lib/db/skills';
+import { getUserFinance } from '@/lib/db/finance';
+import { getUserJournal } from '@/lib/db/journal';
+import { getUserMemories } from '@/lib/db/memories';
+import { getUserIntegrations } from '@/lib/db/integrations';
+import { getProfile, getPlayerProgress, getPlayerStats } from '@/lib/db/profiles';
 
 interface MentraState {
   player: PlayerProfile;
@@ -30,7 +40,7 @@ interface MentraState {
   // Actions
   bootSystem: () => void;
   completeQuest: (questId: string) => void;
-  addXp: (amount: number, statCategory?: keyof PlayerProfile['stats']) => void;
+  addXp: (amount: number, statCategory?: StatKey) => void;
   addTransaction: (tx: Omit<FinanceTransaction, 'id' | 'date'>) => void;
   addMemory: (item: Omit<MemoryItem, 'id' | 'createdAt'>) => void;
   addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'date' | 'extractedMemoryIds'>) => void;
@@ -39,6 +49,8 @@ interface MentraState {
   toggleIntegration: (id: string) => void;
   executeCommand: (query: string) => { success: boolean; message: string };
   clearCommandResponse: () => void;
+  syncUserDatabase: (userId: string) => Promise<void>;
+  resetToNewUser: (name: string, userId: string) => void;
 }
 
 const initialPlayer: PlayerProfile = {
@@ -496,10 +508,11 @@ export const useMentraStore = create<MentraState>((set, get) => ({
       nextLevelXp = Math.floor(nextLevelXp * 1.3);
     }
 
-    const updatedStats = { ...player.stats };
+    const updatedStats: Record<string, any> = { ...player.stats };
     if (quest.skillXpCategory && quest.skillXpAmount) {
       const cat = quest.skillXpCategory;
-      updatedStats[cat] = Math.min(100, (updatedStats[cat] || 50) + Math.ceil(quest.skillXpAmount / 10));
+      const currentVal = Number(updatedStats[cat]) || 50;
+      updatedStats[cat] = Math.min(100, currentVal + Math.ceil(quest.skillXpAmount / 10));
     }
 
     set({
@@ -510,7 +523,7 @@ export const useMentraStore = create<MentraState>((set, get) => ({
         currentXp: newXp,
         nextLevelXp,
         totalQuestsCompleted: player.totalQuestsCompleted + 1,
-        stats: updatedStats
+        stats: updatedStats as PlayerStats
       },
       notifications: [
         {
@@ -527,7 +540,7 @@ export const useMentraStore = create<MentraState>((set, get) => ({
     });
   },
 
-  addXp: (amount: number, statCategory?: keyof PlayerProfile['stats']) => {
+  addXp: (amount: number, statCategory?: StatKey) => {
     const { player } = get();
     let newXp = player.currentXp + amount;
     let newLevel = player.level;
@@ -539,9 +552,10 @@ export const useMentraStore = create<MentraState>((set, get) => ({
       nextLevelXp = Math.floor(nextLevelXp * 1.3);
     }
 
-    const updatedStats = { ...player.stats };
+    const updatedStats: Record<string, any> = { ...player.stats };
     if (statCategory) {
-      updatedStats[statCategory] = Math.min(100, updatedStats[statCategory] + 2);
+      const currentVal = Number(updatedStats[statCategory]) || 50;
+      updatedStats[statCategory] = Math.min(100, currentVal + 2);
     }
 
     set({
@@ -550,7 +564,7 @@ export const useMentraStore = create<MentraState>((set, get) => ({
         level: newLevel,
         currentXp: newXp,
         nextLevelXp,
-        stats: updatedStats
+        stats: updatedStats as PlayerStats
       }
     });
   },
@@ -731,5 +745,109 @@ export const useMentraStore = create<MentraState>((set, get) => ({
     return { success: true, message: res };
   },
 
-  clearCommandResponse: () => set({ activeCommandResponse: null })
+  clearCommandResponse: () => set({ activeCommandResponse: null }),
+
+  syncUserDatabase: async (userId: string) => {
+    try {
+      const [p, prog, st, userQuests, userGoals, userSkills, userFin, userJour, userMems, userInts] = await Promise.all([
+        getProfile(userId),
+        getPlayerProgress(userId),
+        getPlayerStats(userId),
+        getUserQuests(userId),
+        getUserGoals(userId),
+        getUserSkills(userId),
+        getUserFinance(userId),
+        getUserJournal(userId),
+        getUserMemories(userId),
+        getUserIntegrations(userId)
+      ]);
+
+      const updatedPlayer: PlayerProfile = {
+        id: userId,
+        name: p?.display_name || 'Operator',
+        codename: `MENTRA-${(p?.display_name || 'SOV').slice(0, 3).toUpperCase()}-01`,
+        title: 'Vanguard Architect',
+        level: prog?.level || 1,
+        currentXp: prog?.current_xp || 0,
+        nextLevelXp: (prog?.level || 1) * 1000,
+        streakDays: prog?.current_streak || 1,
+        totalQuestsCompleted: prog?.quests_completed || 0,
+        rank: (prog?.level || 1) > 5 ? 'TACTICIAN' : 'NOVICE',
+        stats: st || {
+          focus: 50,
+          discipline: 50,
+          knowledge: 50,
+          business: 50,
+          finance: 50,
+          communication: 50,
+          fitness: 50
+        }
+      };
+
+      set({
+        player: updatedPlayer,
+        quests: userQuests.length > 0 ? userQuests : get().quests,
+        goals: userGoals.length > 0 ? userGoals : get().goals,
+        skills: userSkills.length > 0 ? userSkills : get().skills,
+        finance: userFin.transactions.length > 0 ? userFin : get().finance,
+        journalEntries: userJour.length > 0 ? userJour : get().journalEntries,
+        memories: userMems.length > 0 ? userMems : get().memories,
+        integrations: userInts.length > 0 ? userInts : get().integrations
+      });
+    } catch (err) {
+      console.warn('[MENTRA STORE]: Database sync fallback:', err);
+    }
+  },
+
+  resetToNewUser: (name: string, userId: string) => {
+    const newPlayer: PlayerProfile = {
+      id: userId,
+      name,
+      codename: `MENTRA-${name.slice(0, 3).toUpperCase()}-01`,
+      title: 'Initiate Operator',
+      level: 1,
+      currentXp: 0,
+      nextLevelXp: 1000,
+      streakDays: 1,
+      totalQuestsCompleted: 0,
+      rank: 'NOVICE',
+      stats: {
+        focus: 20,
+        discipline: 20,
+        knowledge: 20,
+        business: 20,
+        finance: 20,
+        communication: 20,
+        fitness: 20
+      }
+    };
+
+    set({
+      player: newPlayer,
+      quests: [],
+      goals: [],
+      finance: {
+        monthlyIncome: 0,
+        monthlyExpenses: 0,
+        monthlySavings: 0,
+        budgetRemaining: 0,
+        businessExpenseRatio: 0,
+        aiInsight: 'Financial telemetry initialized. Ready to log your first income or expense.',
+        transactions: []
+      },
+      journalEntries: [],
+      memories: [],
+      notifications: [
+        {
+          id: `n_${Date.now()}`,
+          timestamp: 'Just now',
+          type: 'SYSTEM',
+          title: 'System Initialized',
+          message: `Welcome, ${name}. MENTRA Personal AI Operating System is active.`,
+          unread: true,
+          priority: 'NORMAL'
+        }
+      ]
+    });
+  }
 }));

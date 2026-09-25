@@ -1,100 +1,89 @@
 'use client';
 
 import React from 'react';
+import { FileText, TrendingUp, Sparkles, CheckCircle2, Shield, ArrowUpRight, Trophy } from 'lucide-react';
+import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
-import HUDOverlay from '@/components/mentra/HUDOverlay';
-import CommandBar from '@/components/mentra/CommandBar';
-import SidebarNav from '@/components/navigation/SidebarNav';
-import MobileNav from '@/components/navigation/MobileNav';
-import { formatCurrency } from '@/lib/utils';
-import { FileText } from 'lucide-react';
 
 export default function ReportsPage() {
-  const player = useMentraStore((state) => state.player);
-  const finance = useMentraStore((state) => state.finance);
-  const quests = useMentraStore((state) => state.quests);
+  const { user, profile, progress } = useAuth();
+  const { player, finance, quests, skills } = useMentraStore();
 
-  const completedQuestsCount = quests.filter(q => q.status === 'COMPLETED').length;
+  const displayLevel = progress?.level ?? player.level;
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator Naaz';
 
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col pb-16 lg:pb-0">
-      <HUDOverlay />
-
-      <div className="flex flex-1">
-        <SidebarNav />
-
-        <main className="max-w-5xl mx-auto px-4 sm:px-8 py-8 flex-1 w-full space-y-6">
-          <div className="border-b border-white/10 pb-6">
-            <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs uppercase tracking-widest font-semibold mb-1">
-              <FileText className="w-4 h-4" /> MENTRA OPERATIONAL SYNTHESIS
-            </div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">Weekly Executive Report</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Comprehensive audit of character advancement, quest completion velocity, cash flow, and next cycle targets.
-            </p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-300">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase tracking-widest">
+            <FileText className="w-4 h-4 text-mentra-orange" />
+            <span>EXECUTIVE DOSSIER & PROGRESSION</span>
           </div>
+          <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white mt-1">
+            Weekly Intelligence Report
+          </h1>
+        </div>
 
-          <CommandBar />
-
-          <div className="p-8 sm:p-10 rounded-3xl bg-[#0d1017]/90 border border-cyan-500/40 backdrop-blur-xl shadow-2xl space-y-6 relative overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-              <div>
-                <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest block">
-                  DOSSIER REF: MENTRA-WK-38
-                </span>
-                <h2 className="text-xl sm:text-2xl font-bold text-white mt-0.5">Week 38 Operational Briefing</h2>
-              </div>
-              <div className="px-4 py-2 rounded-2xl bg-white/5 border border-white/10 font-mono text-xs text-slate-400">
-                OPERATOR: <span className="text-cyan-400 font-bold">{player.codename}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4.5 rounded-2xl bg-white/[0.02] border border-white/5">
-                <span className="text-[10px] font-mono text-slate-500 uppercase">LEVEL ADVANCE</span>
-                <div className="text-xl font-bold text-cyan-400 mt-1">LV.06 → LV.07</div>
-              </div>
-              <div className="p-4.5 rounded-2xl bg-white/[0.02] border border-white/5">
-                <span className="text-[10px] font-mono text-slate-500 uppercase">XP HARVESTED</span>
-                <div className="text-xl font-bold text-amber-400 mt-1">+870 XP</div>
-              </div>
-              <div className="p-4.5 rounded-2xl bg-white/[0.02] border border-white/5">
-                <span className="text-[10px] font-mono text-slate-500 uppercase">MISSIONS EXECUTED</span>
-                <div className="text-xl font-bold text-emerald-400 mt-1">{completedQuestsCount} / {quests.length}</div>
-              </div>
-              <div className="p-4.5 rounded-2xl bg-white/[0.02] border border-white/5">
-                <span className="text-[10px] font-mono text-slate-500 uppercase">MONTHLY RUN-RATE</span>
-                <div className="text-xl font-bold text-white mt-1">{formatCurrency(finance.monthlyIncome)}</div>
-              </div>
-            </div>
-
-            <div className="space-y-4 text-xs font-mono">
-              <div className="p-4.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
-                <span className="text-cyan-400 font-bold uppercase">✦ BIGGEST STRATEGIC WIN:</span>
-                <p className="text-slate-200 font-sans text-sm">
-                  Successfully locked in 280+ GSM combed cotton fabric supplier contract with 12% lower cost and verified 4.2x ROAS on Meta ads testing batch.
-                </p>
-              </div>
-
-              <div className="p-4.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
-                <span className="text-rose-400 font-bold uppercase">✦ IDENTIFIED BOTTLENECK:</span>
-                <p className="text-slate-200 font-sans text-sm">
-                  Packaging lead time delayed sample fulfillment by 48 hours. Buffer order protocol now enacted in memory vault.
-                </p>
-              </div>
-
-              <div className="p-4.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
-                <span className="text-emerald-400 font-bold uppercase">✦ NEXT CYCLE PRIORITY OBJECTIVE:</span>
-                <p className="text-slate-200 font-sans text-sm">
-                  Scale campaign spend to ₹1,500/day while preserving $\ge 3.8x$ ROAS and launch automated multi-agent content pipeline.
-                </p>
-              </div>
-            </div>
-          </div>
-        </main>
+        <div className="text-xs font-mono text-white/50">
+          STATUS: <strong className="text-emerald-400 font-bold">READY FOR REVIEW</strong>
+        </div>
       </div>
 
-      <MobileNav />
+      {/* Executive Summary Card */}
+      <div className="p-6 sm:p-8 rounded-3xl glass-panel-orange bg-black/70 border-white/15 space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
+          <div>
+            <h2 className="text-xl font-bold font-display text-white">
+              WEEKLY OPERATOR DOSSIER // {displayName.toUpperCase()}
+            </h2>
+            <span className="text-xs font-mono text-white/40">PERIOD: CURRENT ACTIVE CYCLE</span>
+          </div>
+          <div className="px-3.5 py-1 rounded-full bg-mentra-orange/15 border border-mentra-orange/30 text-mentra-amber font-mono text-xs font-bold">
+            LEVEL 0{displayLevel} TACTICIAN
+          </div>
+        </div>
+
+        {/* 4 Core Pillars Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+            <div className="text-[10px] font-mono text-white/40 uppercase">QUEST VELOCITY</div>
+            <div className="text-2xl font-mono font-bold text-white mt-1">4 / 5 Done</div>
+            <p className="text-xs text-emerald-400 font-mono mt-1">+240 XP Accumulated</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+            <div className="text-[10px] font-mono text-white/40 uppercase">NET CASH FLOW</div>
+            <div className="text-2xl font-mono font-bold text-emerald-400 mt-1">₹{finance.monthlySavings.toLocaleString()}</div>
+            <p className="text-xs text-white/50 font-mono mt-1">Solvent Runway: 7.4 mo</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+            <div className="text-[10px] font-mono text-white/40 uppercase">SKILLS ELEVATED</div>
+            <div className="text-2xl font-mono font-bold text-mentra-amber mt-1">2 Nodes</div>
+            <p className="text-xs text-mentra-orange font-mono mt-1">AI Agents & Cash Flow</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+            <div className="text-[10px] font-mono text-white/40 uppercase">SOVEREIGN STREAK</div>
+            <div className="text-2xl font-mono font-bold text-white mt-1">12 Days 🔥</div>
+            <p className="text-xs text-emerald-400 font-mono mt-1">Zero Breakdowns</p>
+          </div>
+        </div>
+
+        {/* AI Synthesis Narrative */}
+        <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2">
+          <span className="text-xs font-mono text-mentra-amber font-semibold uppercase">
+            [MENTRA SYNTHESIS SUMMARY]
+          </span>
+          <p className="text-xs sm:text-sm text-white/80 leading-relaxed font-sans">
+            Strong operational momentum this cycle. The Meta Ads unit economics audit stabilized target ROAS at 4.2x while direct fabric negotiations lowered inventory unit cost by 12%. Deep work cadence averaged 4.2 hours daily. Recommend scaling ad budget by 15% next sprint.
+          </p>
+        </div>
+      </div>
+
     </div>
   );
 }

@@ -9,28 +9,42 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#07090e',
-        foreground: '#f8fafc',
+        background: '#100402',
+        foreground: '#ffffff',
         mentra: {
-          deep: '#07090e',
-          graphite: '#0d1017',
-          charcoal: '#141824',
-          cyan: '#00f2fe',
-          'cyan-lit': '#38bdf8',
-          violet: '#8b5cf6',
-          'violet-lit': '#a78bfa',
-          amber: '#f59e0b',
+          'bg-deep': '#100402',
+          'bg-dark': '#1a0803',
+          'surface-warm': '#271007',
+          orange: '#ff4a00',
+          'orange-glow': 'rgba(255, 74, 0, 0.45)',
+          amber: '#ff8a1f',
+          'amber-soft': '#ffb15a',
+          text: '#ffffff',
+          'text-secondary': 'rgba(255, 255, 255, 0.72)',
+          muted: 'rgba(255, 255, 255, 0.46)',
+          hairline: 'rgba(255, 255, 255, 0.12)',
+          glass: 'rgba(56, 20, 6, 0.42)',
+          'glass-strong': 'rgba(34, 11, 3, 0.68)',
+          'hairline-orange': 'rgba(255, 74, 0, 0.3)',
           emerald: '#10b981',
           rose: '#f43f5e'
         }
       },
       fontFamily: {
-        display: ['Inter Tight', 'system-ui', 'sans-serif'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Inter Tight', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        serif: ['Instrument Serif', 'Georgia', 'serif'],
       },
       animation: {
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'spin-slow': 'spin 12s linear infinite',
+        'spin-slow': 'spin 20s linear infinite',
+        'float-slow': 'float 6s ease-in-out infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-10px)' },
+        }
       }
     },
   },
