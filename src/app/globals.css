@@ -232,3 +232,42 @@ select {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Scroll-telling public experience */
+.mentra-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(to bottom, transparent, black 18%, black 82%, transparent);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@supports (animation-timeline: scroll()) {
+  .mentra-scroll-reveal {
+    animation: mentraReveal linear both;
+    animation-timeline: view();
+    animation-range: entry 10% cover 35%;
+  }
+
+  @keyframes mentraReveal {
+    from {
+      opacity: 0;
+      transform: translateY(28px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@media (max-width: 1023px) {
+  .mentra-grid {
+    background-size: 28px 28px;
+  }
+}
