@@ -1,18 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import dynamic from 'next/dynamic';
-import { Sparkles, Shield, ArrowRight, Lock, Mail, User, Terminal } from 'lucide-react';
+import { ArrowRight, Lock, Mail, ShieldCheck, User, Terminal } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
-
-const MentraCore3D = dynamic(() => import('@/components/3d/MentraCore3D'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center">
-      <div className="w-48 h-48 rounded-full bg-mentra-orange/20 blur-3xl animate-pulse" />
-    </div>
-  )
-});
 
 export default function AuthScreen() {
   const { signIn, signUp, signInWithGoogle, setDemoUser } = useAuth();
@@ -30,7 +20,7 @@ export default function AuthScreen() {
 
     if (isSignUp) {
       if (!displayName.trim()) {
-        setErrorMsg('Please specify your operator name.');
+        setErrorMsg('Tell MENTRA what to call you.');
         setLoading(false);
         return;
       }
@@ -40,173 +30,163 @@ export default function AuthScreen() {
       const res = await signIn(email, password);
       if (res.error) setErrorMsg(res.error);
     }
+
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen w-full bg-energy-horizon flex items-center justify-center p-4 lg:p-8 relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-mentra-orange/10 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-[400px] h-[200px] bg-mentra-amber/5 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center z-10">
-        
-        {/* Left Hero 3D Orb & Editorial Headline */}
-        <div className="lg:col-span-6 flex flex-col items-center lg:items-start text-center lg:text-left space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 glass-pill border-mentra-orange/30 bg-black/40 text-xs text-mentra-amber font-mono">
-            <span className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse" />
-            <span>SYSTEM SECURITY KERNEL</span>
+    <main className="min-h-screen bg-[#090B0F] px-4 py-8 sm:px-6 lg:px-10 flex items-center">
+      <div className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+        <section className="py-6 lg:py-12">
+          <div className="inline-flex items-center rounded-full border border-[#292F3B] bg-[#161A22] px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.14em] text-[#A1A8B5]">
+            [ YOUR PERSONAL OS ]
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-display font-extrabold tracking-tight text-white leading-tight">
-            ENTER <br />
-            <span className="bg-gradient-to-r from-mentra-orange via-mentra-amber to-amber-200 bg-clip-text text-transparent">
-              MENTRA
-            </span>
+          <h1 className="mt-6 text-5xl sm:text-6xl lg:text-8xl uppercase leading-[0.92]">
+            Your life.<br />
+            <span className="text-[#B7FF3C]">One system.</span>
           </h1>
 
-          <p className="text-base text-white/70 max-w-md font-sans">
-            Your personal AI operating system. One unified command center for missions, capital velocity, and autonomous agent clusters.
+          <p className="mt-6 max-w-xl text-base sm:text-lg leading-relaxed text-[#A1A8B5]">
+            Goals, tasks, money, learning, memory and AI agents — connected around what matters to you.
           </p>
 
-          <div className="w-full h-64 lg:h-72 relative flex items-center justify-center">
-            <MentraCore3D className="w-full h-full" />
+          <div className="mt-8 grid max-w-xl gap-3 sm:grid-cols-3">
+            {['Private by design', 'Permission-based AI', 'You stay in control'].map((item) => (
+              <div key={item} className="rounded-2xl border border-[#292F3B] bg-[#10131A] p-4">
+                <ShieldCheck className="h-4 w-4 text-[#B7FF3C]" />
+                <div className="mt-3 text-xs font-medium text-[#F5F7FA]">{item}</div>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
 
-        {/* Right Glass Authentication Card */}
-        <div className="lg:col-span-6 w-full max-w-md mx-auto">
-          <div className="glass-panel-orange p-6 sm:p-8 bg-black/70 border-white/15 shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <div>
-                <h2 className="text-xl font-display font-bold text-white">
-                  {isSignUp ? 'INITIALIZE OPERATOR' : 'OPERATOR ACCESS'}
-                </h2>
-                <p className="text-xs text-white/50 font-mono mt-0.5">
-                  {isSignUp ? 'Establish new neural identity' : 'Verify neural credentials'}
-                </p>
-              </div>
-              <Shield className="w-6 h-6 text-mentra-orange" />
+        <section className="rounded-[20px] border border-[#292F3B] bg-[#161A22] p-5 sm:p-7 lg:p-8">
+          <div className="border-b border-[#292F3B] pb-5">
+            <div className="mentra-label">{isSignUp ? 'Create account' : 'Welcome back'}</div>
+            <h2 className="mt-2 text-2xl sm:text-3xl uppercase">
+              {isSignUp ? 'Start your system' : 'Enter MENTRA'}
+            </h2>
+            <p className="mt-2 text-sm text-[#A1A8B5]">
+              {isSignUp ? 'Set up your account, then personalize it.' : 'Continue where you left off.'}
+            </p>
+          </div>
+
+          {errorMsg && (
+            <div className="mt-5 rounded-xl border border-[#FF5C5C]/30 bg-[#FF5C5C]/10 p-3 text-sm text-[#FF8A8A]">
+              {errorMsg}
             </div>
+          )}
 
-            {errorMsg && (
-              <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-mono">
-                {errorMsg}
-              </div>
+          <button
+            onClick={() => signInWithGoogle()}
+            className="mt-6 min-h-12 w-full rounded-xl border border-[#292F3B] bg-[#10131A] px-4 text-sm font-semibold text-[#F5F7FA] hover:border-[#3A424F] flex items-center justify-center gap-3"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.4 8.8 5 12 5z"/>
+              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
+              <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.1-2 .4-2.7L1.6 6.4C.6 8.3 0 10.5 0 12.8s.6 4.5 1.6 6.4l3.7-4.5z"/>
+              <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.2 0-5.8-2.4-6.7-5.3L1.6 18.5C3.5 22.4 7.4 24 12 24z"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-[#292F3B]" />
+            <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#697181]">or</span>
+            <div className="h-px flex-1 bg-[#292F3B]" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignUp && (
+              <Field label="Name" icon={<User className="h-4 w-4" />}>
+                <input
+                  type="text"
+                  required
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="What should MENTRA call you?"
+                  className="min-h-12 w-full bg-transparent pl-10 pr-4 text-sm focus:outline-none"
+                />
+              </Field>
             )}
 
-            {/* Quick Google OAuth Button */}
+            <Field label="Email" icon={<Mail className="h-4 w-4" />}>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="min-h-12 w-full bg-transparent pl-10 pr-4 text-sm focus:outline-none"
+              />
+            </Field>
+
+            <Field label="Password" icon={<Lock className="h-4 w-4" />}>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                className="min-h-12 w-full bg-transparent pl-10 pr-4 text-sm focus:outline-none"
+              />
+            </Field>
+
             <button
-              onClick={() => signInWithGoogle()}
-              className="mt-6 w-full flex items-center justify-center gap-3 py-3 px-4 rounded-full bg-white/5 border border-white/15 hover:bg-white/10 text-white text-xs font-medium transition-all group"
+              type="submit"
+              disabled={loading}
+              className="mentra-primary-button mt-2 w-full px-5 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.4 8.8 5 12 5z"/>
-                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
-                <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.1-2 .4-2.7L1.6 6.4C.6 8.3 0 10.5 0 12.8s.6 4.5 1.6 6.4l3.7-4.5z"/>
-                <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.2 0-5.8-2.4-6.7-5.3L1.6 18.5C3.5 22.4 7.4 24 12 24z"/>
-              </svg>
-              <span>Continue with Google</span>
+              {loading ? 'Working...' : isSignUp ? 'Create account' : 'Sign in'}
+              {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
+          </form>
 
-            <div className="my-5 flex items-center gap-3">
-              <div className="flex-1 h-[1px] bg-white/10" />
-              <span className="text-[10px] uppercase font-mono tracking-widest text-white/40">OR PROTOCOL</span>
-              <div className="flex-1 h-[1px] bg-white/10" />
-            </div>
-
-            {/* Email / Password Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {isSignUp && (
-                <div>
-                  <label className="block text-[11px] font-mono text-white/60 mb-1">OPERATOR CODENAME</label>
-                  <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                    <input
-                      type="text"
-                      required
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="e.g. Operator Naaz"
-                      className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none transition-all"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[11px] font-mono text-white/60 mb-1">SYSTEM EMAIL</label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="operator@mentra.system"
-                    className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-mono text-white/60 mb-1">PASSPHRASE</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber hover:opacity-90 active:scale-98 text-white text-xs font-semibold tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,74,0,0.4)] transition-all disabled:opacity-50"
-              >
-                <span>{loading ? 'AUTHENTICATING...' : isSignUp ? 'INITIALIZE PROFILE' : 'ACCESS SYSTEM'}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </form>
-
-            {/* Toggle Sign In / Sign Up */}
-            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs">
-              <span className="text-white/50">
-                {isSignUp ? 'Already registered?' : 'New operator?'}
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSignUp(!isSignUp);
-                  setErrorMsg(null);
-                }}
-                className="text-mentra-amber hover:text-white font-medium transition-colors"
-              >
-                {isSignUp ? 'Sign In Instead' : 'Create Identity'}
-              </button>
-            </div>
-
-            {/* One-Click Demo Operator Bypass */}
-            <div className="mt-4 pt-3 border-t border-white/5 text-center">
-              <button
-                type="button"
-                onClick={() => setDemoUser('Operator Naaz')}
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-white/40 hover:text-mentra-amber transition-colors"
-              >
-                <Terminal className="w-3 h-3" />
-                <span>Instant Demo Access (Operator Naaz)</span>
-              </button>
-            </div>
-
+          <div className="mt-5 border-t border-[#292F3B] pt-5 flex items-center justify-between gap-4 text-sm">
+            <span className="text-[#697181]">{isSignUp ? 'Already have an account?' : 'New to MENTRA?'}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setErrorMsg(null);
+              }}
+              className="min-h-11 text-[#B7FF3C] font-semibold"
+            >
+              {isSignUp ? 'Sign in' : 'Create account'}
+            </button>
           </div>
-        </div>
 
+          <button
+            type="button"
+            onClick={() => setDemoUser('Operator Naaz')}
+            className="mt-2 min-h-11 w-full text-xs text-[#697181] hover:text-[#A1A8B5] flex items-center justify-center gap-2"
+          >
+            <Terminal className="h-3.5 w-3.5" />
+            Open demo workspace
+          </button>
+        </section>
       </div>
-    </div>
+    </main>
+  );
+}
+
+function Field({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-[10px] font-mono uppercase tracking-[0.12em] text-[#697181]">{label}</span>
+      <span className="relative block rounded-xl border border-[#292F3B] bg-[#10131A] focus-within:border-[#B7FF3C]/50">
+        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#697181]">{icon}</span>
+        {children}
+      </span>
+    </label>
   );
 }
