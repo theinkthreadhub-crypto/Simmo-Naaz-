@@ -13,6 +13,11 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const allowDemo =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.VERCEL_ENV === 'preview' ||
+    process.env.MENTRA_DEMO_MODE === 'true';
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -24,7 +29,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-[#090B0F] text-[#F5F7FA] antialiased">
-        <AuthProvider>
+        <AuthProvider allowDemo={allowDemo}>
           <AppShell>{children}</AppShell>
         </AuthProvider>
       </body>
