@@ -2,23 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1&family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
-
 :root {
-  --bg-deep: #100402;
-  --bg-dark: #1a0803;
-  --surface-warm: #271007;
-  --orange: #ff4a00;
-  --orange-glow: rgba(255, 74, 0, 0.45);
-  --amber: #ff8a1f;
-  --amber-soft: #ffb15a;
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.72);
-  --text-muted: rgba(255, 255, 255, 0.46);
-  --hairline: rgba(255, 255, 255, 0.12);
-  --glass: rgba(56, 20, 6, 0.42);
-  --glass-strong: rgba(34, 11, 3, 0.68);
-  --hud-border-orange: rgba(255, 74, 0, 0.35);
+  --mentra-bg: #090B0F;
+  --mentra-bg-secondary: #10131A;
+  --mentra-surface: #161A22;
+  --mentra-surface-elevated: #1C212B;
+  --mentra-border: #292F3B;
+  --mentra-text: #F5F7FA;
+  --mentra-text-secondary: #A1A8B5;
+  --mentra-muted: #697181;
+  --mentra-accent: #B7FF3C;
+  --mentra-ai: #7C8CFF;
+  --mentra-warning: #FFB020;
+  --mentra-danger: #FF5C5C;
+  --mentra-success: #4DDB8A;
+
+  /* Backwards-compatible tokens used by existing modules. */
+  --bg-deep: var(--mentra-bg);
+  --bg-dark: var(--mentra-bg-secondary);
+  --surface-warm: var(--mentra-surface);
+  --orange: var(--mentra-accent);
+  --orange-glow: rgba(183, 255, 60, 0.18);
+  --amber: var(--mentra-accent);
+  --amber-soft: #D4FF88;
+  --text-primary: var(--mentra-text);
+  --text-secondary: var(--mentra-text-secondary);
+  --text-muted: var(--mentra-muted);
+  --hairline: var(--mentra-border);
+  --glass: rgba(22, 26, 34, 0.94);
+  --glass-strong: rgba(28, 33, 43, 0.98);
+  --hud-border-orange: rgba(183, 255, 60, 0.28);
 }
 
 *,
@@ -27,85 +40,195 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--mentra-bg);
+  color-scheme: dark;
+}
+
 body {
   min-height: 100svh;
-  background-color: var(--bg-deep);
-  color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  background: var(--mentra-bg);
+  color: var(--mentra-text);
+  font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Custom Warm HUD scrollbar */
+h1,
+h2,
+h3,
+.font-display {
+  font-family: 'Archivo Black', 'Arial Black', sans-serif;
+  letter-spacing: -0.025em;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+::selection {
+  background: var(--mentra-accent);
+  color: var(--mentra-bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--mentra-accent);
+  outline-offset: 3px;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a[role='button'] {
+  min-height: 44px;
+}
+
+input,
+textarea,
+select {
+  color: var(--mentra-text);
+}
+
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #100402;
+  background: var(--mentra-bg);
 }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 74, 0, 0.25);
+  background: #343A46;
   border-radius: 999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--orange);
+  background: #4A5362;
 }
 
-/* Glass Utility Classes with Molten Amber & Orange Accents */
-.glass-panel {
-  background: var(--glass);
-  border: 1px solid var(--hairline);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+.glass-panel,
+.glass-panel-orange,
+.glass-panel-strong {
+  background: var(--mentra-surface);
+  border: 1px solid var(--mentra-border);
   border-radius: 18px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 
 .glass-panel-orange {
-  background: var(--glass);
-  border: 1px solid var(--hud-border-orange);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  box-shadow: 0 0 30px -10px var(--orange-glow);
-  border-radius: 18px;
+  border-color: rgba(183, 255, 60, 0.3);
 }
 
 .glass-panel-strong {
-  background: var(--glass-strong);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
-  border-radius: 20px;
+  background: var(--mentra-surface-elevated);
 }
 
 .glass-pill {
-  background: rgba(34, 11, 3, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-radius: 9999px;
+  background: var(--mentra-surface);
+  border: 1px solid var(--mentra-border);
+  border-radius: 999px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-/* Editorial Serif Accent Class */
 .font-serif-accent {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-style: italic;
-  letter-spacing: -0.01em;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-style: normal;
+  font-weight: 600;
 }
 
-/* Subtle background energy grid */
 .bg-energy-horizon {
-  background: radial-gradient(circle at 50% 10%, rgba(255, 74, 0, 0.14) 0%, rgba(255, 138, 31, 0.05) 35%, transparent 70%),
-              radial-gradient(circle at 80% 80%, rgba(255, 74, 0, 0.06) 0%, transparent 50%),
-              #100402;
+  background: var(--mentra-bg);
 }
 
-/* Reduced motion optimization */
+.mentra-card {
+  background: var(--mentra-surface);
+  border: 1px solid var(--mentra-border);
+  border-radius: 18px;
+}
+
+.mentra-card-elevated {
+  background: var(--mentra-surface-elevated);
+  border: 1px solid var(--mentra-border);
+  border-radius: 18px;
+}
+
+.mentra-label {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--mentra-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mentra-accent {
+  color: var(--mentra-accent);
+}
+
+.mentra-primary-button {
+  min-height: 44px;
+  border-radius: 14px;
+  background: var(--mentra-accent);
+  color: #090B0F;
+  font-weight: 700;
+  transition: transform 150ms ease, opacity 150ms ease, background 150ms ease;
+}
+
+.mentra-primary-button:hover {
+  background: #C4FF5F;
+}
+
+.mentra-primary-button:active {
+  transform: scale(0.98);
+}
+
+.mentra-secondary-button {
+  min-height: 44px;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--mentra-text);
+  border: 1px solid var(--mentra-border);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.mentra-secondary-button:hover {
+  background: var(--mentra-surface-elevated);
+  border-color: #3A424F;
+}
+
+/* Old orange/amber utilities remain functional but now inherit the new lime system. */
+.bg-mentra-orange,
+.bg-mentra-amber {
+  color: #090B0F;
+}
+
+/* Remove legacy glow-heavy styling while preserving component behavior. */
+[class*='shadow-[0_0_'] {
+  box-shadow: none !important;
+}
+
+.animate-in {
+  animation-duration: 300ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }
