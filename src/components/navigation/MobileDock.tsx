@@ -3,197 +3,162 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  Home, 
-  Sword, 
-  Bot, 
-  TrendingUp, 
-  Menu, 
-  X, 
-  DollarSign, 
-  Brain, 
-  BookOpen, 
-  Calendar, 
-  HardDrive, 
-  Share2, 
-  Settings, 
-  LogOut,
+import {
+  Home,
+  ListTodo,
   Sparkles,
-  Flame
+  TrendingUp,
+  Menu,
+  X,
+  Target,
+  Repeat2,
+  Wallet,
+  BookOpen,
+  GraduationCap,
+  CalendarDays,
+  Bot,
+  Plug,
+  Brain,
+  BarChart3,
+  Settings,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { useMentraStore } from '@/lib/store/mentraStore';
+
+const moreRoutes = [
+  { href: '/goals', label: 'Goals', icon: Target },
+  { href: '/habits', label: 'Habits', icon: Repeat2 },
+  { href: '/finance', label: 'Finance', icon: Wallet },
+  { href: '/journal', label: 'Journal', icon: BookOpen },
+  { href: '/skills', label: 'Learning', icon: GraduationCap },
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { href: '/agents', label: 'Agents', icon: Bot },
+  { href: '/connections', label: 'Integrations', icon: Plug },
+  { href: '/memory', label: 'Memory', icon: Brain },
+  { href: '/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/settings', label: 'Settings', icon: Settings },
+];
 
 export default function MobileDock() {
   const pathname = usePathname();
-  const { user, profile, progress, signOut } = useAuth();
-  const { player } = useMentraStore();
+  const { user, profile, signOut } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'You';
 
-  const displayLevel = progress?.level ?? player.level;
-  const displayStreak = progress?.current_streak ?? player.streakDays;
-  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator';
-
-  const menuRoutes = [
-    { href: '/goals', label: 'Macro Goals', icon: TrendingUp },
-    { href: '/finance', label: 'Finance HUD', icon: DollarSign },
-    { href: '/skills', label: 'Skill Matrix', icon: Brain },
-    { href: '/journal', label: 'Daily Journal', icon: BookOpen },
-    { href: '/calendar', label: 'Calendar Focus', icon: Calendar },
-    { href: '/memory', label: 'Neural Memory', icon: HardDrive },
-    { href: '/connections', label: 'Connected Apps', icon: Share2 },
-    { href: '/settings', label: 'Settings', icon: Settings },
+  const coreItems = [
+    { href: '/', label: 'Today', icon: Home },
+    { href: '/quests', label: 'Tasks', icon: ListTodo },
+    { href: '/mentra', label: 'Mentor', icon: Sparkles, primary: true },
+    { href: '/skills', label: 'Progress', icon: TrendingUp },
   ];
 
   return (
     <>
-      {/* Top Compact Brand Bar */}
-      <div className="lg:hidden fixed top-0 inset-x-0 z-40 px-4 py-3 bg-black/60 backdrop-blur-xl border-b border-white/10 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_6px_#ff4a00]" />
-          <span className="font-display font-bold tracking-wider text-sm text-white">MENTRA</span>
-          <span className="text-[9px] uppercase font-mono tracking-widest text-white/40 px-1 py-0.5 rounded bg-white/5">
-            OS
+      <header className="lg:hidden fixed inset-x-0 top-0 z-40 h-14 border-b border-[#292F3B] bg-[#090B0F]/95 px-4 flex items-center justify-between">
+        <Link href="/" className="min-h-11 flex items-center gap-2.5">
+          <span className="h-8 w-8 rounded-xl bg-[#B7FF3C] text-[#090B0F] flex items-center justify-center font-display text-xs">
+            M
           </span>
-        </Link>
-
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 glass-pill bg-white/5 border-white/10 text-xs">
-            <Sparkles className="w-3 h-3 text-mentra-amber" />
-            <span className="font-mono text-mentra-amber font-semibold">L{displayLevel}</span>
-            <div className="w-[1px] h-2.5 bg-white/10" />
-            <Flame className="w-3 h-3 text-mentra-orange" />
-            <span className="font-mono text-white/70 text-[10px]">{displayStreak}d</span>
-          </div>
-
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="p-1.5 rounded-full bg-white/5 border border-white/10 text-white/80 hover:text-white"
-          >
-            <Menu className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Bottom Glass Navigation Dock */}
-      <div className="lg:hidden fixed bottom-4 inset-x-4 z-50">
-        <div className="flex items-center justify-around p-2 glass-pill bg-black/80 border-white/10 shadow-2xl backdrop-blur-2xl">
-          {/* Home */}
-          <Link
-            href="/"
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-full transition-all ${
-              pathname === '/' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Home className="w-4 h-4" />
-            <span className="text-[10px]">Home</span>
-          </Link>
-
-          {/* Quests */}
-          <Link
-            href="/quests"
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-full transition-all ${
-              pathname === '/quests' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Sword className="w-4 h-4" />
-            <span className="text-[10px]">Quests</span>
-          </Link>
-
-          {/* Center Elevated MENTRA AI Button */}
-          <Link
-            href="/agents"
-            className="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber text-white shadow-[0_0_20px_rgba(255,74,0,0.5)] border-2 border-black active:scale-95 transition-all"
-          >
-            <Bot className="w-5 h-5" />
-          </Link>
-
-          {/* Progress (Skills & Goals) */}
-          <Link
-            href="/skills"
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-full transition-all ${
-              pathname === '/skills' || pathname === '/goals' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Brain className="w-4 h-4" />
-            <span className="text-[10px]">Progress</span>
-          </Link>
-
-          {/* Drawer Trigger */}
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="flex flex-col items-center gap-1 py-1 px-3 rounded-full text-white/60 hover:text-white"
-          >
-            <Menu className="w-4 h-4" />
-            <span className="text-[10px]">More</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Full Screen Slide-in Drawer */}
-      {drawerOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex flex-col justify-between p-6 animate-in fade-in duration-200">
           <div>
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-mentra-orange shadow-[0_0_8px_#ff4a00]" />
-                <span className="font-display font-bold text-white text-base">MENTRA OS</span>
-              </div>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="p-1.5 rounded-full bg-white/5 border border-white/10 text-white/80"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Profile Brief in Drawer */}
-            <div className="mt-4 p-3 glass-panel border-white/10 rounded-2xl flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber flex items-center justify-center font-bold text-white shadow-lg">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-white">{displayName}</div>
-                <div className="text-xs font-mono text-mentra-amber">Level {displayLevel} • {displayStreak} Day Streak</div>
-              </div>
-            </div>
-
-            {/* All Routes Grid */}
-            <div className="mt-6 grid grid-cols-2 gap-2.5">
-              {menuRoutes.map(item => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setDrawerOpen(false)}
-                    className={`flex items-center gap-2.5 p-3 rounded-xl text-xs transition-all ${
-                      isActive 
-                        ? 'bg-mentra-orange/20 text-mentra-amber border border-mentra-orange/40'
-                        : 'bg-white/5 text-white/80 border border-white/5 hover:bg-white/10'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 text-mentra-orange" />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
+            <div className="font-display text-sm leading-none">MENTRA</div>
+            <div className="mt-1 text-[9px] font-mono uppercase tracking-[0.14em] text-[#697181]">Personal OS</div>
           </div>
+        </Link>
+        <button
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Open menu"
+          className="h-11 w-11 rounded-xl border border-[#292F3B] bg-[#161A22] flex items-center justify-center text-[#A1A8B5]"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </header>
 
-          <div className="pt-4 border-t border-white/10">
-            <button
-              onClick={async () => {
-                setDrawerOpen(false);
-                await signOut();
-              }}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-medium"
+      <nav className="lg:hidden fixed inset-x-3 bottom-3 z-50 rounded-[18px] border border-[#292F3B] bg-[#10131A]/98 p-1.5 flex items-stretch justify-between">
+        {coreItems.map((item) => {
+          const Icon = item.icon;
+          const active =
+            item.href === '/' ? pathname === '/' : pathname === item.href || pathname?.startsWith(item.href + '/');
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`min-h-12 min-w-[58px] rounded-xl px-2 flex flex-col items-center justify-center gap-1 text-[10px] transition-colors ${
+                item.primary
+                  ? 'bg-[#B7FF3C] text-[#090B0F] font-semibold'
+                  : active
+                    ? 'bg-[#1C212B] text-[#F5F7FA]'
+                    : 'text-[#697181]'
+              }`}
             >
-              <LogOut className="w-4 h-4" />
-              <span>Sign Out / Disconnect</span>
+              <Icon className="h-[18px] w-[18px]" />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="min-h-12 min-w-[58px] rounded-xl px-2 flex flex-col items-center justify-center gap-1 text-[10px] text-[#697181]"
+        >
+          <Menu className="h-[18px] w-[18px]" />
+          <span>More</span>
+        </button>
+      </nav>
+
+      {drawerOpen && (
+        <div className="lg:hidden fixed inset-0 z-[60] bg-[#090B0F] p-4 flex flex-col animate-in fade-in duration-200">
+          <div className="flex items-center justify-between border-b border-[#292F3B] pb-4">
+            <div>
+              <div className="font-display text-xl">MORE</div>
+              <div className="mt-1 text-xs text-[#697181]">Everything in your system.</div>
+            </div>
+            <button
+              onClick={() => setDrawerOpen(false)}
+              aria-label="Close menu"
+              className="h-11 w-11 rounded-xl border border-[#292F3B] bg-[#161A22] flex items-center justify-center"
+            >
+              <X className="h-5 w-5" />
             </button>
           </div>
+
+          <div className="mt-4 rounded-2xl border border-[#292F3B] bg-[#161A22] p-4">
+            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#697181]">Signed in</div>
+            <div className="mt-1 font-semibold">{displayName}</div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 overflow-y-auto pb-4">
+            {moreRoutes.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href || pathname?.startsWith(item.href + '/');
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setDrawerOpen(false)}
+                  className={`min-h-[64px] rounded-2xl border p-3 flex items-center gap-3 ${
+                    active
+                      ? 'border-[#B7FF3C]/50 bg-[#B7FF3C]/10 text-[#F5F7FA]'
+                      : 'border-[#292F3B] bg-[#161A22] text-[#A1A8B5]'
+                  }`}
+                >
+                  <Icon className="h-[18px] w-[18px] text-[#B7FF3C]" />
+                  <span className="text-sm">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={async () => {
+              setDrawerOpen(false);
+              await signOut();
+            }}
+            className="mt-auto min-h-12 rounded-xl border border-[#FF5C5C]/30 bg-[#FF5C5C]/10 text-[#FF8A8A] flex items-center justify-center gap-2 text-sm"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
         </div>
       )}
     </>

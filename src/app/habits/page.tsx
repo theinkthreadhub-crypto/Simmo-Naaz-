@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import PillNavbar from '@/components/navigation/PillNavbar';
 import {
   Flame,
   Plus,
@@ -105,9 +104,7 @@ export default function HabitsPage() {
 
   return (
     <div className="min-h-screen bg-black text-slate-100 pb-28">
-      <PillNavbar />
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-28">
+<main className="max-w-5xl mx-auto px-4 sm:px-6 pt-28">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6 mb-8">
           <div>

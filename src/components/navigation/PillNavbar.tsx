@@ -1,227 +1,169 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  Cpu, 
-  Sword, 
-  Target, 
-  DollarSign, 
-  Brain, 
-  BookOpen, 
-  Bot, 
-  ChevronDown, 
-  Calendar, 
-  HardDrive, 
-  FileText, 
-  Share2, 
-  Settings, 
-  LogOut,
+import {
+  Home,
   Sparkles,
-  Flame,
-  ShieldCheck,
-  Users
+  ListTodo,
+  Target,
+  Repeat2,
+  Wallet,
+  BookOpen,
+  GraduationCap,
+  CalendarDays,
+  Bot,
+  Plug,
+  Brain,
+  BarChart3,
+  Settings,
+  Search,
+  Bell,
+  LogOut,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
 
-const primaryNavItems = [
-  { href: '/mentra', label: 'MENTRA AI', icon: Sparkles },
-  { href: '/system', label: 'System', icon: Cpu },
-  { href: '/quests', label: 'Quests', icon: Sword },
+const navItems = [
+  { href: '/', label: 'Today', icon: Home },
+  { href: '/mentra', label: 'AI Mentor', icon: Sparkles },
+  { href: '/quests', label: 'Tasks', icon: ListTodo },
   { href: '/goals', label: 'Goals', icon: Target },
-  { href: '/finance', label: 'Finance', icon: DollarSign },
-  { href: '/skills', label: 'Skills', icon: Brain },
+  { href: '/habits', label: 'Habits', icon: Repeat2 },
+  { href: '/finance', label: 'Finance', icon: Wallet },
   { href: '/journal', label: 'Journal', icon: BookOpen },
+  { href: '/skills', label: 'Learning', icon: GraduationCap },
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/agents', label: 'Agents', icon: Bot },
-];
-
-const secondaryNavItems = [
-  { href: '/workspace/settings', label: 'Team & Collaboration', icon: Users },
-  { href: '/business', label: 'Business Hub', icon: DollarSign },
-  { href: '/creator', label: 'Creator Studio', icon: Sparkles },
-  { href: '/mentra/voice', label: 'Voice MENTRA', icon: Sparkles },
-  { href: '/missions', label: 'Missions & Plans', icon: Target },
-  { href: '/habits', label: 'Habits & Rhythms', icon: Flame },
-  { href: '/projects', label: 'Projects & Decisions', icon: Sparkles },
-  { href: '/focus', label: 'Focus Mode', icon: Cpu },
-  { href: '/approvals', label: 'Approval Center', icon: ShieldCheck },
-  { href: '/settings/autonomy', label: 'Autonomy Matrix', icon: ShieldCheck },
-  { href: '/settings/personalization', label: 'Personalization Scopes', icon: Brain },
-  { href: '/system/improvements', label: 'Improvement Center', icon: Sparkles },
-  { href: '/system/quality', label: 'Quality Dashboard', icon: Cpu },
-  { href: '/calendar', label: 'Calendar', icon: Calendar },
-  { href: '/memory', label: 'Memory Vault', icon: HardDrive },
-  { href: '/reports', label: 'Executive Reports', icon: FileText },
-  { href: '/connections', label: 'Connections', icon: Share2 },
+  { href: '/connections', label: 'Integrations', icon: Plug },
+  { href: '/memory', label: 'Memory', icon: Brain },
+  { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
+
+const pageNames: Record<string, string> = {
+  '/': 'Today',
+  '/mentra': 'AI Mentor',
+  '/quests': 'Tasks',
+  '/goals': 'Goals',
+  '/habits': 'Habits',
+  '/finance': 'Finance',
+  '/journal': 'Journal',
+  '/skills': 'Learning',
+  '/calendar': 'Calendar',
+  '/agents': 'Agents',
+  '/connections': 'Integrations',
+  '/memory': 'Memory',
+  '/reports': 'Reports',
+  '/settings': 'Settings',
+};
 
 export default function PillNavbar() {
   const pathname = usePathname();
   const { user, profile, progress, signOut } = useAuth();
   const { player } = useMentraStore();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const displayLevel = progress?.level ?? player.level;
-  const displayXp = progress?.current_xp ?? player.currentXp;
-  const displayStreak = progress?.current_streak ?? player.streakDays;
-  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator Naaz';
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'You';
+  const pageTitle =
+    pageNames[pathname] ||
+    Object.entries(pageNames).find(([key]) => key !== '/' && pathname?.startsWith(key))?.[1] ||
+    'MENTRA';
 
   return (
-    <header className="hidden lg:flex fixed top-5 inset-x-0 z-50 justify-center px-6 pointer-events-none">
-      <div className="w-full max-w-7xl flex items-center justify-between pointer-events-auto">
-        
-        {/* Left: Brand Wordmark */}
-        <Link 
-          href="/" 
-          className="flex items-center gap-2.5 px-4 py-2 glass-pill bg-black/40 border-white/10 hover:border-mentra-orange/40 transition-all group"
-        >
-          <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_8px_#ff4a00]" />
-          <span className="font-display font-bold tracking-wider text-sm text-white group-hover:text-mentra-amber transition-colors">
-            MENTRA
-          </span>
-          <span className="text-[10px] uppercase font-mono tracking-widest text-white/40 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
-            OS
-          </span>
+    <>
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-[264px] border-r border-[#292F3B] bg-[#10131A] p-4 flex-col">
+        <Link href="/" className="min-h-11 flex items-center gap-3 rounded-2xl px-3">
+          <div className="h-9 w-9 rounded-xl bg-[#B7FF3C] text-[#090B0F] flex items-center justify-center font-display text-sm">
+            M
+          </div>
+          <div>
+            <div className="font-display text-sm tracking-tight">MENTRA</div>
+            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#697181]">
+              Personal OS
+            </div>
+          </div>
         </Link>
 
-        {/* Center: Main Navigation Capsule */}
-        <nav className="flex items-center gap-1 p-1.5 glass-pill bg-black/60 border-white/10 shadow-2xl backdrop-blur-2xl">
-          {primaryNavItems.map(item => {
+        <div className="mt-5 px-3 text-[10px] font-mono uppercase tracking-[0.14em] text-[#697181]">
+          Your system
+        </div>
+
+        <nav className="mt-2 flex-1 overflow-y-auto pr-1 space-y-1">
+          {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const active =
+              item.href === '/'
+                ? pathname === '/'
+                : pathname === item.href || pathname?.startsWith(item.href + '/');
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  isActive
-                    ? 'bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_15px_rgba(255,74,0,0.4)]'
-                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                className={`min-h-11 flex items-center gap-3 rounded-xl px-3 text-sm transition-colors ${
+                  active
+                    ? 'bg-[#B7FF3C] text-[#090B0F] font-semibold'
+                    : 'text-[#A1A8B5] hover:bg-[#1C212B] hover:text-[#F5F7FA]'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="h-[18px] w-[18px]" />
                 <span>{item.label}</span>
+                {active && <ChevronRight className="ml-auto h-4 w-4" />}
               </Link>
             );
           })}
-
-          {/* Secondary Dropdown Capsule */}
-          <div className="relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white/70 hover:text-white hover:bg-white/5 transition-all"
-            >
-              <span>More</span>
-              <ChevronDown className={`w-3 h-3 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {dropdownOpen && (
-              <div 
-                className="absolute right-0 mt-3 w-48 p-1.5 glass-panel-strong border-white/10 shadow-2xl rounded-2xl flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150"
-                onMouseLeave={() => setDropdownOpen(false)}
-              >
-                {secondaryNavItems.map(sub => {
-                  const SubIcon = sub.icon;
-                  const isSubActive = pathname === sub.href;
-                  return (
-                    <Link
-                      key={sub.href}
-                      href={sub.href}
-                      onClick={() => setDropdownOpen(false)}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all ${
-                        isSubActive 
-                          ? 'bg-mentra-orange/20 text-mentra-amber border border-mentra-orange/30' 
-                          : 'text-white/70 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      <SubIcon className="w-3.5 h-3.5 text-mentra-amber" />
-                      <span>{sub.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </nav>
 
-        {/* Right: Player Status & Profile */}
-        <div className="relative flex items-center gap-2">
-          {/* Level & Streak Quick Badge */}
-          <div className="flex items-center gap-3 px-3.5 py-1.5 glass-pill bg-black/40 border-white/10 text-xs">
-            <div className="flex items-center gap-1.5 text-mentra-amber font-mono font-medium">
-              <Sparkles className="w-3.5 h-3.5 text-mentra-orange" />
-              <span>LVL {displayLevel}</span>
-            </div>
-            <div className="w-[1px] h-3 bg-white/10" />
-            <div className="flex items-center gap-1 text-white/80 font-mono text-[11px]">
-              <Flame className="w-3.5 h-3.5 text-mentra-orange" />
-              <span>{displayStreak}d</span>
-            </div>
-          </div>
-
-          {/* Profile Trigger */}
-          <button
-            onClick={() => setProfileOpen(!profileOpen)}
-            className="flex items-center gap-2 p-1.5 pr-3 glass-pill bg-black/40 border-white/10 hover:border-mentra-orange/40 transition-all text-left"
-          >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber flex items-center justify-center text-[10px] font-bold text-white shadow-[0_0_8px_rgba(255,74,0,0.4)]">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-            <span className="text-xs font-medium text-white/90 max-w-[100px] truncate">
-              {displayName}
-            </span>
-            <ChevronDown className="w-3 h-3 text-white/40" />
-          </button>
-
-          {/* Profile & Session Dropdown */}
-          {profileOpen && (
-            <div 
-              className="absolute right-0 top-12 w-56 p-2 glass-panel-strong border-white/10 shadow-2xl rounded-2xl flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-150"
-              onMouseLeave={() => setProfileOpen(false)}
-            >
-              <div className="px-3 py-2 border-b border-white/5">
-                <div className="text-xs font-semibold text-white truncate">{displayName}</div>
-                <div className="text-[10px] font-mono text-white/40 truncate">{user?.email || 'operator@mentra.system'}</div>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-mentra-amber">
-                  <span>XP: {displayXp} / 1000</span>
-                  <span>{Math.round((displayXp / 1000) * 100)}%</span>
-                </div>
-                <div className="mt-1 w-full bg-white/5 rounded-full h-1 overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-mentra-orange to-mentra-amber rounded-full" 
-                    style={{ width: `${Math.min(100, Math.round((displayXp / 1000) * 100))}%` }} 
-                  />
-                </div>
+        <div className="mt-4 border-t border-[#292F3B] pt-4">
+          <div className="rounded-2xl border border-[#292F3B] bg-[#161A22] p-3">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-full border border-[#3A424F] bg-[#1C212B] flex items-center justify-center text-sm font-semibold">
+                {displayName.charAt(0).toUpperCase()}
               </div>
-
-              <Link
-                href="/settings"
-                onClick={() => setProfileOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/70 hover:text-white hover:bg-white/5 transition-all"
-              >
-                <Settings className="w-3.5 h-3.5 text-white/60" />
-                <span>Operator Settings</span>
-              </Link>
-
-              <button
-                onClick={async () => {
-                  setProfileOpen(false);
-                  await signOut();
-                }}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all text-left"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Disconnect / Sign Out</span>
-              </button>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold">{displayName}</div>
+                <div className="text-[11px] font-mono text-[#697181]">Level {displayLevel}</div>
+              </div>
+              <span className="h-2 w-2 rounded-full bg-[#4DDB8A]" aria-label="System online" />
             </div>
-          )}
+            <button
+              onClick={() => signOut()}
+              className="mt-3 min-h-11 w-full rounded-xl border border-[#292F3B] text-xs text-[#A1A8B5] hover:bg-[#1C212B] hover:text-[#F5F7FA] flex items-center justify-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <header className="hidden lg:flex fixed top-0 left-[264px] right-0 z-40 h-16 items-center justify-between border-b border-[#292F3B] bg-[#090B0F]/95 px-6">
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#697181]">MENTRA</div>
+          <div className="font-display text-sm">{pageTitle}</div>
         </div>
 
-      </div>
-    </header>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/mentra"
+            className="min-h-11 w-[360px] rounded-xl border border-[#292F3B] bg-[#161A22] px-4 flex items-center gap-3 text-sm text-[#697181] hover:border-[#3A424F] hover:text-[#A1A8B5]"
+          >
+            <Search className="h-4 w-4" />
+            <span>Ask MENTRA or search anything...</span>
+            <span className="ml-auto font-mono text-[10px]">⌘K</span>
+          </Link>
+          <Link
+            href="/system"
+            aria-label="Notifications and system status"
+            className="h-11 w-11 rounded-xl border border-[#292F3B] bg-[#161A22] flex items-center justify-center text-[#A1A8B5] hover:text-[#F5F7FA]"
+          >
+            <Bell className="h-[18px] w-[18px]" />
+          </Link>
+        </div>
+      </header>
+    </>
   );
 }
