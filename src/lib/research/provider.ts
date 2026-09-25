@@ -1,5 +1,51 @@
 import { ResearchProvider, ResearchSource } from './types';
 
+/**
+ * SSRF and URL validation: Ensures that research only queries public HTTP/HTTPS endpoints.
+ * Blocks localhost, private RFC1918 subnets, cloud metadata IPs, and unsafe protocols.
+ */
+export function validatePublicResearchUrl(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return false;
+    }
+
+    const host = url.hostname.toLowerCase();
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      host === '::1' ||
+      host === '169.254.169.254' || // Cloud metadata endpoint
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('172.16.') ||
+      host.startsWith('172.17.') ||
+      host.startsWith('172.18.') ||
+      host.startsWith('172.19.') ||
+      host.startsWith('172.20.') ||
+      host.startsWith('172.21.') ||
+      host.startsWith('172.22.') ||
+      host.startsWith('172.23.') ||
+      host.startsWith('172.24.') ||
+      host.startsWith('172.25.') ||
+      host.startsWith('172.26.') ||
+      host.startsWith('172.27.') ||
+      host.startsWith('172.28.') ||
+      host.startsWith('172.29.') ||
+      host.startsWith('172.30.') ||
+      host.startsWith('172.31.')
+    ) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export class TavilySearchProvider implements ResearchProvider {
   name = 'tavily';
   private apiKey: string;
@@ -9,6 +55,10 @@ export class TavilySearchProvider implements ResearchProvider {
   }
 
   async search(query: string, maxResults: number = 5): Promise<ResearchSource[]> {
+    if (!this.apiKey) {
+      return [];
+    }
+
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -26,14 +76,22 @@ export class TavilySearchProvider implements ResearchProvider {
     }
 
     const data = await res.json();
-    return (data.results || []).map((r: any) => ({
-      title: r.title || 'Source',
-      url: r.url,
-      domain: new URL(r.url).hostname.replace('www.', ''),
-      snippet: r.content || '',
-      publishedDate: r.published_date,
-      score: r.score
-    }));
+    const results: ResearchSource[] = [];
+
+    for (const r of data.results || []) {
+      if (r.url && validatePublicResearchUrl(r.url)) {
+        results.push({
+          title: r.title || 'Source',
+          url: r.url,
+          domain: new URL(r.url).hostname.replace('www.', ''),
+          snippet: r.content || '',
+          publishedDate: r.published_date,
+          score: r.score
+        });
+      }
+    }
+
+    return results;
   }
 }
 
@@ -42,7 +100,7 @@ export class LiveWebSearchProvider implements ResearchProvider {
 
   async search(query: string, maxResults: number = 5): Promise<ResearchSource[]> {
     try {
-      // Use DuckDuckGo HTML endpoint as resilient default
+      // Use DuckDuckGo HTML endpoint
       const endpoint = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
       const res = await fetch(endpoint, {
         headers: {
@@ -51,7 +109,8 @@ export class LiveWebSearchProvider implements ResearchProvider {
       });
 
       if (!res.ok) {
-        return this.getCuratedFallbackSources(query);
+        // Return empty array truthfully when provider fails. Never synthesize fake articles.
+        return [];
       }
 
       const html = await res.text();
@@ -71,7 +130,7 @@ export class LiveWebSearchProvider implements ResearchProvider {
         let domain = 'web';
         try { domain = new URL(rawUrl).hostname.replace('www.', ''); } catch {}
 
-        if (snippet && rawUrl.startsWith('http')) {
+        if (snippet && rawUrl.startsWith('http') && validatePublicResearchUrl(rawUrl)) {
           results.push({
             title: match[2].replace(/<[^>]*>?/gm, '').trim() || domain,
             url: rawUrl,
@@ -81,43 +140,11 @@ export class LiveWebSearchProvider implements ResearchProvider {
         }
       }
 
-      if (results.length === 0) {
-        return this.getCuratedFallbackSources(query);
-      }
-
       return results;
     } catch {
-      return this.getCuratedFallbackSources(query);
+      // Never fabricate sources on network failure
+      return [];
     }
-  }
-
-  private getCuratedFallbackSources(query: string): ResearchSource[] {
-    const q = query.toLowerCase();
-    if (q.includes('streetwear') || q.includes('fashion') || q.includes('apparel')) {
-      return [
-        {
-          title: 'Indian Streetwear Landscape & Gen-Z Apparel Trends 2026',
-          url: 'https://vogue.in/fashion/streetwear-india-2026-report',
-          domain: 'vogue.in',
-          snippet: 'Oversized boxy silhouettes (240-280 GSM), heavy washed vintage graphics, and minimal typography are leading high-conversion streetwear drops in Tier-1 & Tier-2 Indian cities.'
-        },
-        {
-          title: 'D2C Apparel E-commerce: ROAS Optimization on Meta Ads',
-          url: 'https://businessoffashion.com/articles/d2c-apparel-ad-trends',
-          domain: 'businessoffashion.com',
-          snippet: 'Short-form reel hooks featuring raw fabric textures and unboxing experiences achieve 3.4x higher conversion than standard studio mockups in fashion drops.'
-        }
-      ];
-    }
-
-    return [
-      {
-        title: `Intelligence Dossier: ${query}`,
-        url: 'https://marketintelligence.io/reports/overview',
-        domain: 'marketintelligence.io',
-        snippet: `Verified market evidence on ${query} indicates accelerating adoption and key strategic differentiation levers.`
-      }
-    ];
   }
 }
 

@@ -25,6 +25,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper to strictly gate demo mode to explicit dev environments
+const isDevDemoAllowed = () => {
+  return process.env.NODE_ENV !== 'production' && 
+    (process.env.NEXT_PUBLIC_MENTRA_DEMO_MODE === 'true' || process.env.MENTRA_DEMO_MODE === 'true');
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -59,16 +65,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check active session on mount
     const initAuth = async () => {
       try {
-        // Check localStorage for offline demo session first if Supabase is placeholder
-        const savedDemo = localStorage.getItem('mentra_demo_session');
-        if (savedDemo) {
-          const parsed = JSON.parse(savedDemo);
-          setUser(parsed.user);
-          setProfile(parsed.profile);
-          setProgress(parsed.progress);
-          setStats(parsed.stats);
-          setIsLoading(false);
-          return;
+        // Check localStorage for offline demo session only if explicitly allowed in development
+        if (isDevDemoAllowed()) {
+          const savedDemo = localStorage.getItem('mentra_demo_session');
+          if (savedDemo) {
+            const parsed = JSON.parse(savedDemo);
+            setUser(parsed.user);
+            setProfile(parsed.profile);
+            setProgress(parsed.progress);
+            setStats(parsed.stats);
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          // Clear any stale demo session in non-demo mode
+          localStorage.removeItem('mentra_demo_session');
         }
 
         const { data: { session } } = await supabase.auth.getSession();
@@ -90,8 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session.user);
         await loadUserData(session.user.id);
       } else {
-        const savedDemo = localStorage.getItem('mentra_demo_session');
-        if (!savedDemo) {
+        if (!isDevDemoAllowed() || !localStorage.getItem('mentra_demo_session')) {
           setUser(null);
           setProfile(null);
           setProgress(null);
@@ -111,8 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        // If Supabase not connected to real backend, allow local demo sign-in for seamless testing
-        if (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key')) {
+        if (isDevDemoAllowed() && (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key'))) {
           setDemoUser(email.split('@')[0]);
           setIsLoading(false);
           return {};
@@ -127,9 +136,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return {};
     } catch (err: any) {
-      setDemoUser(email.split('@')[0]);
+      if (isDevDemoAllowed()) {
+        setDemoUser(email.split('@')[0]);
+        setIsLoading(false);
+        return {};
+      }
       setIsLoading(false);
-      return {};
+      return { error: err.message || 'Authentication provider unavailable' };
     }
   };
 
@@ -144,8 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
       if (error) {
-        if (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key')) {
-          setDemoUser(displayName);
+        if (isDevDemoAllowed() && (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key'))) {
+          setDemoUser(displayName || email.split('@')[0]);
           setIsLoading(false);
           return {};
         }
@@ -154,22 +167,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (data.user) {
         setUser(data.user);
-        // Create initial un-onboarded profile
-        setProfile({
-          id: data.user.id,
-          user_id: data.user.id,
-          display_name: displayName,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-          preferred_language: 'en',
-          onboarding_completed: false
-        });
+        await initializeUserProfile(data.user.id, displayName);
+        await loadUserData(data.user.id);
       }
       setIsLoading(false);
       return {};
     } catch (err: any) {
-      setDemoUser(displayName);
+      if (isDevDemoAllowed()) {
+        setDemoUser(displayName || email.split('@')[0]);
+        setIsLoading(false);
+        return {};
+      }
       setIsLoading(false);
-      return {};
+      return { error: err.message || 'Authentication provider unavailable' };
     }
   };
 
@@ -182,17 +192,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
       if (error) {
+        if (isDevDemoAllowed()) {
+          setDemoUser('Google Operator');
+          return {};
+        }
+        return { error: error.message };
+      }
+      return {};
+    } catch (err: any) {
+      if (isDevDemoAllowed()) {
         setDemoUser('Google Operator');
         return {};
       }
-      return {};
-    } catch {
-      setDemoUser('Google Operator');
-      return {};
+      return { error: err.message || 'Google authentication unavailable' };
     }
   };
 
   const setDemoUser = (name = 'Operator Naaz') => {
+    if (!isDevDemoAllowed()) {
+      console.warn('[AUTH] Demo user bypass rejected: production mode active.');
+      return;
+    }
+
     const demoUser = {
       id: 'demo_user_001',
       email: `${name.toLowerCase().replace(/\s+/g, '')}@mentra.system`,
@@ -254,18 +275,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const completeOnboarding = async (displayName: string, primaryGoal: string, priorities: string[]): Promise<boolean> => {
-    if (!user?.id) return false;
-    try {
-      const res = await initializeUserProfile(user.id, displayName, primaryGoal, priorities);
-      setProfile(res.profile);
-      setProgress(res.progress);
-      setStats(res.stats);
-      return true;
-    } catch {
-      // Local fallback
+    if (!user) return false;
+
+    if (user.id !== 'demo_user_001') {
+      try {
+        await initializeUserProfile(user.id, displayName, primaryGoal, priorities);
+        await loadUserData(user.id);
+        return true;
+      } catch {
+        return false;
+      }
+    } else {
       const updatedProfile: Profile = {
-        id: `prof_${Date.now()}`,
-        user_id: user.id,
+        id: 'prof_demo',
+        user_id: 'demo_user_001',
         display_name: displayName,
         timezone: 'UTC',
         preferred_language: 'en',
@@ -273,7 +296,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         primary_goal: primaryGoal
       };
       const updatedProgress: PlayerProgress = {
-        user_id: user.id,
+        user_id: 'demo_user_001',
         level: 1,
         current_xp: 0,
         total_xp: 0,

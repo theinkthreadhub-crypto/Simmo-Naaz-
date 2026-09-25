@@ -130,11 +130,12 @@ ALTER TABLE public.workspace_activity ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_approval_policies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_memories ENABLE ROW LEVEL SECURITY;
 
--- Helper functions for RLS checks
+-- Helper functions for RLS checks with explicit search_path
 CREATE OR REPLACE FUNCTION public.is_workspace_member(ws_id UUID, u_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public, auth
 STABLE
 AS $$
     SELECT EXISTS (
@@ -145,11 +146,33 @@ AS $$
     );
 $$;
 
--- RLS Policies
+CREATE OR REPLACE FUNCTION public.is_workspace_admin_or_owner(ws_id UUID, u_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, auth
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.workspace_members
+        WHERE workspace_id = ws_id
+          AND user_id = u_id
+          AND status = 'ACTIVE'
+          AND role IN ('OWNER', 'ADMIN')
+    );
+$$;
+
+-- RLS Policies (SELECT, INSERT, UPDATE, DELETE)
 DROP POLICY IF EXISTS "Members can view their workspaces" ON public.workspaces;
 CREATE POLICY "Members can view their workspaces" ON public.workspaces
     FOR SELECT USING (
         owner_id = auth.uid() OR public.is_workspace_member(id, auth.uid())
+    );
+
+DROP POLICY IF EXISTS "Owners can update their workspaces" ON public.workspaces;
+CREATE POLICY "Owners can update their workspaces" ON public.workspaces
+    FOR UPDATE USING (
+        owner_id = auth.uid()
     );
 
 DROP POLICY IF EXISTS "Members can view workspace members" ON public.workspace_members;
@@ -158,9 +181,27 @@ CREATE POLICY "Members can view workspace members" ON public.workspace_members
         public.is_workspace_member(workspace_id, auth.uid()) OR user_id = auth.uid()
     );
 
+DROP POLICY IF EXISTS "Admins can manage workspace members" ON public.workspace_members;
+CREATE POLICY "Admins can manage workspace members" ON public.workspace_members
+    FOR ALL USING (
+        public.is_workspace_admin_or_owner(workspace_id, auth.uid())
+    );
+
 DROP POLICY IF EXISTS "Members can view workspace tasks" ON public.workspace_tasks;
 CREATE POLICY "Members can view workspace tasks" ON public.workspace_tasks
     FOR SELECT USING (
+        public.is_workspace_member(workspace_id, auth.uid())
+    );
+
+DROP POLICY IF EXISTS "Members can insert workspace tasks" ON public.workspace_tasks;
+CREATE POLICY "Members can insert workspace tasks" ON public.workspace_tasks
+    FOR INSERT WITH CHECK (
+        public.is_workspace_member(workspace_id, auth.uid())
+    );
+
+DROP POLICY IF EXISTS "Members can update workspace tasks" ON public.workspace_tasks;
+CREATE POLICY "Members can update workspace tasks" ON public.workspace_tasks
+    FOR UPDATE USING (
         public.is_workspace_member(workspace_id, auth.uid())
     );
 
@@ -170,14 +211,32 @@ CREATE POLICY "Members can view workspace comments" ON public.workspace_comments
         public.is_workspace_member(workspace_id, auth.uid())
     );
 
+DROP POLICY IF EXISTS "Members can insert workspace comments" ON public.workspace_comments;
+CREATE POLICY "Members can insert workspace comments" ON public.workspace_comments
+    FOR INSERT WITH CHECK (
+        public.is_workspace_member(workspace_id, auth.uid())
+    );
+
 DROP POLICY IF EXISTS "Members can view workspace memories" ON public.workspace_memories;
 CREATE POLICY "Members can view workspace memories" ON public.workspace_memories
     FOR SELECT USING (
         public.is_workspace_member(workspace_id, auth.uid())
     );
 
+DROP POLICY IF EXISTS "Members can insert workspace memories" ON public.workspace_memories;
+CREATE POLICY "Members can insert workspace memories" ON public.workspace_memories
+    FOR INSERT WITH CHECK (
+        public.is_workspace_member(workspace_id, auth.uid())
+    );
+
 DROP POLICY IF EXISTS "Members can view workspace activity" ON public.workspace_activity;
 CREATE POLICY "Members can view workspace activity" ON public.workspace_activity
     FOR SELECT USING (
+        public.is_workspace_member(workspace_id, auth.uid())
+    );
+
+DROP POLICY IF EXISTS "Members can log workspace activity" ON public.workspace_activity;
+CREATE POLICY "Members can log workspace activity" ON public.workspace_activity
+    FOR INSERT WITH CHECK (
         public.is_workspace_member(workspace_id, auth.uid())
     );

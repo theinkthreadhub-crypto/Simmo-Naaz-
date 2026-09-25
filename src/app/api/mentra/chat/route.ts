@@ -1,18 +1,12 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { requireUser, AuthRequiredError } from '@/lib/auth/requireUser';
 import { runMentra } from '@/lib/ai/core';
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Authenticated user session check
-    let userId = user?.id;
-    if (!userId) {
-      // In local demo mode, fallback to demo operator id
-      userId = 'usr_operator_naaz';
-    }
+    // 1. Enforce strict authentic user session
+    const user = await requireUser();
+    const userId = user.id;
 
     const body = await request.json();
     const { message, conversationId, channel, pageContext, externalMessageId } = body;
@@ -34,6 +28,10 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
 
   } catch (err: any) {
+    if (err instanceof AuthRequiredError || err.message === 'AUTH_REQUIRED') {
+      return NextResponse.json({ error: 'AUTH_REQUIRED' }, { status: 401 });
+    }
+
     console.error('[MENTRA CHAT API ERR]:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }

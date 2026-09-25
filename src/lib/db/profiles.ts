@@ -37,8 +37,8 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats | null
 export async function initializeUserProfile(
   userId: string,
   displayName: string,
-  primaryGoal: string,
-  priorities: string[]
+  primaryGoal: string = 'Master AI Orchestration & Life RPG',
+  priorities: string[] = ['Business', 'Discipline']
 ): Promise<{ profile: Profile; progress: PlayerProgress; stats: PlayerStats }> {
   // 1. Create or update profile
   const { data: profileData, error: profileErr } = await supabase

@@ -1,10 +1,12 @@
-import { MentraIncomingMessage, MentraMessage, ActionCard, ModelMessage } from './types';
+import { MentraIncomingMessage, ActionCard, ModelMessage } from './types';
 import { getAIProvider } from './provider';
 import { getMentraSystemPrompt } from './prompts';
 import { buildMentraContext } from './context';
 import { checkRateLimit, sanitizeInputText } from './safety';
 import { MENTRA_TOOL_REGISTRY, ALL_MENTRA_TOOLS } from './tools/registry';
 import { createClient } from '@/lib/supabase/server';
+import { evaluateActionPermission } from '@/lib/safety/riskEngine';
+import crypto from 'crypto';
 
 export interface RunMentraResult {
   success: boolean;
@@ -22,7 +24,6 @@ export async function runMentra(
     onStatus?: (status: string) => void;
   }
 ): Promise<RunMentraResult> {
-  const startTime = Date.now();
   const supabase = createClient();
   const cleanText = sanitizeInputText(incoming.text);
 
@@ -101,6 +102,7 @@ export async function runMentra(
   const executedTools: string[] = [];
   const accumulatedCards: ActionCard[] = [];
   let finalResponseText = '';
+  const toolResultsForSynthesis: Array<{ tool: string; result: any }> = [];
 
   try {
     const aiResponse = await provider.generate(modelMessages, {
@@ -121,13 +123,71 @@ export async function runMentra(
           if (callbacks?.onStatus) callbacks.onStatus(`EXECUTING_${call.name.toUpperCase()}`);
           
           const toolStartTime = Date.now();
-          const idempotencyKey = incoming.externalMessageId ? `${incoming.externalMessageId}_${call.name}` : `tool_${Date.now()}`;
+          const idempotencyKey = incoming.externalMessageId 
+            ? `${incoming.externalMessageId}_${call.name}` 
+            : `tool_${incoming.userId}_${Date.now()}_${call.name}`;
 
-          // Server-side Zod validation
+          // Server-side Zod validation: NEVER execute raw invalid arguments!
           const parsedArgs = toolDef.schema.safeParse(call.arguments);
-          const validArgs = parsedArgs.success ? parsedArgs.data : call.arguments;
+          if (!parsedArgs.success) {
+            const validationError = parsedArgs.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+            console.warn(`[AI TOOL SCHEMA ERROR] Tool '${call.name}' validation failed:`, validationError);
 
-          // Execute tool with context
+            await supabase.from('ai_tool_calls').insert({
+              user_id: incoming.userId,
+              tool_name: call.name,
+              input: call.arguments,
+              output: {},
+              status: 'TOOL_VALIDATION_FAILED',
+              idempotency_key: idempotencyKey,
+              latency_ms: Date.now() - toolStartTime,
+              error_message: validationError
+            });
+
+            finalResponseText = `I encountered an issue with the parameters for ${call.name}: ${validationError}. Execution was prevented for data integrity.`;
+            continue;
+          }
+
+          const validArgs = parsedArgs.data;
+
+          // Deterministic Risk & Permission check
+          const permission = evaluateActionPermission('ASSISTED', call.name, validArgs);
+          if (permission.requiresApproval) {
+            const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validArgs)).digest('hex');
+            const approvalId = `appr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+            const approvalCard: ActionCard = {
+              id: approvalId,
+              type: 'APPROVAL_REQUIRED',
+              title: `Approval Required: ${call.name}`,
+              subtitle: permission.reason || 'Mutating external action requires human sign-off',
+              data: {
+                toolName: call.name,
+                payload: validArgs,
+                payloadHash,
+                riskLevel: permission.riskLevel
+              },
+              requiresApproval: true,
+              approvalId
+            };
+
+            accumulatedCards.push(approvalCard);
+            finalResponseText = `The action "${call.name}" requires your authorization before proceeding (${permission.reason}). Please review the approval card.`;
+            
+            await supabase.from('ai_tool_calls').insert({
+              user_id: incoming.userId,
+              tool_name: call.name,
+              input: validArgs,
+              output: { approvalId, status: 'APPROVAL_REQUIRED' },
+              status: 'APPROVAL_REQUIRED',
+              idempotency_key: idempotencyKey,
+              latency_ms: Date.now() - toolStartTime
+            });
+
+            continue;
+          }
+
+          // Execute tool with validated arguments and context
           const toolResult = await toolDef.execute(validArgs, {
             userId: incoming.userId,
             conversationId,
@@ -137,16 +197,17 @@ export async function runMentra(
 
           const toolLatency = Date.now() - toolStartTime;
           executedTools.push(call.name);
+          toolResultsForSynthesis.push({ tool: call.name, result: toolResult });
 
           if (toolResult.card) {
             accumulatedCards.push(toolResult.card);
           }
 
-          if (toolResult.message && (!finalResponseText || finalResponseText.includes('Executing') || finalResponseText.includes('Retrieving') || finalResponseText.includes('Searching') || finalResponseText.includes('Analyzing') || finalResponseText.includes('Initializing'))) {
+          if (toolResult.message) {
             finalResponseText = toolResult.message;
           }
 
-          // Log Tool Execution to DB
+          // Log Tool Execution to DB with truthful status
           await supabase.from('ai_tool_calls').insert({
             user_id: incoming.userId,
             tool_name: call.name,
@@ -180,18 +241,6 @@ export async function runMentra(
       tool_calls: executedTools.map(t => ({ name: t, status: 'SUCCESS' }))
     });
 
-    // 10. Record AI Run Metrics
-    const totalLatency = Date.now() - startTime;
-    await supabase.from('ai_runs').insert({
-      user_id: incoming.userId,
-      conversation_id: conversationId,
-      provider: provider.name,
-      model: process.env.AI_MODEL_SMART || 'gemini-1.5-flash',
-      purpose: 'CHAT',
-      latency_ms: totalLatency,
-      status: 'SUCCESS'
-    });
-
     return {
       success: true,
       message: finalResponseText || 'Command processed.',
@@ -201,12 +250,10 @@ export async function runMentra(
     };
 
   } catch (err: any) {
-    console.error('[MENTRA CORE ERR]:', err);
-    const fallbackMsg = `[MENTRA CORE]: System operational. An error occurred while processing command: ${err.message}`;
-
+    console.error('[MENTRA AI CORE ERROR]:', err);
     return {
       success: false,
-      message: fallbackMsg,
+      message: 'MENTRA AI encountered an unexpected error processing your request.',
       cards: [],
       conversationId,
       toolCallsExecuted: executedTools,

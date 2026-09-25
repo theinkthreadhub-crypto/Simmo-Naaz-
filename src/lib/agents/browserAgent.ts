@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { ActionRiskLevel, evaluateActionPermission } from '../safety/riskEngine';
+import { validatePublicResearchUrl } from '../research/provider';
 
 export type BrowserActionType =
   | 'NAVIGATE'
@@ -43,6 +44,15 @@ export class ControlledBrowserAgent implements BrowserTool {
   }
 
   async navigate(url: string): Promise<BrowserActionResult> {
+    if (!validatePublicResearchUrl(url)) {
+      return {
+        success: false,
+        actionType: 'NAVIGATE',
+        targetUrl: url,
+        error: 'BLOCKED_BY_SSRF_PROTECTION'
+      };
+    }
+
     if (!this.isConfigured()) {
       return {
         success: false,
@@ -61,6 +71,15 @@ export class ControlledBrowserAgent implements BrowserTool {
   }
 
   async readPage(url: string): Promise<BrowserActionResult> {
+    if (!validatePublicResearchUrl(url)) {
+      return {
+        success: false,
+        actionType: 'READ_PAGE',
+        targetUrl: url,
+        error: 'BLOCKED_BY_SSRF_PROTECTION'
+      };
+    }
+
     if (!this.isConfigured()) {
       return {
         success: false,
@@ -87,6 +106,15 @@ export class ControlledBrowserAgent implements BrowserTool {
   }
 
   async click(url: string, selector: string): Promise<BrowserActionResult> {
+    if (!this.isConfigured()) {
+      return {
+        success: false,
+        actionType: 'CLICK',
+        targetUrl: url,
+        error: 'BROWSER_PROVIDER_UNCONFIGURED'
+      };
+    }
+
     const perm = evaluateActionPermission('ASSISTED', 'browser_click', { url, selector });
     if (perm.requiresApproval) {
       return {
@@ -102,20 +130,45 @@ export class ControlledBrowserAgent implements BrowserTool {
   }
 
   async type(url: string, selector: string, text: string): Promise<BrowserActionResult> {
+    if (!this.isConfigured()) {
+      return {
+        success: false,
+        actionType: 'TYPE',
+        targetUrl: url,
+        error: 'BROWSER_PROVIDER_UNCONFIGURED'
+      };
+    }
+
     return { success: true, actionType: 'TYPE', targetUrl: url };
   }
 
   async screenshot(url: string): Promise<BrowserActionResult> {
+    if (!this.isConfigured()) {
+      return {
+        success: false,
+        actionType: 'SCREENSHOT',
+        targetUrl: url,
+        error: 'BROWSER_PROVIDER_UNCONFIGURED'
+      };
+    }
+
     return {
       success: true,
       actionType: 'SCREENSHOT',
-      targetUrl: url,
-      screenshotUrl: '/assets/mock-browser-view.png'
+      targetUrl: url
     };
   }
 
   async submit(url: string, selector: string, payload: Record<string, unknown>): Promise<BrowserActionResult> {
-    // Sensitive mutating submission requires explicit approval
+    if (!this.isConfigured()) {
+      return {
+        success: false,
+        actionType: 'SUBMIT',
+        targetUrl: url,
+        error: 'BROWSER_PROVIDER_UNCONFIGURED'
+      };
+    }
+
     const perm = evaluateActionPermission('ASSISTED', 'browser_submit', payload);
     if (perm.requiresApproval) {
       return {
@@ -134,9 +187,6 @@ export class ControlledBrowserAgent implements BrowserTool {
     };
   }
 
-  /**
-   * Log action to sovereign database audit trail
-   */
   async logBrowserAction(
     userId: string,
     sessionId: string,
@@ -156,7 +206,7 @@ export class ControlledBrowserAgent implements BrowserTool {
         result: action
       });
     } catch {
-      // Ignored in test harness
+      // Ignored
     }
   }
 }

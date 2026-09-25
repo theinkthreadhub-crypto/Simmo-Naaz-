@@ -10,16 +10,21 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleDispatch(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET || process.env.JOB_SECRET;
 
-  // Verify cron secret if set
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    const { searchParams } = new URL(req.url);
-    const key = searchParams.get('key');
-    if (key !== cronSecret) {
-      return NextResponse.json({ error: 'UNAUTHORIZED_CRON' }, { status: 401 });
-    }
+  // Fail-Closed: If CRON_SECRET is not configured on the server, deny execution
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: 'CRON_SECRET_NOT_CONFIGURED: Cron dispatch is disabled until a secret is configured.' },
+      { status: 503 }
+    );
+  }
+
+  const authHeader = req.headers.get('authorization');
+  const expectedHeader = `Bearer ${cronSecret}`;
+
+  if (!authHeader || authHeader !== expectedHeader) {
+    return NextResponse.json({ error: 'UNAUTHORIZED_CRON: Invalid or missing Authorization token.' }, { status: 401 });
   }
 
   try {

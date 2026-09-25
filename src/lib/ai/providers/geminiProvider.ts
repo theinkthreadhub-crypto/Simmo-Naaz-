@@ -1,4 +1,83 @@
-import { AIProvider, AIProviderResponse, ModelMessage, GenerateOptions } from '../types';
+import { AIProvider, AIProviderResponse, ModelMessage, GenerateOptions, ToolDefinition } from '../types';
+import { z } from 'zod';
+
+/**
+ * Converts a Zod Schema into a Gemini-compliant JSON Schema representation
+ */
+function convertZodToGeminiSchema(schema: z.ZodTypeAny): Record<string, any> {
+  if (!schema) {
+    return { type: 'OBJECT', properties: {} };
+  }
+
+  // Handle Optional, Nullable, Default wrappers
+  if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
+    return convertZodToGeminiSchema(schema.unwrap());
+  }
+  if (schema instanceof z.ZodDefault) {
+    return convertZodToGeminiSchema(schema.removeDefault());
+  }
+
+  if (schema instanceof z.ZodString) {
+    return { type: 'STRING', description: schema.description };
+  }
+
+  if (schema instanceof z.ZodNumber) {
+    return { type: 'NUMBER', description: schema.description };
+  }
+
+  if (schema instanceof z.ZodBoolean) {
+    return { type: 'BOOLEAN', description: schema.description };
+  }
+
+  if (schema instanceof z.ZodEnum) {
+    return {
+      type: 'STRING',
+      enum: schema._def.values,
+      description: schema.description,
+    };
+  }
+
+  if (schema instanceof z.ZodArray) {
+    return {
+      type: 'ARRAY',
+      items: convertZodToGeminiSchema(schema.element),
+      description: schema.description,
+    };
+  }
+
+  if (schema instanceof z.ZodObject) {
+    const shape = schema.shape;
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+
+    for (const key of Object.keys(shape)) {
+      const fieldSchema = shape[key];
+      properties[key] = convertZodToGeminiSchema(fieldSchema);
+
+      const isOptional =
+        fieldSchema instanceof z.ZodOptional ||
+        fieldSchema instanceof z.ZodDefault ||
+        fieldSchema.isOptional?.();
+
+      if (!isOptional) {
+        required.push(key);
+      }
+    }
+
+    const result: Record<string, any> = {
+      type: 'OBJECT',
+      properties,
+    };
+
+    if (required.length > 0) {
+      result.required = required;
+    }
+
+    return result;
+  }
+
+  return { type: 'STRING' };
+}
 
 export class GeminiProvider implements AIProvider {
   name = 'gemini';
@@ -27,17 +106,17 @@ export class GeminiProvider implements AIProvider {
         parts: [{ text: m.content }]
       }));
 
-    // Convert tools if provided
+    // Convert tools if provided with real parameter schemas
     let toolsPayload = undefined;
     if (options?.tools && options.tools.length > 0) {
-      const functionDeclarations = options.tools.map(t => ({
-        name: t.name,
-        description: t.description,
-        parameters: {
-          type: 'OBJECT',
-          properties: {}
-        }
-      }));
+      const functionDeclarations = options.tools.map((t: ToolDefinition) => {
+        const schemaObj = t.schema ? convertZodToGeminiSchema(t.schema) : { type: 'OBJECT', properties: {} };
+        return {
+          name: t.name,
+          description: t.description,
+          parameters: schemaObj,
+        };
+      });
       toolsPayload = [{ functionDeclarations }];
     }
 
@@ -73,13 +152,15 @@ export class GeminiProvider implements AIProvider {
     const data = await response.json();
     const candidate = data.candidates?.[0];
     const textPart = candidate?.content?.parts?.find((p: any) => p.text)?.text || '';
-    const functionCallPart = candidate?.content?.parts?.find((p: any) => p.functionCall);
+    
+    // Safely parse all function call parts returned by Gemini
+    const functionCallParts = candidate?.content?.parts?.filter((p: any) => p.functionCall) || [];
 
-    const toolCalls = functionCallPart ? [{
-      id: `call_${Date.now()}`,
-      name: functionCallPart.functionCall.name,
-      arguments: functionCallPart.functionCall.args || {}
-    }] : undefined;
+    const toolCalls = functionCallParts.length > 0 ? functionCallParts.map((fPart: any, index: number) => ({
+      id: `call_${Date.now()}_${index}`,
+      name: fPart.functionCall.name,
+      arguments: fPart.functionCall.args || {}
+    })) : undefined;
 
     return {
       content: textPart,
@@ -98,16 +179,18 @@ export class GeminiProvider implements AIProvider {
     callbacks: { onToken: (token: string) => void; onStatus?: (status: string) => void }
   ): Promise<AIProviderResponse> {
     if (callbacks.onStatus) callbacks.onStatus('CONNECTING_AI_CORE');
-    const result = await this.generate(messages, options);
+    const response = await this.generate(messages, options);
 
-    if (result.content) {
-      const words = result.content.split(' ');
+    if (callbacks.onToken && response.content) {
+      const words = response.content.split(' ');
       for (const word of words) {
         callbacks.onToken(word + ' ');
         await new Promise(r => setTimeout(r, 12));
       }
     }
 
-    return result;
+    return response;
   }
 }
+
+export { convertZodToGeminiSchema };

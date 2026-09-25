@@ -2,7 +2,8 @@ export interface SpeechAnalysisResult {
   durationSeconds: number;
   wordCount: number;
   speakingRateWpm: number;
-  pauseCount: number;
+  pauseAnalysisStatus: 'MEASURED' | 'DERIVED' | 'PAUSE_ANALYSIS_UNAVAILABLE';
+  pauseCount: number | null;
   fillerWordsCount: number;
   fillerWordsList: string[];
   clarityScore: number;
@@ -35,12 +36,11 @@ export class ModularSpeechProvider implements SpeechProvider {
   }
 
   isAvailable(): boolean {
-    return Boolean(this.apiKey || process.env.AI_API_KEY);
+    return Boolean(this.apiKey);
   }
 
   async transcribe(audioBlobOrBase64: string | Blob): Promise<{ transcript: string; confidence: number; detectedLanguage?: string }> {
     if (!this.isAvailable()) {
-      // Return safe unconfigured response without fabricating data
       return {
         transcript: '',
         confidence: 0,
@@ -49,8 +49,7 @@ export class ModularSpeechProvider implements SpeechProvider {
     }
 
     try {
-      // If native OpenAI/Whisper or Gemini Audio API is configured
-      if (process.env.SPEECH_API_KEY && typeof audioBlobOrBase64 !== 'string') {
+      if (this.apiKey && typeof audioBlobOrBase64 !== 'string') {
         const formData = new FormData();
         formData.append('file', audioBlobOrBase64, 'audio.webm');
         formData.append('model', this.sttModel);
@@ -98,18 +97,24 @@ export class ModularSpeechProvider implements SpeechProvider {
       if (res.ok) {
         const buffer = await res.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
-        return { audioBase64: base64, mimeType: 'audio/mp3' };
+        return {
+          audioBase64: base64,
+          mimeType: 'audio/mp3'
+        };
       }
-    } catch (err) {
-      console.warn('[SpeechProvider] TTS synthesis skipped:', err);
-    }
 
-    return { mimeType: 'audio/mp3' };
+      return { mimeType: 'audio/mp3' };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[SpeechProvider] TTS error:', msg);
+      return { mimeType: 'audio/mp3' };
+    }
   }
 
   /**
    * Deterministic Speech Metric Analysis
-   * Analyzes actual words, speaking rate, and filler words from speech transcript
+   * Truthfully derives word count, speaking rate, and filler words from transcript.
+   * Without acoustic timestamps, pauseCount is marked PAUSE_ANALYSIS_UNAVAILABLE.
    */
   analyzeAudio(transcript: string, durationSeconds: number): SpeechAnalysisResult {
     const cleanText = transcript.trim().toLowerCase();
@@ -148,7 +153,8 @@ export class ModularSpeechProvider implements SpeechProvider {
       durationSeconds,
       wordCount,
       speakingRateWpm,
-      pauseCount: Math.max(0, Math.floor(durationSeconds / 15) - 1),
+      pauseAnalysisStatus: 'PAUSE_ANALYSIS_UNAVAILABLE',
+      pauseCount: null,
       fillerWordsCount: fillerCount,
       fillerWordsList: Array.from(new Set(foundFillers)),
       clarityScore: clarity
