@@ -9,9 +9,11 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "npx tsx scripts/mentra-truth-and-repair-audit.ts",
-    "test:truth": "npx tsx scripts/mentra-truth-and-repair-audit.ts",
+    "test:unit": "npx tsx scripts/mentra-truth-and-repair-audit.ts",
     "test:security": "npx tsx scripts/phase13-team-collaboration-eval.ts",
-    "test:evals": "npx tsx scripts/phase12-business-creator-eval.ts"
+    "test:e2e": "npx tsx scripts/mentra-truth-e2e.ts",
+    "test:evals": "npx tsx scripts/phase12-business-creator-eval.ts",
+    "test:all": "npx tsx scripts/mentra-truth-and-repair-audit.ts && npx tsx scripts/mentra-truth-e2e.ts && npx tsx scripts/phase13-team-collaboration-eval.ts && npx tsx scripts/phase12-business-creator-eval.ts"
   },
   "dependencies": {
     "@react-three/drei": "^9.121.4",

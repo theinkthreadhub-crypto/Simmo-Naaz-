@@ -8,8 +8,11 @@ import { createClient } from '@/lib/supabase/server';
 import { evaluateActionPermission } from '@/lib/safety/riskEngine';
 import crypto from 'crypto';
 
+export type AIRunStatus = 'SUCCESS' | 'PARTIAL' | 'WAITING_APPROVAL' | 'FAILED';
+
 export interface RunMentraResult {
   success: boolean;
+  status: AIRunStatus;
   message: string;
   cards: ActionCard[];
   conversationId: string;
@@ -33,6 +36,7 @@ export async function runMentra(
     const errorMsg = `Daily request limit reached. Please wait ${rateLimit.resetInSec}s.`;
     return {
       success: false,
+      status: 'FAILED',
       message: errorMsg,
       cards: [],
       conversationId: incoming.conversationId || '',
@@ -102,7 +106,9 @@ export async function runMentra(
   const executedTools: string[] = [];
   const accumulatedCards: ActionCard[] = [];
   let finalResponseText = '';
-  const toolResultsForSynthesis: Array<{ tool: string; result: any }> = [];
+  const toolResultsForSynthesis: Array<{ tool: string; result: any; args: any }> = [];
+  let hasPendingApproval = false;
+  let hasToolFailure = false;
 
   try {
     const aiResponse = await provider.generate(modelMessages, {
@@ -130,6 +136,7 @@ export async function runMentra(
           // Server-side Zod validation: NEVER execute raw invalid arguments!
           const parsedArgs = toolDef.schema.safeParse(call.arguments);
           if (!parsedArgs.success) {
+            hasToolFailure = true;
             const validationError = parsedArgs.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
             console.warn(`[AI TOOL SCHEMA ERROR] Tool '${call.name}' validation failed:`, validationError);
 
@@ -138,13 +145,17 @@ export async function runMentra(
               tool_name: call.name,
               input: call.arguments,
               output: {},
-              status: 'TOOL_VALIDATION_FAILED',
+              status: 'VALIDATION_FAILED',
               idempotency_key: idempotencyKey,
               latency_ms: Date.now() - toolStartTime,
               error_message: validationError
             });
 
-            finalResponseText = `I encountered an issue with the parameters for ${call.name}: ${validationError}. Execution was prevented for data integrity.`;
+            toolResultsForSynthesis.push({
+              tool: call.name,
+              args: call.arguments,
+              result: { ok: false, errorCode: 'VALIDATION_FAILED', message: `Validation error: ${validationError}` }
+            });
             continue;
           }
 
@@ -153,6 +164,7 @@ export async function runMentra(
           // Deterministic Risk & Permission check
           const permission = evaluateActionPermission('ASSISTED', call.name, validArgs);
           if (permission.requiresApproval) {
+            hasPendingApproval = true;
             const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validArgs)).digest('hex');
             const approvalId = `appr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
@@ -172,7 +184,6 @@ export async function runMentra(
             };
 
             accumulatedCards.push(approvalCard);
-            finalResponseText = `The action "${call.name}" requires your authorization before proceeding (${permission.reason}). Please review the approval card.`;
             
             await supabase.from('ai_tool_calls').insert({
               user_id: incoming.userId,
@@ -184,6 +195,11 @@ export async function runMentra(
               latency_ms: Date.now() - toolStartTime
             });
 
+            toolResultsForSynthesis.push({
+              tool: call.name,
+              args: validArgs,
+              result: { ok: false, errorCode: 'APPROVAL_REQUIRED', message: `Authorization required: ${permission.reason}` }
+            });
             continue;
           }
 
@@ -197,14 +213,14 @@ export async function runMentra(
 
           const toolLatency = Date.now() - toolStartTime;
           executedTools.push(call.name);
-          toolResultsForSynthesis.push({ tool: call.name, result: toolResult });
+          toolResultsForSynthesis.push({ tool: call.name, args: validArgs, result: toolResult });
+
+          if (!toolResult.ok) {
+            hasToolFailure = true;
+          }
 
           if (toolResult.card) {
             accumulatedCards.push(toolResult.card);
-          }
-
-          if (toolResult.message) {
-            finalResponseText = toolResult.message;
           }
 
           // Log Tool Execution to DB with truthful status
@@ -220,6 +236,64 @@ export async function runMentra(
           });
         }
       }
+
+      // 9. Tool Result Final Synthesis Loop
+      if (toolResultsForSynthesis.length > 0) {
+        if (callbacks?.onStatus) callbacks.onStatus('SYNTHESIZING_RESPONSE');
+
+        const synthesisContext = toolResultsForSynthesis.map(t => {
+          return `[Action: ${t.tool}]
+Input: ${JSON.stringify(t.args)}
+Status: ${t.result.ok ? 'SUCCESS' : (t.result.errorCode || 'FAILED')}
+Result Data: ${JSON.stringify(t.result.data || {})}
+Message: ${t.result.message || ''}`;
+        }).join('\n\n');
+
+        const synthesisMessages: ModelMessage[] = [
+          ...modelMessages,
+          {
+            role: 'assistant',
+            content: `I executed the requested operations with the following verifiable results:\n\n${synthesisContext}`
+          },
+          {
+            role: 'user',
+            content: `Synthesize a concise, natural, and truthful final response for the user request: "${cleanText}".
+Rules:
+1. Use ONLY the verified data returned above.
+2. If an action succeeded, confirm it clearly with the exact figures/data.
+3. If an action required approval or failed, state that truthfully without pretending it completed.
+4. Do not invent unrecorded metrics or duplicate operations.`
+          }
+        ];
+
+        try {
+          const synthesisResponse = await provider.generate(synthesisMessages, {
+            temperature: 0.2,
+            maxTokens: 800
+          });
+
+          if (synthesisResponse.content?.trim()) {
+            finalResponseText = synthesisResponse.content.trim();
+          }
+        } catch (synthErr) {
+          console.warn('[AI SYNTHESIS FALLBACK]:', synthErr);
+          // Deterministic fallback preserves execution truth without implying tool failure
+          const truthfulMessages = toolResultsForSynthesis.map(t => t.result.message).filter(Boolean);
+          if (truthfulMessages.length > 0) {
+            finalResponseText = truthfulMessages.join(' ');
+          }
+        }
+      }
+    }
+
+    // Determine overall run status
+    let runStatus: AIRunStatus = 'SUCCESS';
+    if (hasPendingApproval) {
+      runStatus = 'WAITING_APPROVAL';
+    } else if (hasToolFailure && executedTools.length > 0) {
+      runStatus = 'PARTIAL';
+    } else if (hasToolFailure && executedTools.length === 0) {
+      runStatus = 'FAILED';
     }
 
     // Stream out final tokens if callback provided
@@ -231,7 +305,7 @@ export async function runMentra(
       }
     }
 
-    // 9. Persist Assistant Message
+    // 10. Persist Assistant Message
     await supabase.from('messages').insert({
       conversation_id: conversationId,
       user_id: incoming.userId,
@@ -242,7 +316,8 @@ export async function runMentra(
     });
 
     return {
-      success: true,
+      success: runStatus !== 'FAILED',
+      status: runStatus,
       message: finalResponseText || 'Command processed.',
       cards: accumulatedCards,
       conversationId,
@@ -253,6 +328,7 @@ export async function runMentra(
     console.error('[MENTRA AI CORE ERROR]:', err);
     return {
       success: false,
+      status: 'FAILED',
       message: 'MENTRA AI encountered an unexpected error processing your request.',
       cards: [],
       conversationId,
