@@ -5,7 +5,7 @@ import { ArrowRight, Lock, Mail, ShieldCheck, User, Terminal } from 'lucide-reac
 import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function AuthScreen() {
-  const { signIn, signUp, signInWithGoogle, setDemoUser } = useAuth();
+  const { signIn, signUp, signInWithGoogle, setDemoUser, isDemoAllowed } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -157,14 +157,16 @@ export default function AuthScreen() {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setDemoUser('Operator Naaz')}
-            className="mt-2 min-h-11 w-full text-xs text-[#697181] hover:text-[#A1A8B5] flex items-center justify-center gap-2"
-          >
-            <Terminal className="h-3.5 w-3.5" />
-            Open demo workspace
-          </button>
+          {isDemoAllowed && (
+            <button
+              type="button"
+              onClick={() => setDemoUser('Operator Naaz')}
+              className="mt-2 min-h-11 w-full text-xs text-[#697181] hover:text-[#A1A8B5] flex items-center justify-center gap-2"
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              Open demo workspace
+            </button>
+          )}
         </section>
       </div>
     </main>
