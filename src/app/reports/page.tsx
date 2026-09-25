@@ -1,89 +1,111 @@
 'use client';
 
 import React from 'react';
-import { FileText, TrendingUp, Sparkles, CheckCircle2, Shield, ArrowUpRight, Trophy } from 'lucide-react';
+import { CheckCircle2, CircleDot, Target, Wallet, GraduationCap, Bot } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
 
 export default function ReportsPage() {
   const { user, profile, progress } = useAuth();
-  const { player, finance, quests, skills } = useMentraStore();
+  const { player, finance, quests, skills, goals, agents } = useMentraStore();
 
   const displayLevel = progress?.level ?? player.level;
-  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator Naaz';
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'You';
+
+  const completedTasks = quests.filter((q) => q.status === 'COMPLETED');
+  const activeTasks = quests.filter((q) => q.status === 'ACTIVE');
+  const activeGoals = goals.filter((g) => g.status === 'IN_PROGRESS');
+  const activeSkills = skills.filter((s) => s.unlocked);
+  const approvals = agents.filter(
+    (a) => a.status === 'WAITING_APPROVAL' || a.status === 'AWAITING_APPROVAL'
+  );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-300">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase tracking-widest">
-            <FileText className="w-4 h-4 text-mentra-orange" />
-            <span>EXECUTIVE DOSSIER & PROGRESSION</span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white mt-1">
-            Weekly Intelligence Report
-          </h1>
-        </div>
+    <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-5 lg:py-8 space-y-6">
+      <header className="border-b border-[#292F3B] pb-6">
+        <div className="mentra-label">Reports</div>
+        <h1 className="mt-2 text-3xl sm:text-5xl uppercase">Your current picture.</h1>
+        <p className="mt-3 max-w-2xl text-sm sm:text-base text-[#A1A8B5]">
+          A factual snapshot of what MENTRA currently has in your system. No invented scores or activity.
+        </p>
+      </header>
 
-        <div className="text-xs font-mono text-white/50">
-          STATUS: <strong className="text-emerald-400 font-bold">READY FOR REVIEW</strong>
-        </div>
-      </div>
-
-      {/* Executive Summary Card */}
-      <div className="p-6 sm:p-8 rounded-3xl glass-panel-orange bg-black/70 border-white/15 space-y-6">
-        <div className="flex items-center justify-between pb-4 border-b border-white/10">
+      <section className="rounded-[20px] border border-[#292F3B] bg-[#161A22] p-5 sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold font-display text-white">
-              WEEKLY OPERATOR DOSSIER // {displayName.toUpperCase()}
-            </h2>
-            <span className="text-xs font-mono text-white/40">PERIOD: CURRENT ACTIVE CYCLE</span>
+            <div className="mentra-label">{displayName}</div>
+            <h2 className="mt-2 text-2xl sm:text-3xl uppercase">System summary</h2>
           </div>
-          <div className="px-3.5 py-1 rounded-full bg-mentra-orange/15 border border-mentra-orange/30 text-mentra-amber font-mono text-xs font-bold">
-            LEVEL 0{displayLevel} TACTICIAN
-          </div>
-        </div>
-
-        {/* 4 Core Pillars Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-mono text-white/40 uppercase">QUEST VELOCITY</div>
-            <div className="text-2xl font-mono font-bold text-white mt-1">4 / 5 Done</div>
-            <p className="text-xs text-emerald-400 font-mono mt-1">+240 XP Accumulated</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-mono text-white/40 uppercase">NET CASH FLOW</div>
-            <div className="text-2xl font-mono font-bold text-emerald-400 mt-1">₹{finance.monthlySavings.toLocaleString()}</div>
-            <p className="text-xs text-white/50 font-mono mt-1">Solvent Runway: 7.4 mo</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-mono text-white/40 uppercase">SKILLS ELEVATED</div>
-            <div className="text-2xl font-mono font-bold text-mentra-amber mt-1">2 Nodes</div>
-            <p className="text-xs text-mentra-orange font-mono mt-1">AI Agents & Cash Flow</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-mono text-white/40 uppercase">SOVEREIGN STREAK</div>
-            <div className="text-2xl font-mono font-bold text-white mt-1">12 Days 🔥</div>
-            <p className="text-xs text-emerald-400 font-mono mt-1">Zero Breakdowns</p>
-          </div>
-        </div>
-
-        {/* AI Synthesis Narrative */}
-        <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2">
-          <span className="text-xs font-mono text-mentra-amber font-semibold uppercase">
-            [MENTRA SYNTHESIS SUMMARY]
+          <span className="rounded-full border border-[#B7FF3C]/30 bg-[#B7FF3C]/10 px-3 py-1.5 text-xs font-mono text-[#B7FF3C]">
+            LEVEL {displayLevel}
           </span>
-          <p className="text-xs sm:text-sm text-white/80 leading-relaxed font-sans">
-            Strong operational momentum this cycle. The Meta Ads unit economics audit stabilized target ROAS at 4.2x while direct fabric negotiations lowered inventory unit cost by 12%. Deep work cadence averaged 4.2 hours daily. Recommend scaling ad budget by 15% next sprint.
-          </p>
         </div>
-      </div>
 
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ReportMetric icon={<CircleDot className="h-4 w-4" />} label="Active tasks" value={String(activeTasks.length)} />
+          <ReportMetric icon={<CheckCircle2 className="h-4 w-4" />} label="Completed tasks" value={String(completedTasks.length)} />
+          <ReportMetric icon={<Target className="h-4 w-4" />} label="Goals in progress" value={String(activeGoals.length)} />
+          <ReportMetric icon={<GraduationCap className="h-4 w-4" />} label="Unlocked skills" value={String(activeSkills.length)} />
+          <ReportMetric icon={<Wallet className="h-4 w-4" />} label="Monthly savings" value={`₹${finance.monthlySavings.toLocaleString()}`} />
+          <ReportMetric icon={<Bot className="h-4 w-4" />} label="Agent approvals" value={String(approvals.length)} />
+        </div>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-[20px] border border-[#292F3B] bg-[#10131A] p-5 sm:p-6">
+          <div className="mentra-label">Goals</div>
+          <h2 className="mt-2 text-2xl uppercase">Progress</h2>
+          <div className="mt-5 space-y-4">
+            {activeGoals.length > 0 ? activeGoals.map((goal) => (
+              <div key={goal.id} className="rounded-2xl border border-[#292F3B] bg-[#161A22] p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="text-sm font-semibold">{goal.title}</div>
+                  <div className="font-mono text-xs text-[#B7FF3C]">{goal.progressPercent}%</div>
+                </div>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#090B0F]">
+                  <div className="h-full rounded-full bg-[#B7FF3C]" style={{ width: `${Math.min(100, goal.progressPercent)}%` }} />
+                </div>
+              </div>
+            )) : (
+              <p className="text-sm text-[#697181]">No goals are currently in progress.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[20px] border border-[#292F3B] bg-[#10131A] p-5 sm:p-6">
+          <div className="mentra-label">Money</div>
+          <h2 className="mt-2 text-2xl uppercase">Monthly snapshot</h2>
+          <dl className="mt-5 space-y-3">
+            <MoneyRow label="Income" value={finance.monthlyIncome} />
+            <MoneyRow label="Expenses" value={finance.monthlyExpenses} />
+            <MoneyRow label="Savings" value={finance.monthlySavings} accent />
+            <MoneyRow label="Budget remaining" value={finance.budgetRemaining} />
+          </dl>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ReportMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[#292F3B] bg-[#10131A] p-4">
+      <div className="flex items-center gap-2 text-[#697181]">
+        {icon}
+        <span className="text-[10px] font-mono uppercase tracking-[0.12em]">{label}</span>
+      </div>
+      <div className="mt-3 text-2xl font-display">{value}</div>
+    </div>
+  );
+}
+
+function MoneyRow({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-[#292F3B] bg-[#161A22] px-4 py-3">
+      <dt className="text-sm text-[#A1A8B5]">{label}</dt>
+      <dd className={`font-mono text-sm font-semibold ${accent ? 'text-[#B7FF3C]' : 'text-[#F5F7FA]'}`}>
+        ₹{value.toLocaleString()}
+      </dd>
     </div>
   );
 }
