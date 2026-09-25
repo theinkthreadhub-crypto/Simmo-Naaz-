@@ -1,75 +1,69 @@
 'use client';
 
 import React from 'react';
-import { Flame, Shield, Activity, Sparkles } from 'lucide-react';
+import { CheckCircle2, Flame, Target } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
 
 export default function SystemStatus() {
   const { user, profile, progress } = useAuth();
-  const { quests, player } = useMentraStore();
+  const { quests, agents, player } = useMentraStore();
 
-  const activeQuests = quests.filter(q => q.status === 'ACTIVE');
+  const activeTasks = quests.filter((q) => q.status === 'ACTIVE').length;
+  const approvals = agents.filter(
+    (a) => a.status === 'WAITING_APPROVAL' || a.status === 'AWAITING_APPROVAL'
+  ).length;
   const displayLevel = progress?.level ?? player.level;
   const displayStreak = progress?.current_streak ?? player.streakDays;
-  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator Naaz';
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  };
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'You';
 
   return (
-    <div className="w-full glass-panel-strong p-4 sm:p-5 border-white/10 bg-black/60 relative overflow-hidden">
-      {/* Subtle ambient beam */}
-      <div className="absolute top-0 right-1/4 w-48 h-12 bg-mentra-orange/15 rounded-full blur-2xl pointer-events-none" />
-
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Left Greeting & Telemetry Message */}
-        <div className="space-y-1">
+    <section className="rounded-[20px] border border-[#292F3B] bg-[#161A22] p-5 sm:p-6">
+      <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#10b981]" />
-            <span className="text-[11px] font-mono uppercase tracking-widest text-mentra-amber">
-              MENTRA ONLINE // TELEMETRY OPTIMAL
+            <span className="h-2 w-2 rounded-full bg-[#4DDB8A]" />
+            <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#697181]">
+              System active
             </span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-white flex items-center gap-2">
-            <span>{getGreeting()}, {displayName}</span>
+          <h2 className="mt-3 text-xl sm:text-2xl uppercase">
+            {displayName}, your current system is ready.
           </h2>
-          <p className="text-xs text-white/70 max-w-xl font-sans">
-            Today you have {activeQuests.length > 0 ? `${activeQuests.length} active missions` : 'no pending missions'}, 1 finance checkpoint and 20 minutes of autonomous skill progression ready.
+          <p className="mt-2 text-sm text-[#A1A8B5]">
+            {activeTasks > 0 ? `${activeTasks} active task${activeTasks === 1 ? '' : 's'}` : 'No active tasks'}
+            {approvals > 0 ? ` · ${approvals} agent approval${approvals === 1 ? '' : 's'} waiting` : ''}
           </p>
         </div>
 
-        {/* Right Status Metrics */}
-        <div className="flex items-center gap-3 self-start sm:self-auto">
-          <div className="px-3.5 py-2 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2.5">
-            <Shield className="w-4 h-4 text-mentra-orange" />
-            <div>
-              <div className="text-[10px] uppercase font-mono text-white/40">LEVEL</div>
-              <div className="text-xs font-mono font-bold text-white">0{displayLevel}</div>
-            </div>
-          </div>
-
-          <div className="px-3.5 py-2 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2.5">
-            <Flame className="w-4 h-4 text-mentra-amber" />
-            <div>
-              <div className="text-[10px] uppercase font-mono text-white/40">STREAK</div>
-              <div className="text-xs font-mono font-bold text-white">{displayStreak} Days</div>
-            </div>
-          </div>
-
-          <div className="px-3.5 py-2 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2.5">
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <div>
-              <div className="text-[10px] uppercase font-mono text-white/40">KERNEL</div>
-              <div className="text-xs font-mono font-bold text-emerald-300">100% OK</div>
-            </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <StatusStat icon={<Target className="h-4 w-4" />} label="Level" value={String(displayLevel)} />
+          <StatusStat icon={<Flame className="h-4 w-4" />} label="Streak" value={`${displayStreak}d`} />
+          <div className="col-span-2 sm:col-span-1">
+            <StatusStat icon={<CheckCircle2 className="h-4 w-4" />} label="Approvals" value={String(approvals)} />
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+function StatusStat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-[110px] rounded-2xl border border-[#292F3B] bg-[#10131A] p-3">
+      <div className="flex items-center gap-2 text-[#697181]">
+        {icon}
+        <span className="text-[9px] font-mono uppercase tracking-[0.12em]">{label}</span>
+      </div>
+      <div className="mt-2 text-lg font-semibold">{value}</div>
     </div>
   );
 }
