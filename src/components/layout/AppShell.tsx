@@ -12,31 +12,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen w-full bg-energy-horizon flex flex-col items-center justify-center space-y-4">
-        <div className="relative flex items-center justify-center">
-          <div className="w-20 h-20 rounded-full border border-mentra-orange/30 animate-spin-slow" />
-          <div className="absolute w-8 h-8 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_20px_#ff4a00]" />
-        </div>
-        <div className="text-xs font-mono tracking-widest text-mentra-amber uppercase animate-pulse">
-          CALIBRATING MENTRA KERNEL...
+      <div className="min-h-screen w-full bg-[#090B0F] flex items-center justify-center px-6">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto mb-5 h-12 w-12 rounded-2xl border border-[#B7FF3C]/30 bg-[#161A22] flex items-center justify-center">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#B7FF3C] animate-pulse" />
+          </div>
+          <div className="font-display text-xl text-[#F5F7FA]">MENTRA</div>
+          <div className="mt-2 text-xs font-mono uppercase tracking-[0.16em] text-[#697181]">
+            Loading your system
+          </div>
         </div>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return <AuthScreen />;
-  }
-
-  if (!onboardingCompleted) {
-    return <OnboardingSequence />;
-  }
+  if (!isAuthenticated) return <AuthScreen />;
+  if (!onboardingCompleted) return <OnboardingSequence />;
 
   return (
-    <div className="min-h-screen bg-energy-horizon text-white flex flex-col relative selection:bg-mentra-orange selection:text-white">
+    <div className="min-h-screen bg-[#090B0F] text-[#F5F7FA] selection:bg-[#B7FF3C] selection:text-[#090B0F]">
       <PillNavbar />
       <MobileDock />
-      <main className="flex-1 w-full pt-20 lg:pt-28 pb-24 lg:pb-12">
+      <main className="min-h-screen pt-16 pb-24 lg:pt-20 lg:pb-10 lg:pl-[264px]">
         {children}
       </main>
     </div>
