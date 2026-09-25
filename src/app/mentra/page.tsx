@@ -62,7 +62,7 @@ export default function MentraChatPage() {
       {
         id: 'msg_welcome',
         role: 'assistant',
-        content: `[MENTRA CORE ONLINE]: Operator ${profile?.display_name || 'Naaz'}, all systems nominal. Level 0${displayLevel} Vanguard Architect active with ${activeQuests.length} scheduled quests. Standing by for voice or command dispatch.`,
+        content: `Hi ${profile?.display_name || 'there'}. I can see ${activeQuests.length} active task${activeQuests.length === 1 ? '' : 's'} in your current context. What do you want to work on?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ]);
