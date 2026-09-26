@@ -37,7 +37,7 @@ export class WhatsAppClient {
       // Graceful unconfigured logging - does not fake successful sending to Meta
       console.warn('[WhatsAppClient] Credentials not configured. Outbound message skipped.');
       if (userId) {
-        await this.logOutbound(userId, cleanPhone, 'TEXT', 'FAILED', undefined, 'WhatsApp credentials not configured in environment');
+        await this.logOutbound(userId, cleanPhone, 'TEXT', text, 'FAILED', undefined, 'WhatsApp credentials not configured in environment');
       }
       return { success: false, error: 'WHATSAPP_NOT_CONFIGURED' };
     }
@@ -63,14 +63,14 @@ export class WhatsAppClient {
       if (!response.ok) {
         const errorMsg = data?.error?.message || response.statusText;
         if (userId) {
-          await this.logOutbound(userId, cleanPhone, 'TEXT', 'FAILED', undefined, errorMsg);
+          await this.logOutbound(userId, cleanPhone, 'TEXT', text, 'FAILED', undefined, errorMsg);
         }
         return { success: false, error: errorMsg };
       }
 
       const messageId = data?.messages?.[0]?.id;
       if (userId) {
-        await this.logOutbound(userId, cleanPhone, 'TEXT', 'SENT', messageId);
+        await this.logOutbound(userId, cleanPhone, 'TEXT', text, 'SENT', messageId);
       }
       return { success: true, messageId };
     } catch (err: unknown) {
@@ -130,7 +130,7 @@ export class WhatsAppClient {
       if (!response.ok) {
         const errorMsg = data?.error?.message || response.statusText;
         if (userId) {
-          await this.logOutbound(userId, cleanPhone, 'INTERACTIVE', 'FAILED', undefined, errorMsg);
+          await this.logOutbound(userId, cleanPhone, 'INTERACTIVE', bodyText, 'FAILED', undefined, errorMsg);
         }
         return { success: false, error: errorMsg };
       }
@@ -153,6 +153,7 @@ export class WhatsAppClient {
     userId: string,
     recipientPhone: string,
     messageType: string,
+    content: string,
     status: 'SENT' | 'FAILED' | 'DELIVERED',
     providerMessageId?: string,
     error?: string
@@ -164,9 +165,10 @@ export class WhatsAppClient {
         channel: 'WHATSAPP',
         recipient: recipientPhone,
         message_type: messageType,
+        content,
         provider_message_id: providerMessageId,
         status,
-        error_message: error,
+        error,
         created_at: new Date().toISOString()
       });
     } catch (e) {
