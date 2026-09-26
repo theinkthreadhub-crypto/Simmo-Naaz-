@@ -12,7 +12,7 @@ This guide describes the complete procedure for deploying **MENTRA** to live pro
 2. **Hosting Platform:**
    - Vercel, Railway, or standard Node.js server with HTTPS support.
 3. **Domain & DNS:**
-   - Configure a custom domain (e.g., `mentra.yourdomain.com`).
+   - Configure a custom domain (e.g., `mentra.inkthreadhub.in`).
    - Provision SSL certificates (handled automatically by Vercel/Cloudflare).
 
 ---
@@ -49,7 +49,7 @@ In Supabase Dashboard → Storage, create the following private buckets:
 Configure the following variables in your hosting provider's dashboard:
 
 ```ini
-NEXT_PUBLIC_APP_URL=https://mentra.yourdomain.com
+NEXT_PUBLIC_APP_URL=https://mentra.inkthreadhub.in
 NODE_ENV=production
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project-id>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-production-anon-key>
@@ -66,7 +66,7 @@ AI_API_KEY=<your-production-gemini-api-key>
 
 Configure an external cron trigger (e.g. Vercel Cron or GitHub Action) to trigger every 5 minutes:
 - **HTTP Method:** `POST`
-- **URL:** `https://mentra.yourdomain.com/api/cron/dispatch`
+- **URL:** `https://mentra.inkthreadhub.in/api/cron/dispatch`
 - **Header:** `Authorization: Bearer <CRON_SECRET>`
 
 ---
@@ -75,5 +75,5 @@ Configure an external cron trigger (e.g. Vercel Cron or GitHub Action) to trigge
 
 After deployment, verify that the health endpoint returns `HEALTHY`:
 ```bash
-curl https://mentra.yourdomain.com/api/system/health
+curl https://mentra.inkthreadhub.in/api/system/health
 ```
