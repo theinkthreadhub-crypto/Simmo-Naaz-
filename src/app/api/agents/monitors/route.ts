@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { scheduleOperativeAgent } from '@/lib/agents/operativeAgent';
+import { scheduleOperativeAgent } from '@/lib/agents/monitorScheduler';
 
 const createSchema = z.object({
   title: z.string().min(1).max(120),
