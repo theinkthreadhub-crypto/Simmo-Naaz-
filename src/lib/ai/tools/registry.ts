@@ -12,6 +12,7 @@ import { getUserSkills } from '@/lib/db/skills';
 import { getUserIntegrations } from '@/lib/db/integrations';
 import { addXPServer } from '@/lib/progression/playerProgression';
 import { QUEST_REWARD_RULES, QuestDifficulty } from '@/types/mentra';
+import { scheduleOperativeAgent } from '@/lib/agents/operativeAgent';
 import { getMentraSkill, listMentraSkills } from '@/lib/skills/catalog';
 
 // ==============================================================================
@@ -579,6 +580,62 @@ export const routeToAgentTool: ToolDefinition = {
   }
 };
 
+export const scheduleMonitorTool: ToolDefinition = {
+  name: 'scheduleMonitor',
+  description: 'Create or update a persistent Operative monitor that checks an objective on a recurring schedule.',
+  permission: 'WRITE_LOW',
+  schema: z.object({
+    title: z.string().min(1).max(120),
+    objective: z.string().min(1).max(2000),
+    cadence: z.enum(['HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY']).default('DAILY'),
+    notifyWhen: z.string().max(1000).default('Notify only on meaningful actionable change.'),
+    notifyOnEveryRun: z.boolean().default(false)
+  }),
+  execute: async (input, context) => {
+    const scheduled = await scheduleOperativeAgent(context.userId, input);
+    return {
+      ok: true,
+      data: scheduled,
+      card: {
+        id: `card_${Date.now()}`,
+        type: 'AGENT_WORKING',
+        title: `Monitor Scheduled: ${input.title}`,
+        subtitle: `${input.cadence} • ${input.notifyWhen}`,
+        data: scheduled
+      },
+      message: `Persistent monitor "${input.title}" scheduled ${input.cadence.toLowerCase()}.`
+    };
+  }
+};
+
+export const listMonitorsTool: ToolDefinition = {
+  name: 'listMonitors',
+  description: 'List the operator\'s persistent scheduled Operative monitors and their next run state.',
+  permission: 'READ',
+  schema: z.object({}),
+  execute: async (_, context) => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('scheduled_jobs')
+      .select('id, payload, recurrence, status, scheduled_for, next_run_at, last_run_at, attempt_count')
+      .eq('user_id', context.userId)
+      .eq('type', 'AGENT_SCHEDULE')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { ok: false, errorCode: 'MONITOR_LIST_FAILED', message: error.message };
+    }
+
+    return {
+      ok: true,
+      data: data || [],
+      message: data?.length
+        ? `You have ${data.length} persistent monitor(s).`
+        : 'No persistent monitors are currently configured.'
+    };
+  }
+};
+
 // ==============================================================================
 // 8. GOOGLE WORKSPACE & RESEARCH TOOLS (PHASE 5)
 // ==============================================================================
@@ -1029,6 +1086,8 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   activateMentraSkill: activateMentraSkillTool,
   getConnections: getConnectionsTool,
   routeToAgent: routeToAgentTool,
+  scheduleMonitor: scheduleMonitorTool,
+  listMonitors: listMonitorsTool,
   
   // Phase 5 Google Workspace & Research Tools
   searchGmail: searchGmailTool,
