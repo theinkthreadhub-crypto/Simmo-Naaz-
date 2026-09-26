@@ -10,6 +10,27 @@ export interface JobExecutionResult {
   message: string;
 }
 
+function nextRecurringRun(fromIso: string, recurrence?: string | null): string | null {
+  if (!recurrence || recurrence === 'NONE') return null;
+
+  const next = new Date(fromIso);
+  if (recurrence === 'DAILY') {
+    next.setUTCDate(next.getUTCDate() + 1);
+  } else if (recurrence === 'WEEKLY') {
+    next.setUTCDate(next.getUTCDate() + 7);
+  } else if (recurrence === 'MONTHLY') {
+    next.setUTCMonth(next.getUTCMonth() + 1);
+  } else {
+    return null;
+  }
+
+  return next.toISOString();
+}
+
+function deferredRun(minutes: number): string {
+  return new Date(Date.now() + minutes * 60 * 1000).toISOString();
+}
+
 export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
   const supabase = createClient();
   const nowIso = new Date().toISOString();
@@ -56,7 +77,7 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
     try {
       const userSettings = await getUserNotificationSettings(job.user_id);
 
-      switch (job.job_type) {
+      switch (job.type) {
         case 'MORNING_BRIEF': {
           const deliveryCheck = isDeliveryAllowedNow(userSettings, 'REPORT');
           if (!deliveryCheck.allowed && deliveryCheck.reason === 'QUIET_HOURS_ACTIVE') {
@@ -71,7 +92,7 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
             .from('quests')
             .select('title, xp_reward, status')
             .eq('user_id', job.user_id)
-            .eq('status', 'IN_PROGRESS')
+            .eq('status', 'ACTIVE')
             .limit(3);
 
           // Player XP
@@ -96,18 +117,8 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
 
           const briefText = `🌅 *GOOD MORNING — MENTRA BRIEF*\n\n🎯 *Today's Priorities:*\n${priorities}\n\n📅 *Schedule:*\n${calendarText}\n\n⚡ *Rank:* Level ${player?.level || 1} • ${player?.total_xp || 0} XP\n\n_Reply with "1 done" to check off your first mission._`;
 
-          // Persist Daily Brief
-          const todayDate = new Date().toISOString().split('T')[0];
-          await supabase.from('daily_briefs').upsert({
-            user_id: job.user_id,
-            brief_date: todayDate,
-            content: briefText,
-            delivered_whatsapp: userSettings.preferred_channel === 'WHATSAPP',
-            delivered_web: true,
-            created_at: nowIso
-          }, { onConflict: 'user_id,brief_date' });
-
-          // Send via WhatsApp if linked and preferred
+          // Send via WhatsApp if linked and preferred, then persist truthful delivery state.
+          let whatsappDeliveryStatus = 'SKIPPED';
           if (userSettings.preferred_channel === 'WHATSAPP') {
             const { data: waConn } = await supabase
               .from('whatsapp_connections')
@@ -117,11 +128,33 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
               .single();
 
             if (waConn?.phone_number) {
-              await whatsappClient.sendTextMessage(waConn.phone_number, briefText, job.user_id);
+              const sent = await whatsappClient.sendTextMessage(waConn.phone_number, briefText, job.user_id);
+              whatsappDeliveryStatus = sent.success ? 'SENT' : 'FAILED';
+            } else {
+              whatsappDeliveryStatus = 'NOT_CONNECTED';
             }
           }
 
-          outputMessage = 'Morning Brief compiled and delivered.';
+          const todayDate = new Date().toISOString().split('T')[0];
+          await supabase.from('daily_briefs').upsert({
+            user_id: job.user_id,
+            date: todayDate,
+            timezone: userSettings.timezone || 'Asia/Kolkata',
+            content: briefText,
+            priorities: (quests || []).map(q => ({ title: q.title, xp_reward: q.xp_reward })),
+            delivery_channels: userSettings.preferred_channel === 'WHATSAPP'
+              ? ['WEB', 'WHATSAPP']
+              : ['WEB'],
+            delivery_status: {
+              WEB: 'DELIVERED',
+              WHATSAPP: whatsappDeliveryStatus
+            },
+            created_at: nowIso
+          }, { onConflict: 'user_id,date' });
+
+          outputMessage = whatsappDeliveryStatus === 'FAILED'
+            ? 'Morning Brief compiled; WhatsApp delivery failed.'
+            : 'Morning Brief compiled and delivered.';
           break;
         }
 
@@ -193,43 +226,60 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
         }
 
         default: {
-          outputMessage = `Job type ${job.job_type} processed.`;
+          outputMessage = `Job type ${job.type} processed.`;
           break;
         }
       }
 
-      // Mark Job Status
+      // Persist scheduler state using the Phase-6 schema contract.
+      const recurringRun = nextRecurringRun(job.scheduled_for || nowIso, job.recurrence);
+      const nextRun = jobStatus === 'SKIPPED' ? deferredRun(15) : recurringRun;
+
       await supabase
         .from('scheduled_jobs')
         .update({
-          status: jobStatus === 'SKIPPED' ? 'SCHEDULED' : 'COMPLETE',
+          status: nextRun ? 'SCHEDULED' : 'COMPLETE',
+          scheduled_for: nextRun || job.scheduled_for,
+          next_run_at: nextRun,
+          attempt_count: nextRun && jobStatus !== 'SKIPPED' ? 0 : claimedJob.attempt_count,
           updated_at: new Date().toISOString()
         })
         .eq('id', job.id);
 
-      // Log execution to job_runs
+      // job_runs uses SUCCESS/FAILED/RETRYING and JSON result fields.
       await supabase.from('job_runs').insert({
         job_id: job.id,
         user_id: job.user_id,
-        job_type: job.job_type,
-        status: jobStatus,
-        result_summary: outputMessage,
-        executed_at: nowIso
+        status: 'SUCCESS',
+        result: {
+          scheduler_status: jobStatus,
+          job_type: job.type,
+          message: outputMessage
+        },
+        started_at: nowIso,
+        completed_at: new Date().toISOString()
       });
 
       results.push({
         jobId: job.id,
-        type: job.job_type,
+        type: job.type,
         status: jobStatus,
         message: outputMessage
       });
 
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
+      const attempts = claimedJob.attempt_count || 1;
+      const maxAttempts = claimedJob.max_attempts || 3;
+      const shouldRetry = attempts < maxAttempts;
+      const retryAt = shouldRetry ? deferredRun(5) : null;
+
       await supabase
         .from('scheduled_jobs')
         .update({
-          status: 'FAILED',
+          status: shouldRetry ? 'SCHEDULED' : 'FAILED',
+          scheduled_for: retryAt || job.scheduled_for,
+          next_run_at: retryAt,
           updated_at: new Date().toISOString()
         })
         .eq('id', job.id);
@@ -237,17 +287,21 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
       await supabase.from('job_runs').insert({
         job_id: job.id,
         user_id: job.user_id,
-        job_type: job.job_type,
-        status: 'FAILED',
-        error: errorMsg,
-        executed_at: nowIso
+        status: shouldRetry ? 'RETRYING' : 'FAILED',
+        result: {
+          job_type: job.type,
+          retry_scheduled_for: retryAt
+        },
+        error_message: errorMsg,
+        started_at: nowIso,
+        completed_at: new Date().toISOString()
       });
 
       results.push({
         jobId: job.id,
-        type: job.job_type,
+        type: job.type,
         status: 'FAILED',
-        message: errorMsg
+        message: shouldRetry ? `${errorMsg} Retry scheduled.` : errorMsg
       });
     }
   }
