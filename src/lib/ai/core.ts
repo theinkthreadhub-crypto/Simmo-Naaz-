@@ -5,7 +5,7 @@ import { buildMentraContext } from './context';
 import { checkRateLimit, sanitizeInputText } from './safety';
 import { MENTRA_TOOL_REGISTRY, ALL_MENTRA_TOOLS } from './tools/registry';
 import { createClient } from '@/lib/supabase/server';
-import { evaluateActionPermission } from '@/lib/safety/riskEngine';
+import { evaluateToolPermission, getConfiguredAutonomyMode } from '@/lib/safety/riskEngine';
 import crypto from 'crypto';
 import { runMentraAgentRuntime } from './agentRuntime';
 
@@ -247,7 +247,12 @@ export async function runMentra(
           const validArgs = parsedArgs.data;
 
           // Deterministic Risk & Permission check
-          const permission = evaluateActionPermission('ASSISTED', call.name, validArgs);
+          const permission = evaluateToolPermission(
+            toolDef.permission,
+            getConfiguredAutonomyMode(),
+            call.name,
+            validArgs
+          );
           if (permission.requiresApproval) {
             hasPendingApproval = true;
             const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validArgs)).digest('hex');
