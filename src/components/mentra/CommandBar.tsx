@@ -57,15 +57,42 @@ export default function CommandBar() {
   };
 
   const toggleMic = () => {
-    if (!isListening) {
-      setIsListening(true);
-      setTimeout(() => {
-        setIsListening(false);
-        setQuery('₹450 Meta Ads expense add karo');
-      }, 2000);
-    } else {
+    if (isListening) {
       setIsListening(false);
+      return;
     }
+
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setResponseMessage('Voice input is not supported by this browser yet. Type your command instead.');
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    setResponseMessage(null);
+    setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results?.[0]?.[0]?.transcript?.trim();
+      if (transcript) setQuery(transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      setResponseMessage(`Voice input error: ${event?.error || 'Could not capture speech.'}`);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
   };
 
   const suggestions = [
