@@ -13,7 +13,7 @@ import { getUserIntegrations } from '@/lib/db/integrations';
 import { addXPServer } from '@/lib/progression/playerProgression';
 import { QUEST_REWARD_RULES, QuestDifficulty } from '@/types/mentra';
 import { scheduleOperativeAgent } from '@/lib/agents/monitorScheduler';
-import { getMentraSkill, listMentraSkills } from '@/lib/skills/catalog';
+import { listAvailableMentraSkills, getAvailableMentraSkill, saveCustomMentraSkill, disableCustomMentraSkill } from '@/lib/skills/store';
 import { browserAgent } from '@/lib/agents/browserAgent';
 import { sanitizeExternalContent } from '@/lib/safety/promptInjectionShield';
 
@@ -475,8 +475,8 @@ export const listMentraSkillsTool: ToolDefinition = {
   schema: z.object({
     category: z.enum(['PERSONAL_OS', 'BUSINESS', 'RESEARCH', 'PRODUCTIVITY', 'LEARNING']).optional()
   }),
-  execute: async (input) => {
-    const skills = listMentraSkills(input.category);
+  execute: async (input, context) => {
+    const skills = await listAvailableMentraSkills(context.userId, input.category);
     return {
       ok: true,
       data: skills,
@@ -495,8 +495,8 @@ export const activateMentraSkillTool: ToolDefinition = {
     skillName: z.string().min(1),
     objective: z.string().default('')
   }),
-  execute: async (input) => {
-    const skill = getMentraSkill(input.skillName);
+  execute: async (input, context) => {
+    const skill = await getAvailableMentraSkill(context.userId, input.skillName);
 
     if (!skill) {
       return {
@@ -517,6 +517,64 @@ export const activateMentraSkillTool: ToolDefinition = {
     };
   }
 };
+
+export const createCustomMentraSkillTool: ToolDefinition = {
+  name: 'createCustomMentraSkill',
+  description: 'Create or update a reusable user-defined MENTRA workflow using only approved registered tools.',
+  permission: 'WRITE_LOW',
+  schema: z.object({
+    name: z.string().min(1).max(64),
+    title: z.string().min(1).max(120),
+    description: z.string().max(1000).default(''),
+    category: z.enum(['PERSONAL_OS', 'BUSINESS', 'RESEARCH', 'PRODUCTIVITY', 'LEARNING']).default('PERSONAL_OS'),
+    requiredTools: z.array(z.string().min(1)).min(1).max(20),
+    instructions: z.array(z.string().min(1).max(1000)).min(1).max(20)
+  }),
+  execute: async (input, context) => {
+    try {
+      const skill = await saveCustomMentraSkill(context.userId, input);
+      return {
+        ok: true,
+        data: skill,
+        card: {
+          id: `card_${Date.now()}`,
+          type: 'AGENT_WORKING',
+          title: `Custom Skill Saved: ${skill.title}`,
+          subtitle: `v${skill.version} • ${skill.requiredTools.length} tools`,
+          data: skill
+        },
+        message: `Custom skill "${skill.title}" saved as version ${skill.version}.`
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        errorCode: 'CUSTOM_SKILL_SAVE_FAILED',
+        message: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+};
+
+export const disableCustomMentraSkillTool: ToolDefinition = {
+  name: 'disableCustomMentraSkill',
+  description: 'Disable a user-created MENTRA skill without deleting its history.',
+  permission: 'WRITE_LOW',
+  schema: z.object({
+    name: z.string().min(1).max(64)
+  }),
+  execute: async (input, context) => {
+    const disabled = await disableCustomMentraSkill(context.userId, input.name);
+    return {
+      ok: disabled,
+      data: { name: input.name, disabled },
+      errorCode: disabled ? undefined : 'CUSTOM_SKILL_DISABLE_FAILED',
+      message: disabled
+        ? `Custom skill "${input.name}" disabled.`
+        : 'Skill could not be disabled or is a protected built-in skill.'
+    };
+  }
+};
+
 
 // ==============================================================================
 // 7. INTEGRATION & AGENT ROUTING TOOLS
@@ -1232,6 +1290,8 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   searchMemory: searchMemoryTool,
   listMentraSkills: listMentraSkillsTool,
   activateMentraSkill: activateMentraSkillTool,
+  createCustomMentraSkill: createCustomMentraSkillTool,
+  disableCustomMentraSkill: disableCustomMentraSkillTool,
   getConnections: getConnectionsTool,
   routeToAgent: routeToAgentTool,
   scheduleMonitor: scheduleMonitorTool,
