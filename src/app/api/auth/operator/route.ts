@@ -4,19 +4,7 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 const OPERATOR_ID = 'inkthread';
-const OPERATOR_USER_ID = '1d70b737-0e87-4718-95b7-21d5ab3254ed';
-
-function getConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !anonKey || !serviceRoleKey) {
-    throw new Error('Authentication service is not configured.');
-  }
-
-  return { url, anonKey, serviceRoleKey };
-}
+const OPERATOR_EMAIL = 'theinkthreadhub@gmail.com';
 
 export async function POST(request: Request) {
   try {
@@ -28,24 +16,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid operator credentials.' }, { status: 401 });
     }
 
-    const { url, anonKey, serviceRoleKey } = getConfig();
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    const admin = createClient(url, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-
-    const { data: operator, error: operatorError } = await admin.auth.admin.getUserById(OPERATOR_USER_ID);
-    const email = operator?.user?.email;
-
-    if (operatorError || !email) {
-      return NextResponse.json({ error: 'Operator access is unavailable.' }, { status: 503 });
+    if (!url || !anonKey) {
+      return NextResponse.json({ error: 'Authentication service is not configured.' }, { status: 503 });
     }
 
     const auth = createClient(url, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    const { data, error } = await auth.auth.signInWithPassword({ email, password });
+    const { data, error } = await auth.auth.signInWithPassword({
+      email: OPERATOR_EMAIL,
+      password
+    });
 
     if (error || !data.session || !data.user) {
       return NextResponse.json({ error: 'Invalid operator credentials.' }, { status: 401 });
