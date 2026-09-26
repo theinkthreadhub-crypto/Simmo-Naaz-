@@ -76,7 +76,7 @@ export class WhatsAppClient {
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       if (userId) {
-        await this.logOutbound(userId, cleanPhone, 'TEXT', 'FAILED', undefined, errorMsg);
+        await this.logOutbound(userId, cleanPhone, 'TEXT', text, 'FAILED', undefined, errorMsg);
       }
       return { success: false, error: errorMsg };
     }
@@ -137,7 +137,7 @@ export class WhatsAppClient {
 
       const messageId = data?.messages?.[0]?.id;
       if (userId) {
-        await this.logOutbound(userId, cleanPhone, 'INTERACTIVE', 'SENT', messageId);
+        await this.logOutbound(userId, cleanPhone, 'INTERACTIVE', bodyText, 'SENT', messageId);
       }
       return { success: true, messageId };
     } catch (err: unknown) {
