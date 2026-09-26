@@ -63,7 +63,7 @@ export class BrowserlessProvider implements BrowserProvider {
   private apiKey: string;
 
   constructor() {
-    this.endpoint = process.env.BROWSER_ENDPOINT || 'https://chrome.browserless.io';
+    this.endpoint = process.env.BROWSER_ENDPOINT || 'https://production-sfo.browserless.io';
     this.apiKey = process.env.BROWSER_API_KEY || '';
   }
 
@@ -75,12 +75,95 @@ export class BrowserlessProvider implements BrowserProvider {
     const configured = this.isConfigured();
     return {
       navigate: configured,
-      readPage: true, // HTTP text fetch is always supported with SSRF check
+      readPage: true,
       click: configured,
       type: configured,
       screenshot: configured,
       submit: configured,
     };
+  }
+
+  private async runFunction(
+    actionType: BrowserActionType,
+    url: string,
+    code: string,
+    context: Record<string, unknown>
+  ): Promise<BrowserActionResult> {
+    if (!validatePublicResearchUrl(url)) {
+      return {
+        success: false,
+        actionType,
+        targetUrl: url,
+        status: 'BLOCKED_BY_SSRF_PROTECTION',
+        error: 'BLOCKED_BY_SSRF_PROTECTION'
+      };
+    }
+
+    if (!this.isConfigured()) {
+      return {
+        success: false,
+        actionType,
+        targetUrl: url,
+        status: 'BROWSER_PROVIDER_UNCONFIGURED',
+        error: 'BROWSER_PROVIDER_UNCONFIGURED'
+      };
+    }
+
+    try {
+      const res = await fetch(
+        `${this.endpoint}/function?token=${encodeURIComponent(this.apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            context: { url, ...context }
+          })
+        }
+      );
+
+      const raw = await res.text();
+      let data: any = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = { text: raw };
+      }
+
+      if (!res.ok || data?.error) {
+        return {
+          success: false,
+          actionType,
+          targetUrl: url,
+          status: 'FAILED',
+          error:
+            data?.error?.message ||
+            data?.error ||
+            `BROWSER_FUNCTION_FAILED_${res.status}`
+        };
+      }
+
+      return {
+        success: true,
+        actionType,
+        targetUrl: data?.url || url,
+        status: 'SUCCESS',
+        pageTitle: data?.title,
+        extractedContent:
+          typeof data?.text === 'string'
+            ? data.text.slice(0, 4000)
+            : undefined,
+        executionId: data?.executionId
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        actionType,
+        targetUrl: url,
+        status: 'FAILED',
+        error: err instanceof Error ? err.message : String(err)
+      };
+    }
   }
 
   async fetchPublicPageText(url: string): Promise<BrowserActionResult> {
@@ -185,44 +268,48 @@ export class BrowserlessProvider implements BrowserProvider {
   }
 
   async click(url: string, selector: string): Promise<BrowserActionResult> {
-    if (!this.isConfigured()) {
+    const code = `export default async ({ page, context }) => {
+      await page.goto(context.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForSelector(context.selector, { visible: true, timeout: 15000 });
+      await page.click(context.selector);
+      await new Promise(resolve => setTimeout(resolve, 500));
       return {
-        success: false,
-        actionType: 'CLICK',
-        targetUrl: url,
-        status: 'BROWSER_PROVIDER_UNCONFIGURED',
-        error: 'BROWSER_PROVIDER_UNCONFIGURED',
+        data: {
+          title: await page.title(),
+          url: page.url(),
+          text: (await page.locator('body').innerText()).slice(0, 4000)
+        },
+        type: 'application/json'
       };
-    }
+    };`;
 
-    // In a real browserless function call, evaluate code on endpoint
-    return {
-      success: false,
-      actionType: 'CLICK',
-      targetUrl: url,
-      status: 'BROWSER_ACTION_NOT_IMPLEMENTED',
-      error: 'BROWSER_ACTION_NOT_IMPLEMENTED: Interactive click requires full WebSocket session.',
-    };
+    return this.runFunction('CLICK', url, code, { selector });
   }
 
   async type(url: string, selector: string, text: string): Promise<BrowserActionResult> {
-    if (!this.isConfigured()) {
+    const code = `export default async ({ page, context }) => {
+      await page.goto(context.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForSelector(context.selector, { visible: true, timeout: 15000 });
+      await page.focus(context.selector);
+      await page.evaluate(selector => {
+        const element = document.querySelector(selector);
+        if (element && 'value' in element) {
+          element.value = '';
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }, context.selector);
+      await page.type(context.selector, context.text, { delay: 15 });
       return {
-        success: false,
-        actionType: 'TYPE',
-        targetUrl: url,
-        status: 'BROWSER_PROVIDER_UNCONFIGURED',
-        error: 'BROWSER_PROVIDER_UNCONFIGURED',
+        data: {
+          title: await page.title(),
+          url: page.url(),
+          text: (await page.locator('body').innerText()).slice(0, 4000)
+        },
+        type: 'application/json'
       };
-    }
+    };`;
 
-    return {
-      success: false,
-      actionType: 'TYPE',
-      targetUrl: url,
-      status: 'BROWSER_ACTION_NOT_IMPLEMENTED',
-      error: 'BROWSER_ACTION_NOT_IMPLEMENTED: Interactive type requires full WebSocket session.',
-    };
+    return this.runFunction('TYPE', url, code, { selector, text });
   }
 
   async screenshot(url: string): Promise<BrowserActionResult> {
@@ -273,25 +360,68 @@ export class BrowserlessProvider implements BrowserProvider {
     }
   }
 
-  async submit(url: string, selector: string, payload: Record<string, unknown>): Promise<BrowserActionResult> {
-    if (!this.isConfigured()) {
-      return {
-        success: false,
-        actionType: 'SUBMIT',
-        targetUrl: url,
-        status: 'BROWSER_PROVIDER_UNCONFIGURED',
-        error: 'BROWSER_PROVIDER_UNCONFIGURED',
-      };
-    }
+  async submit(
+    url: string,
+    selector: string,
+    payload: Record<string, unknown>
+  ): Promise<BrowserActionResult> {
+    const code = `export default async ({ page, context }) => {
+      await page.goto(context.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForSelector(context.selector, { visible: true, timeout: 15000 });
 
-    return {
-      success: false,
-      actionType: 'SUBMIT',
-      targetUrl: url,
-      status: 'BROWSER_ACTION_NOT_IMPLEMENTED',
-      error: 'BROWSER_ACTION_NOT_IMPLEMENTED: Form submission requires verified provider driver.',
-    };
+      await page.$eval(
+        context.selector,
+        (form, rawPayload) => {
+          if (!(form instanceof HTMLFormElement)) {
+            throw new Error('SUBMIT_SELECTOR_NOT_FORM');
+          }
+
+          for (const [name, value] of Object.entries(rawPayload || {})) {
+            const field = Array.from(form.elements).find(
+              element => element instanceof HTMLElement && element.getAttribute('name') === name
+            );
+
+            if (
+              field instanceof HTMLInputElement ||
+              field instanceof HTMLTextAreaElement ||
+              field instanceof HTMLSelectElement
+            ) {
+              field.value = String(value ?? '');
+              field.dispatchEvent(new Event('input', { bubbles: true }));
+              field.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }
+
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+          } else {
+            form.submit();
+          }
+        },
+        context.payload
+      );
+
+      await page.waitForNavigation({
+        waitUntil: 'domcontentloaded',
+        timeout: 10000
+      }).catch(() => null);
+
+      return {
+        data: {
+          title: await page.title(),
+          url: page.url(),
+          text: (await page.locator('body').innerText()).slice(0, 4000)
+        },
+        type: 'application/json'
+      };
+    };`;
+
+    return this.runFunction('SUBMIT', url, code, {
+      selector,
+      payload
+    });
   }
+
 }
 
 /**
