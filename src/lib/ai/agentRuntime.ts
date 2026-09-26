@@ -247,7 +247,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
         await supabase.from('ai_tool_calls').insert({
           user_id: context.userId,
           tool_name: call.name,
-          input: args,
+          input: redactForAudit(args),
           output: {},
           status: 'VALIDATION_FAILED',
           idempotency_key: key,
