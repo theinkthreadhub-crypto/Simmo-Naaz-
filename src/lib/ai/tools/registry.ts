@@ -16,6 +16,7 @@ import { scheduleOperativeAgent } from '@/lib/agents/monitorScheduler';
 import { listAvailableMentraSkills, getAvailableMentraSkill, saveCustomMentraSkill, disableCustomMentraSkill } from '@/lib/skills/store';
 import { browserAgent } from '@/lib/agents/browserAgent';
 import { sanitizeExternalContent } from '@/lib/safety/promptInjectionShield';
+import { getRuntimeQualitySummary } from '@/lib/evals/runtimeLearning';
 
 // ==============================================================================
 // 1. PROGRESS & PROFILE TOOLS
@@ -1275,6 +1276,30 @@ export const runMultiAgentTaskTool: ToolDefinition = {
   }
 };
 
+export const getRuntimeQualityTool: ToolDefinition = {
+  name: 'getRuntimeQuality',
+  description: 'Inspect recent MENTRA provider and tool reliability, success rates, and latency.',
+  permission: 'READ',
+  schema: z.object({
+    limit: z.number().int().min(10).max(250).default(100)
+  }),
+  execute: async (input, context) => {
+    const summary = await getRuntimeQualitySummary(
+      context.userId,
+      input.limit
+    );
+
+    return {
+      ok: true,
+      data: summary,
+      message:
+        summary.recentRuns === 0
+          ? 'No runtime quality history is available yet.'
+          : `Reviewed ${summary.recentRuns} recent AI runs. Successful: ${summary.successfulRuns}; failed: ${summary.failedRuns}; average latency: ${summary.avgLatencyMs} ms.`
+    };
+  }
+};
+
 // Tool Registry Map
 export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   getPlayerProgress: getPlayerProgressTool,
@@ -1300,6 +1325,7 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   browserClick: browserClickTool,
   browserType: browserTypeTool,
   browserSubmit: browserSubmitTool,
+  getRuntimeQuality: getRuntimeQualityTool,
   
   // Phase 5 Google Workspace & Research Tools
   searchGmail: searchGmailTool,
