@@ -39,8 +39,7 @@ UPDATE public.notification_preferences
 SET preferred_channel = CASE
   WHEN COALESCE(channels->'REMINDER', '[]'::jsonb) ? 'WHATSAPP' THEN 'WHATSAPP'
   ELSE 'WEB'
-END
-WHERE preferred_channel IS NULL OR preferred_channel = '';
+END;
 
 CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_due
   ON public.scheduled_jobs(status, scheduled_for ASC)
