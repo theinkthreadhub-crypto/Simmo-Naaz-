@@ -81,7 +81,7 @@ export default function FinanceCard({ summary }: FinanceCardProps) {
 
       {/* AI Sentinel Telemetry Insight */}
       <div className="mt-4 p-3 rounded-xl bg-mentra-orange/10 border border-mentra-orange/20 flex items-start gap-2.5">
-        <span className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse mt-1.5 flex-shrink-0 shadow-[0_0_6px_#ff4a00]" />
+        <span className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse mt-1.5 flex-shrink-0 shadow-[0_0_6px_#5b6cff]" />
         <p className="text-xs text-white/80 font-mono leading-relaxed">
           <span className="text-mentra-amber font-semibold">SENTINEL INSIGHT:</span> {summary.aiInsight}
         </p>

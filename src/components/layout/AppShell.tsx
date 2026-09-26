@@ -28,7 +28,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen w-full bg-energy-horizon flex flex-col items-center justify-center space-y-4">
         <div className="relative flex items-center justify-center">
           <div className="w-20 h-20 rounded-full border border-mentra-orange/30 animate-spin-slow" />
-          <div className="absolute w-8 h-8 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_20px_#ff4a00]" />
+          <div className="absolute w-8 h-8 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_20px_#5b6cff]" />
         </div>
         <div className="text-xs font-mono tracking-widest text-mentra-amber uppercase animate-pulse">
           CALIBRATING MENTRA KERNEL...

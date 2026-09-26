@@ -92,7 +92,7 @@ export default function Navbar() {
                 <Link
                   href={link.href}
                   onClick={() => setOpen(false)}
-                  className={pathname === link.href ? 'text-amber-400 font-semibold' : ''}
+                  className={pathname === link.href ? 'text-cyan-400 font-semibold' : ''}
                 >
                   {link.label}
                 </Link>

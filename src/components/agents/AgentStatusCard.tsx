@@ -34,7 +34,7 @@ export default function AgentStatusCard({ agent }: AgentStatusCardProps) {
       case 'Mail':
         return <Mail className="w-4 h-4 text-mentra-amber" />;
       case 'Calendar':
-        return <Calendar className="w-4 h-4 text-amber-200" />;
+        return <Calendar className="w-4 h-4 text-cyan-200" />;
       case 'HardDrive':
         return <HardDrive className="w-4 h-4 text-white/80" />;
       case 'DollarSign':
@@ -60,7 +60,7 @@ export default function AgentStatusCard({ agent }: AgentStatusCardProps) {
       case 'WAITING_APPROVAL':
       case 'AWAITING_APPROVAL':
         return (
-          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">
+          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
             <AlertCircle className="w-3 h-3" />
             <span>APPROVAL REQ</span>
           </span>
@@ -126,7 +126,7 @@ export default function AgentStatusCard({ agent }: AgentStatusCardProps) {
       {/* Human-in-the-Loop Approval Action Gate */}
       {isAwaitingApproval && (
         <div className="mt-4 pt-3 border-t border-mentra-orange/20 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-amber-300">
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-cyan-300">
             <ShieldAlert className="w-3.5 h-3.5 text-mentra-orange" />
             <span>Action requires operator sign-off</span>
           </div>
