@@ -9,6 +9,7 @@ import { evaluateToolPermission, getConfiguredAutonomyMode } from '@/lib/safety/
 import crypto from 'crypto';
 import { redactForAudit } from '@/lib/safety/auditRedaction';
 import { runMentraAgentRuntime } from './agentRuntime';
+import { extractDurableMemories } from '@/lib/memory/extractor';
 
 export type AIRunStatus = 'SUCCESS' | 'PARTIAL' | 'WAITING_APPROVAL' | 'FAILED';
 
@@ -151,6 +152,13 @@ export async function runMentra(
           latencyMs: trace.latencyMs
         }))
       });
+
+      await extractDurableMemories(
+        incoming.userId,
+        cleanText,
+        responseText,
+        conversationId
+      );
 
       await supabase.from('ai_runs').insert({
         user_id: incoming.userId,
@@ -437,6 +445,13 @@ Rules:
       cards: accumulatedCards,
       tool_calls: executedTools.map(t => ({ name: t, status: 'SUCCESS' }))
     });
+
+    await extractDurableMemories(
+      incoming.userId,
+      cleanText,
+      finalResponseText || '[MENTRA Command Executed]',
+      conversationId
+    );
 
     return {
       success: runStatus !== 'FAILED',
