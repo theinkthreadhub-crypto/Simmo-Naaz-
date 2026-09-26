@@ -52,11 +52,13 @@ function tokenSimilarity(a: string, b: string): number {
   if (aTokens.size === 0 || bTokens.size === 0) return 0;
 
   let intersection = 0;
-  for (const token of aTokens) {
+  for (const token of Array.from(aTokens)) {
     if (bTokens.has(token)) intersection++;
   }
 
-  const union = new Set([...aTokens, ...bTokens]).size;
+  const union = new Set(
+    Array.from(aTokens).concat(Array.from(bTokens))
+  ).size;
   return union === 0 ? 0 : intersection / union;
 }
 
