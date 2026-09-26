@@ -32,7 +32,7 @@ export function auditEnvironment(): EnvironmentAudit {
     return { ready: missing.length === 0, missing };
   };
 
-  const aiProvider = (env.AI_PROVIDER || 'fallback').toLowerCase();
+  const aiProvider = (env.AI_PROVIDER || 'auto').toLowerCase();
   const gatewayAuthReady = Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN);
   const geminiAuthReady = Boolean(env.AI_API_KEY || env.AI_PROVIDER_API_KEY);
   const localAiReady = Boolean(env.AI_LOCAL_BASE_URL);
@@ -40,7 +40,7 @@ export function auditEnvironment(): EnvironmentAudit {
   let aiRequiredEnv: string[] = [];
   let aiMissingEnv: string[] = [];
   let aiStatus: CapabilityStatus = 'DEGRADED';
-  let aiDescription = 'Deterministic fallback is active; full model reasoning is not enabled.';
+  let aiDescription = 'No real model provider is connected.';
 
   if (['gateway', 'vercel', 'vercel-ai-gateway'].includes(aiProvider)) {
     aiRequiredEnv = ['AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'];
@@ -60,9 +60,20 @@ export function auditEnvironment(): EnvironmentAudit {
   } else if (['auto', 'hybrid'].includes(aiProvider)) {
     const anyModelReady = gatewayAuthReady || geminiAuthReady || localAiReady;
     aiRequiredEnv = ['AI_GATEWAY_API_KEY/VERCEL_OIDC_TOKEN, AI_API_KEY, or AI_LOCAL_BASE_URL'];
-    aiMissingEnv = anyModelReady ? [] : ['at least one model provider'];
+    aiMissingEnv = anyModelReady ? [] : ['at least one real model provider'];
     aiStatus = anyModelReady ? 'CONNECTED' : 'CONFIG_REQUIRED';
-    aiDescription = 'Resilient multi-provider AI routing.';
+    aiDescription = anyModelReady
+      ? 'Real multi-provider AI routing is available.'
+      : 'Real AI is not configured; production must not silently simulate reasoning.';
+  } else if (['fallback', 'deterministic'].includes(aiProvider)) {
+    const allowed =
+      env.AI_ALLOW_DETERMINISTIC_FALLBACK === 'true' || !isProd;
+    aiRequiredEnv = [];
+    aiMissingEnv = allowed ? [] : ['real model provider required in production'];
+    aiStatus = allowed ? 'DEGRADED' : 'CONFIG_REQUIRED';
+    aiDescription = allowed
+      ? 'Deterministic fallback is explicitly enabled; this is not full model reasoning.'
+      : 'Deterministic fallback is disabled in production.';
   }
 
   const capabilities: Record<string, ServiceCapability> = {
