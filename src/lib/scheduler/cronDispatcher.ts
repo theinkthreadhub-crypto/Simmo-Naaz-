@@ -38,7 +38,7 @@ function deferredRun(minutes: number): string {
 export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
   const supabase = createClient();
 
-  if (process.env.SYSTEM_AUTO_RECOVERY === 'true') {
+  if (process.env.SYSTEM_AUTO_RECOVERY !== 'false') {
     try {
       await runAutomaticRecovery();
     } catch (error) {
