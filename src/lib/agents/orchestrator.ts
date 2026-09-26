@@ -5,6 +5,7 @@ import { getUserQuests } from '../db/quests';
 import { getUserGoals } from '../db/goals';
 import { searchGmail } from '../integrations/google/gmail';
 import { getGoogleCalendarEvents } from '../integrations/google/calendar';
+import { isLeadAgentEnabled, runLeadAgent } from './lead/runner';
 
 export interface MultiAgentTaskInput {
   taskTitle: string;
@@ -27,10 +28,64 @@ export interface MultiAgentTaskResult {
   };
 }
 
+/**
+ * Lead Agent path (AI_LEAD_AGENT=true): AI planning + scoped sub-agents.
+ * Returns null on unexpected failure so the legacy pipeline can take over.
+ */
+async function runViaLeadAgent(
+  userId: string,
+  input: MultiAgentTaskInput
+): Promise<MultiAgentTaskResult | null> {
+  try {
+    const lead = await runLeadAgent(userId, {
+      taskTitle: input.taskTitle,
+      query: input.query,
+      agentHints: input.agentChain,
+      context: input.context
+    });
+
+    const approvalCard = lead.cards.find(card => card.requiresApproval && card.approvalId);
+
+    return {
+      taskId: lead.runId || `task_${Date.now()}`,
+      status: lead.status,
+      currentStage: lead.status,
+      results: {
+        engine: 'LEAD_AGENT',
+        plan: lead.plan,
+        plannerError: lead.plannerError || null,
+        steps: lead.steps.map(({ cards: _cards, ...step }) => step),
+        cards: lead.cards,
+        usage: lead.usage
+      },
+      summary: lead.summary,
+      approvalRequired: lead.status === 'WAITING_APPROVAL',
+      approvalDetails: approvalCard
+        ? {
+            actionType: String(approvalCard.data?.toolName || 'APPROVAL'),
+            description: approvalCard.subtitle || approvalCard.title,
+            payload: {
+              approvalId: approvalCard.approvalId,
+              ...(approvalCard.data?.payload || {})
+            }
+          }
+        : undefined
+    };
+  } catch (err) {
+    console.error('[ORCHESTRATOR]: Lead Agent failed, falling back to legacy pipeline:', err);
+    return null;
+  }
+}
+
 export async function runMultiAgentTask(
   userId: string,
   input: MultiAgentTaskInput
 ): Promise<MultiAgentTaskResult> {
+  if (isLeadAgentEnabled()) {
+    const leadResult = await runViaLeadAgent(userId, input);
+    if (leadResult) return leadResult;
+  }
+
   const supabase = createClient();
   const taskId = `task_${Date.now()}`;
 
