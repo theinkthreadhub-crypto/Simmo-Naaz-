@@ -24,6 +24,17 @@ const heartbeatInterval = Math.max(
 );
 const sessionFile = path.resolve('./data/user-session.json');
 
+// Who MENTRA replies to on WhatsApp (see isAllowedChat).
+const allowedNumbers = new Set(
+  (process.env.WHATSAPP_ALLOWED_NUMBERS || '')
+    .split(',')
+    .map(value => value.replace(/[^0-9]/g, ''))
+    .filter(Boolean)
+);
+const allowSelfChat = (process.env.WHATSAPP_SELF_CHAT || 'true').toLowerCase() !== 'false';
+const REPLY_MARK = '🧠 MENTRA';
+const sentByBot = new Set();
+
 let accessToken = '';
 let refreshToken = process.env.MENTRA_REFRESH_TOKEN || '';
 let accessTokenExpiresAt = 0;
@@ -174,19 +185,63 @@ function extractText(message) {
   );
 }
 
+/** "916392995127:12@s.whatsapp.net" -> "916392995127" */
+function jidNumber(jid) {
+  return String(jid || '').split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+}
+
+function rememberBotMessage(id) {
+  if (!id) return;
+  sentByBot.add(id);
+  if (sentByBot.size > 500) {
+    const oldest = sentByBot.values().next().value;
+    sentByBot.delete(oldest);
+  }
+}
+
+/**
+ * Who may talk to MENTRA:
+ * - Self chat ("Message yourself") on the linked account, if WHATSAPP_SELF_CHAT is not "false".
+ * - Numbers in WHATSAPP_ALLOWED_NUMBERS.
+ * Everyone else is ignored silently, so friends and customers never get AI replies.
+ */
+function isAllowedChat(sock, envelope) {
+  const key = envelope.key || {};
+  const jid = key.remoteJid || '';
+  const ownNumber = jidNumber(sock.user?.id);
+  const ownLid = jidNumber(sock.user?.lid);
+
+  // Baileys v7 may address chats by LID; the phone-number JID can be in an alternate field.
+  const candidates = [jid, key.remoteJidAlt, key.senderPn, key.participantPn]
+    .filter(Boolean)
+    .map(jidNumber)
+    .filter(Boolean);
+
+  const isSelfChat = candidates.some(number => number === ownNumber || (ownLid && number === ownLid));
+  if (isSelfChat) return allowSelfChat;
+
+  if (key.fromMe) return false; // your own messages to other people
+  return candidates.some(number => allowedNumbers.has(number));
+}
+
 async function handleIncoming(sock, envelope) {
   const jid = envelope.key?.remoteJid || '';
   if (
     !jid ||
-    envelope.key?.fromMe ||
     jid.endsWith('@g.us') ||
+    jid.endsWith('@newsletter') ||
     jid === 'status@broadcast'
   ) {
     return;
   }
 
+  // Never answer our own replies (important in self chat).
+  if (sentByBot.has(envelope.key?.id)) return;
+
   const text = extractText(envelope.message).trim();
-  if (!text) return;
+  if (!text || text.startsWith(REPLY_MARK)) return;
+
+  if (!isAllowedChat(sock, envelope)) return;
 
   const result = await postInternal(
     '/api/worker/whatsapp/inbound',
@@ -200,9 +255,10 @@ async function handleIncoming(sock, envelope) {
   );
 
   if (result?.reply) {
-    await sock.sendMessage(jid, {
-      text: String(result.reply).slice(0, 12000)
+    const sent = await sock.sendMessage(jid, {
+      text: `${REPLY_MARK}\n${String(result.reply)}`.slice(0, 12000)
     });
+    rememberBotMessage(sent?.key?.id);
   }
 }
 
@@ -234,6 +290,13 @@ async function connectWhatsApp() {
         console.log(
           '[MENTRA Brain Worker] WhatsApp connected:',
           connectedNumber || 'linked device'
+        );
+        console.log(
+          '[MENTRA Brain Worker] Replies to:',
+          [
+            allowSelfChat ? 'self chat' : null,
+            ...Array.from(allowedNumbers)
+          ].filter(Boolean).join(', ') || 'nobody (set WHATSAPP_ALLOWED_NUMBERS)'
         );
       }
 
