@@ -152,7 +152,7 @@ export default function WorkspaceSettingsPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-xl">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-wider uppercase font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-wider uppercase font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                 Phase 13 Active
               </span>
               <span className="flex items-center gap-1 text-xs text-zinc-400">
@@ -161,7 +161,7 @@ export default function WorkspaceSettingsPage() {
               </span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold font-display tracking-tight text-white flex items-center gap-2">
-              <Building2 className="h-7 w-7 text-amber-500" />
+              <Building2 className="h-7 w-7 text-cyan-500" />
               Team & Collaboration Workspace
             </h1>
             <p className="text-sm text-zinc-400 mt-1">
@@ -175,7 +175,7 @@ export default function WorkspaceSettingsPage() {
               onClick={() => setActiveWorkspace('business')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeWorkspace === 'business'
-                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-lg shadow-amber-500/20'
+                  ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-black shadow-lg shadow-cyan-500/20'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -213,7 +213,7 @@ export default function WorkspaceSettingsPage() {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                   isActive
-                    ? 'bg-zinc-800 text-amber-400 border border-zinc-700 shadow-md'
+                    ? 'bg-zinc-800 text-cyan-400 border border-zinc-700 shadow-md'
                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
                 }`}
               >
@@ -230,7 +230,7 @@ export default function WorkspaceSettingsPage() {
             {/* Invite New Member */}
             <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-4">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-amber-400" />
+                <UserPlus className="h-5 w-5 text-cyan-400" />
                 Invite Team Member
               </h2>
               <p className="text-xs text-zinc-400">
@@ -243,13 +243,13 @@ export default function WorkspaceSettingsPage() {
                   placeholder="colleague@inkthreadhub.com"
                   value={inviteEmail}
                   onChange={e => setInviteEmail(e.target.value)}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-black/60 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-black/60 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
                   required
                 />
                 <select
                   value={inviteRole}
                   onChange={e => setInviteRole(e.target.value as WorkspaceRole)}
-                  className="px-4 py-2.5 rounded-xl bg-black/60 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-amber-500"
+                  className="px-4 py-2.5 rounded-xl bg-black/60 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-cyan-500"
                 >
                   <option value="ADMIN">Admin (Workspace & Agent Config)</option>
                   <option value="MANAGER">Manager (Projects, Campaigns, Approvals)</option>
@@ -259,7 +259,7 @@ export default function WorkspaceSettingsPage() {
                 </select>
                 <button
                   type="submit"
-                  className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-all shadow-md shadow-amber-500/20"
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold text-xs transition-all shadow-md shadow-cyan-500/20"
                 >
                   <Send className="h-3.5 w-3.5" />
                   Send Invitation
@@ -304,14 +304,14 @@ export default function WorkspaceSettingsPage() {
                         </td>
                         <td className="py-3.5">
                           {member.role === 'OWNER' ? (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
                               👑 OWNER
                             </span>
                           ) : (
                             <select
                               value={member.role}
                               onChange={e => handleRoleChange(member.id, e.target.value as WorkspaceRole)}
-                              className="px-2.5 py-1 rounded-lg bg-black/60 border border-zinc-800 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
+                              className="px-2.5 py-1 rounded-lg bg-black/60 border border-zinc-800 text-[11px] text-zinc-300 focus:outline-none focus:border-cyan-500"
                             >
                               <option value="ADMIN">ADMIN</option>
                               <option value="MANAGER">MANAGER</option>
@@ -325,7 +325,7 @@ export default function WorkspaceSettingsPage() {
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
                             member.status === 'ACTIVE'
                               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
                           }`}>
                             {member.status}
                           </span>
@@ -356,14 +356,14 @@ export default function WorkspaceSettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-amber-400" />
+                  <Clock className="h-5 w-5 text-cyan-400" />
                   Team Workload & Task Delegation
                 </h2>
                 <p className="text-xs text-zinc-400 mt-1">
                   Assign business campaigns and creative production tasks with transparent SLAs.
                 </p>
               </div>
-              <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 text-black font-semibold text-xs hover:bg-amber-400 transition-all">
+              <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 text-black font-semibold text-xs hover:bg-cyan-400 transition-all">
                 <Plus className="h-3.5 w-3.5" />
                 Assign Task
               </button>
@@ -377,7 +377,7 @@ export default function WorkspaceSettingsPage() {
                       task.priority === 'LAUNCH_CRITICAL'
                         ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                         : task.priority === 'HIGH'
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                         : 'bg-zinc-800 text-zinc-400'
                     }`}>
                       {task.priority}
@@ -413,7 +413,7 @@ export default function WorkspaceSettingsPage() {
           <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-6">
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-amber-400" />
+                <ShieldCheck className="h-5 w-5 text-cyan-400" />
                 Action Approval Policies & Governance Matrix
               </h2>
               <p className="text-xs text-zinc-400 mt-1">
@@ -434,7 +434,7 @@ export default function WorkspaceSettingsPage() {
                     <p className="text-xs text-zinc-500">{policy.review}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       Min: {policy.minRole}
                     </span>
                     <span className="px-2.5 py-1 rounded-full text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -452,7 +452,7 @@ export default function WorkspaceSettingsPage() {
           <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-6">
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Brain className="h-5 w-5 text-amber-400" />
+                <Brain className="h-5 w-5 text-cyan-400" />
                 Shared Business Knowledge Vault
               </h2>
               <p className="text-xs text-zinc-400 mt-1">
@@ -489,7 +489,7 @@ export default function WorkspaceSettingsPage() {
               ].map((mem, idx) => (
                 <div key={idx} className="p-5 rounded-2xl bg-black/40 border border-zinc-800/80 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       {mem.category}
                     </span>
                     <span className="text-[10px] font-mono text-zinc-500">{mem.source}</span>
@@ -506,7 +506,7 @@ export default function WorkspaceSettingsPage() {
         {activeTab === 'audit' && (
           <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-4">
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Activity className="h-5 w-5 text-amber-400" />
+              <Activity className="h-5 w-5 text-cyan-400" />
               Immutable Activity & Security Audit Trail
             </h2>
             <p className="text-xs text-zinc-400">
@@ -526,7 +526,7 @@ export default function WorkspaceSettingsPage() {
                     <span className="font-semibold text-zinc-200">{item.actor}</span>
                     <span className="text-zinc-400">{item.action}</span>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-amber-400">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-cyan-400">
                     {item.tag}
                   </span>
                 </div>

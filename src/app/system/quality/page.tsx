@@ -34,13 +34,13 @@ export default function QualityDashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-mono tracking-wider font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono tracking-wider font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                 SYSTEM V1.1
               </span>
               <span className="text-xs text-zinc-500">Observability & Evaluations</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-              <Activity className="h-7 w-7 text-amber-500" />
+              <Activity className="h-7 w-7 text-cyan-500" />
               AI & Agent Quality Dashboard
             </h1>
             <p className="text-sm text-zinc-400 mt-1">
@@ -80,7 +80,7 @@ export default function QualityDashboardPage() {
             ]).map((tc: any) => (
               <div key={tc.id} className="p-3.5 rounded-xl border border-zinc-800/60 bg-zinc-950/40 flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-mono text-amber-400">{tc.id}</span>
+                  <span className="text-xs font-mono text-cyan-400">{tc.id}</span>
                   <p className="text-xs text-zinc-500 mt-0.5">Category: {tc.category}</p>
                 </div>
                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold border border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
@@ -95,7 +95,7 @@ export default function QualityDashboardPage() {
         <div className="p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md space-y-4">
           <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
             <h2 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
-              <Layers className="h-5 w-5 text-amber-400" />
+              <Layers className="h-5 w-5 text-cyan-400" />
               Prompt Version Registry
             </h2>
           </div>
@@ -109,7 +109,7 @@ export default function QualityDashboardPage() {
               <div key={p.family} className="p-4 rounded-xl border border-zinc-800/60 bg-zinc-950/40 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-zinc-200">{p.family}</span>
-                  <span className="px-2 py-0.5 rounded text-[11px] font-mono border border-amber-500/30 text-amber-400 bg-amber-500/10">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-mono border border-cyan-500/30 text-cyan-400 bg-cyan-500/10">
                     {p.activeVersion}
                   </span>
                 </div>
@@ -123,7 +123,7 @@ export default function QualityDashboardPage() {
         <div className="p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md space-y-4">
           <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
             <h2 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-400" />
+              <AlertTriangle className="h-5 w-5 text-cyan-400" />
               Detected Technical Issue Clusters
             </h2>
           </div>
@@ -137,7 +137,7 @@ export default function QualityDashboardPage() {
                       <span className="text-xs font-semibold text-zinc-200">{iss.issueType}</span>
                       <p className="text-xs text-zinc-500">Module: {iss.module} • Count: {iss.occurrenceCount}</p>
                     </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold border border-amber-500/30 text-amber-400 bg-amber-500/10">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold border border-cyan-500/30 text-cyan-400 bg-cyan-500/10">
                       {iss.severity}
                     </span>
                   </div>

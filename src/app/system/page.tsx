@@ -39,7 +39,7 @@ function badgeClass(level: HealthLevel): string {
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
   }
   if (level === 'DEGRADED') {
-    return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+    return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
   }
   if (level === 'CRITICAL') {
     return 'border-red-500/30 bg-red-500/10 text-red-300';
@@ -132,7 +132,7 @@ export default function SystemPage() {
           <button
             onClick={runRecovery}
             disabled={recovering}
-            className="px-4 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-sm text-amber-200 flex items-center gap-2 hover:bg-amber-500/15 disabled:opacity-50"
+            className="px-4 py-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-sm text-cyan-200 flex items-center gap-2 hover:bg-cyan-500/15 disabled:opacity-50"
           >
             <RotateCcw className={`w-4 h-4 ${recovering ? 'animate-spin' : ''}`} />
             Run Safe Recovery
@@ -149,7 +149,7 @@ export default function SystemPage() {
             {overall === 'HEALTHY' ? (
               <CheckCircle2 className="w-7 h-7 text-emerald-400" />
             ) : (
-              <AlertTriangle className="w-7 h-7 text-amber-400" />
+              <AlertTriangle className="w-7 h-7 text-cyan-400" />
             )}
             <span className={`px-3 py-1 rounded-full border text-xs font-mono ${badgeClass(overall)}`}>
               {overall}
@@ -185,7 +185,7 @@ export default function SystemPage() {
       </div>
 
       {recoveryMessage && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 text-sm text-cyan-200">
           {recoveryMessage}
         </div>
       )}
