@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server';
-import { auditEnvironment } from '@/lib/config/envValidator';
-import { getAllCircuitStates } from '@/lib/safety/circuitBreaker';
+import { createClient } from '@/lib/supabase/server';
+import { getSystemHealthSnapshot } from '@/lib/system/healthEngine';
 
 export async function GET() {
-  const envAudit = auditEnvironment();
-  const circuits = getAllCircuitStates();
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  return NextResponse.json({
-    status: envAudit.isValidCore ? 'HEALTHY' : 'DEGRADED',
-    timestamp: new Date().toISOString(),
-    environment: envAudit.environment,
-    capabilities: envAudit.capabilities,
-    circuits,
-    summary: envAudit.summary
-  });
+  const snapshot = await getSystemHealthSnapshot(user?.id);
+  return NextResponse.json(snapshot);
 }
