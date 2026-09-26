@@ -1,3 +1,12 @@
+const PRODUCTION_GOOGLE_REDIRECT_URI = 'https://mentra.inkthreadhub.in/api/integrations/google/callback';
+
+function getGoogleRedirectUri(): string {
+  if (process.env.NODE_ENV === 'production') {
+    return PRODUCTION_GOOGLE_REDIRECT_URI;
+  }
+  return process.env.GOOGLE_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3010'}/api/integrations/google/callback`;
+}
+
 export const GOOGLE_SCOPES = {
   // Read Scopes
   GMAIL_READ: 'https://www.googleapis.com/auth/gmail.readonly',
@@ -25,7 +34,7 @@ export const DEFAULT_GOOGLE_SCOPES = [
 
 export function getGoogleOAuthUrl(state: string, scopes: string[] = DEFAULT_GOOGLE_SCOPES): string {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3010'}/api/integrations/google/callback`;
+  const redirectUri = getGoogleRedirectUri();
 
   if (!clientId) {
     return `/connections?error=GOOGLE_CLIENT_ID_MISSING`;
@@ -53,7 +62,7 @@ export async function exchangeCodeForGoogleTokens(code: string): Promise<{
 }> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3010'}/api/integrations/google/callback`;
+  const redirectUri = getGoogleRedirectUri();
 
   if (!clientId || !clientSecret) {
     throw new Error('Google OAuth credentials not configured.');
