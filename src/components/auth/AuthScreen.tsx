@@ -254,15 +254,16 @@ export default function AuthScreen() {
                 )}
 
                 <label className="block">
-                  <span className="mb-2 block text-[10px] uppercase tracking-[0.18em] text-white/38">Email</span>
+                  <span className="mb-2 block text-[10px] uppercase tracking-[0.18em] text-white/38">{isSignUp ? 'Email' : 'Operator ID'}</span>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/28" />
                     <input
-                      type="email"
+                      type={isSignUp ? 'email' : 'text'}
                       required
+                      autoComplete={isSignUp ? 'email' : 'username'}
                       value={email}
                       onChange={event => setEmail(event.target.value)}
-                      placeholder="you@example.com"
+                      placeholder={isSignUp ? 'you@example.com' : 'inkthread'}
                       className="w-full rounded-2xl border border-white/10 bg-white/[0.035] py-3 pl-10 pr-4 text-sm outline-none transition placeholder:text-white/24 focus:border-indigo-400/60 focus:bg-white/[0.055]"
                     />
                   </div>
