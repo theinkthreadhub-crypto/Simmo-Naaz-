@@ -180,7 +180,7 @@ export async function executeApprovalDecision(
   await supabase.from('ai_tool_calls').insert({
     user_id: userId,
     tool_name: approval.tool_name,
-    input: parsed.data,
+    input: redactForAudit(parsed.data),
     output: redactForAudit(toolResult.data || {}),
     status: toolResult.ok ? 'SUCCESS' : 'FAILED',
     idempotency_key: `approval_${approvalId}`,
@@ -193,7 +193,7 @@ export async function executeApprovalDecision(
       .from('approval_requests')
       .update({
         status: 'FAILED',
-        result: toolResult.data || {},
+        result: redactForAudit(toolResult.data || {}),
         error_message: toolResult.errorCode || toolResult.message || 'TOOL_FAILED',
         executed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -215,7 +215,7 @@ export async function executeApprovalDecision(
     .from('approval_requests')
     .update({
       status: 'APPROVED',
-      result: toolResult.data || {},
+      result: redactForAudit(toolResult.data || {}),
       error_message: null,
       executed_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
