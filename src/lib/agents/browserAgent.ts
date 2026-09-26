@@ -277,7 +277,7 @@ export class BrowserlessProvider implements BrowserProvider {
         data: {
           title: await page.title(),
           url: page.url(),
-          text: (await page.locator('body').innerText()).slice(0, 4000)
+          text: (await page.evaluate(() => document.body?.innerText || '')).slice(0, 4000)
         },
         type: 'application/json'
       };
@@ -303,7 +303,7 @@ export class BrowserlessProvider implements BrowserProvider {
         data: {
           title: await page.title(),
           url: page.url(),
-          text: (await page.locator('body').innerText()).slice(0, 4000)
+          text: (await page.evaluate(() => document.body?.innerText || '')).slice(0, 4000)
         },
         type: 'application/json'
       };
@@ -410,7 +410,7 @@ export class BrowserlessProvider implements BrowserProvider {
         data: {
           title: await page.title(),
           url: page.url(),
-          text: (await page.locator('body').innerText()).slice(0, 4000)
+          text: (await page.evaluate(() => document.body?.innerText || '')).slice(0, 4000)
         },
         type: 'application/json'
       };
@@ -450,7 +450,7 @@ export class ControlledBrowserAgent {
     return this.provider.fetchPublicPageText(url);
   }
 
-  async click(url: string, selector: string): Promise<BrowserActionResult> {
+  async click(url: string, selector: string, approved: boolean = false): Promise<BrowserActionResult> {
     if (!this.isConfigured()) {
       return {
         success: false,
@@ -462,7 +462,7 @@ export class ControlledBrowserAgent {
     }
 
     const perm = evaluateActionPermission('ASSISTED', 'browser_click', { url, selector });
-    if (perm.requiresApproval) {
+    if (!approved && perm.requiresApproval) {
       return {
         success: false,
         actionType: 'CLICK',
@@ -476,7 +476,7 @@ export class ControlledBrowserAgent {
     return this.provider.click(url, selector);
   }
 
-  async type(url: string, selector: string, text: string): Promise<BrowserActionResult> {
+  async type(url: string, selector: string, text: string, approved: boolean = false): Promise<BrowserActionResult> {
     if (!this.isConfigured()) {
       return {
         success: false,
@@ -488,7 +488,7 @@ export class ControlledBrowserAgent {
     }
 
     const perm = evaluateActionPermission('ASSISTED', 'browser_type', { url, selector, textLength: text.length });
-    if (perm.requiresApproval) {
+    if (!approved && perm.requiresApproval) {
       return {
         success: false,
         actionType: 'TYPE',
@@ -506,7 +506,7 @@ export class ControlledBrowserAgent {
     return this.provider.screenshot(url);
   }
 
-  async submit(url: string, selector: string, payload: Record<string, unknown>): Promise<BrowserActionResult> {
+  async submit(url: string, selector: string, payload: Record<string, unknown>, approved: boolean = false): Promise<BrowserActionResult> {
     if (!this.isConfigured()) {
       return {
         success: false,
@@ -518,7 +518,7 @@ export class ControlledBrowserAgent {
     }
 
     const perm = evaluateActionPermission('ASSISTED', 'browser_submit', payload);
-    if (perm.requiresApproval) {
+    if (!approved && perm.requiresApproval) {
       return {
         success: false,
         actionType: 'SUBMIT',
