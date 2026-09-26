@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { redactForAudit } from '@/lib/safety/auditRedaction';
 import { runMentraAgentRuntime } from './agentRuntime';
 import { extractDurableMemories } from '@/lib/memory/extractor';
+import { evaluateRunAndPersist } from '@/lib/evals/runtimeLearning';
 
 export type AIRunStatus = 'SUCCESS' | 'PARTIAL' | 'WAITING_APPROVAL' | 'FAILED';
 
@@ -160,17 +161,32 @@ export async function runMentra(
         conversationId
       );
 
-      await supabase.from('ai_runs').insert({
-        user_id: incoming.userId,
-        conversation_id: conversationId,
-        provider: provider.name,
-        model: provider.model || process.env.AI_MODEL_SMART || process.env.AI_MODEL_FAST || 'provider-default',
-        purpose: 'AGENT_RUNTIME_V2',
-        input_tokens: runtime.usage.inputTokens,
-        output_tokens: runtime.usage.outputTokens,
-        latency_ms: runtime.traces.reduce((sum, trace) => sum + trace.latencyMs, 0),
-        status: runtime.status === 'FAILED' ? 'FAILED' : 'SUCCESS'
-      });
+      const { data: aiRunRecord } = await supabase
+        .from('ai_runs')
+        .insert({
+          user_id: incoming.userId,
+          conversation_id: conversationId,
+          provider: provider.name,
+          model: provider.model || process.env.AI_MODEL_SMART || process.env.AI_MODEL_FAST || 'provider-default',
+          purpose: 'AGENT_RUNTIME_V2',
+          input_tokens: runtime.usage.inputTokens,
+          output_tokens: runtime.usage.outputTokens,
+          latency_ms: runtime.traces.reduce((sum, trace) => sum + trace.latencyMs, 0),
+          status: runtime.status === 'FAILED' ? 'FAILED' : 'SUCCESS'
+        })
+        .select('id')
+        .single();
+
+      if (aiRunRecord?.id) {
+        await evaluateRunAndPersist({
+          userId: incoming.userId,
+          aiRunId: aiRunRecord.id,
+          runStatus: runtime.status,
+          responseText,
+          traces: runtime.traces,
+          maxStepsReached: runtime.maxStepsReached
+        });
+      }
 
       return {
         success: runtime.status !== 'FAILED',
@@ -452,6 +468,46 @@ Rules:
       finalResponseText || '[MENTRA Command Executed]',
       conversationId
     );
+
+    const { data: legacyRunRecord } = await supabase
+      .from('ai_runs')
+      .insert({
+        user_id: incoming.userId,
+        conversation_id: conversationId,
+        provider: provider.name,
+        model:
+          provider.model ||
+          process.env.AI_MODEL_SMART ||
+          process.env.AI_MODEL_FAST ||
+          'provider-default',
+        purpose: 'LEGACY_TOOL_RUNTIME',
+        input_tokens: aiResponse.usage?.inputTokens || 0,
+        output_tokens: aiResponse.usage?.outputTokens || 0,
+        latency_ms: toolResultsForSynthesis.reduce(
+          (sum, item) => sum + Number(item.result?.latencyMs || 0),
+          0
+        ),
+        status: runStatus === 'FAILED' ? 'FAILED' : 'SUCCESS'
+      })
+      .select('id')
+      .single();
+
+    if (legacyRunRecord?.id) {
+      await evaluateRunAndPersist({
+        userId: incoming.userId,
+        aiRunId: legacyRunRecord.id,
+        runStatus,
+        responseText: finalResponseText || '[MENTRA Command Executed]',
+        traces: toolResultsForSynthesis.map(item => ({
+          tool: item.tool,
+          status:
+            item.result?.ok === true
+              ? 'SUCCESS'
+              : item.result?.errorCode || 'FAILED'
+        })),
+        maxStepsReached: currentStep >= maxSteps
+      });
+    }
 
     return {
       success: runStatus !== 'FAILED',
