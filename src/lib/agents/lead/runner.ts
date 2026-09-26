@@ -326,6 +326,22 @@ export async function runLeadAgent(userId: string, input: LeadAgentInput): Promi
     }
   };
 
+  /** Live snapshot for the UI: finished steps with results, the rest as RUNNING or PENDING. */
+  const snapshotSteps = (running: Set<string> = new Set()) =>
+    plan.steps.map(step => {
+      const result = results.get(step.id);
+      if (result) {
+        const { cards: _cards, ...rest } = result;
+        return { ...rest, output: clipText(rest.output, 4000) };
+      }
+      return {
+        id: step.id,
+        agent: step.agent,
+        title: step.title,
+        status: running.has(step.id) ? 'RUNNING' : 'PENDING'
+      };
+    });
+
   while (pending.length > 0) {
     if (Date.now() - startedAt > timeBudgetMs) {
       stopReason = 'TIME_BUDGET';
@@ -338,10 +354,21 @@ export async function runLeadAgent(userId: string, input: LeadAgentInput): Promi
     const batch = ready.slice(0, maxParallel);
     for (const step of batch) pending.splice(pending.indexOf(step), 1);
 
-    await updateRun({ current_stage: `RUNNING_${batch.map(step => step.id).join('_')}`.slice(0, 120) });
+    await updateRun({
+      current_stage: `RUNNING_${batch.map(step => step.id).join('_')}`.slice(0, 120),
+      output: {
+        plan,
+        plannerError: planned.plannerError || null,
+        steps: snapshotSteps(new Set(batch.map(step => step.id)))
+      }
+    });
 
     const batchResults = await Promise.all(batch.map(executeStep));
     for (const result of batchResults) results.set(result.id, result);
+
+    await updateRun({
+      output: { plan, plannerError: planned.plannerError || null, steps: snapshotSteps() }
+    });
 
     if (batchResults.some(result => result.status === 'WAITING_APPROVAL')) {
       stopReason = 'APPROVAL';
@@ -370,6 +397,7 @@ export async function runLeadAgent(userId: string, input: LeadAgentInput): Promi
 
   // 4. Synthesize
   input.onStatus?.('LEAD_SYNTHESIZING');
+  await updateRun({ current_stage: 'SYNTHESIZING' });
   const status = resolveRunStatus(steps);
   const cards = steps.flatMap(step => step.cards);
   const approvalId = cards.find(card => card.requiresApproval && card.approvalId)?.approvalId;
@@ -387,7 +415,7 @@ export async function runLeadAgent(userId: string, input: LeadAgentInput): Promi
     output: {
       plan,
       plannerError: planned.plannerError || null,
-      steps: steps.map(({ cards: _cards, ...rest }) => ({ ...rest, output: clipText(rest.output, 4000) })),
+      steps: snapshotSteps(),
       summary: clipText(summary, 8000),
       usage,
       durationMs: Date.now() - startedAt
