@@ -48,7 +48,7 @@ export default function MobileDock() {
   return (
     <>
       {/* Top Compact Brand Bar */}
-      <div className="lg:hidden fixed top-0 inset-x-0 z-40 px-4 py-3 bg-black/60 backdrop-blur-xl border-b border-white/10 flex items-center justify-between">
+      <div className="lg:hidden fixed top-0 inset-x-0 z-40 px-3 py-3 bg-black/70 backdrop-blur-xl border-b border-white/10 flex items-center justify-between sm:px-4">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_6px_#5b6cff]" />
           <span className="font-display font-bold tracking-wider text-sm text-white">MENTRA</span>
@@ -76,12 +76,12 @@ export default function MobileDock() {
       </div>
 
       {/* Bottom Glass Navigation Dock */}
-      <div className="lg:hidden fixed bottom-4 inset-x-4 z-50">
+      <div className="lg:hidden fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] inset-x-3 z-50 sm:inset-x-4">
         <div className="flex items-center justify-around p-2 glass-pill bg-black/80 border-white/10 shadow-2xl backdrop-blur-2xl">
           {/* Home */}
           <Link
             href="/"
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-full transition-all ${
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 sm:px-3 rounded-full transition-all ${
               pathname === '/' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
             }`}
           >
@@ -92,7 +92,7 @@ export default function MobileDock() {
           {/* Quests */}
           <Link
             href="/quests"
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-full transition-all ${
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 sm:px-3 rounded-full transition-all ${
               pathname === '/quests' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
             }`}
           >
@@ -111,7 +111,7 @@ export default function MobileDock() {
           {/* Progress (Skills & Goals) */}
           <Link
             href="/skills"
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-full transition-all ${
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 sm:px-3 rounded-full transition-all ${
               pathname === '/skills' || pathname === '/goals' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
             }`}
           >
@@ -122,7 +122,7 @@ export default function MobileDock() {
           {/* Drawer Trigger */}
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex flex-col items-center gap-1 py-1 px-3 rounded-full text-white/60 hover:text-white"
+            className="flex flex-col items-center gap-1 py-1 px-2.5 sm:px-3 rounded-full text-white/60 hover:text-white"
           >
             <Menu className="w-4 h-4" />
             <span className="text-[10px]">More</span>
@@ -132,7 +132,7 @@ export default function MobileDock() {
 
       {/* Full Screen Slide-in Drawer */}
       {drawerOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex flex-col justify-between p-6 animate-in fade-in duration-200">
+        <div className="lg:hidden fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-xl flex flex-col justify-between p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 animate-in fade-in duration-200">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-2">
@@ -159,7 +159,7 @@ export default function MobileDock() {
             </div>
 
             {/* All Routes Grid */}
-            <div className="mt-6 grid grid-cols-2 gap-2.5">
+            <div className="mt-5 grid grid-cols-1 gap-2.5 min-[390px]:grid-cols-2 sm:mt-6">
               {menuRoutes.map(item => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
