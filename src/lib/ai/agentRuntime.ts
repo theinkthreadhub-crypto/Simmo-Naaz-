@@ -321,7 +321,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
         onStatus?.('WAITING_APPROVAL');
 
         const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validArgs)).digest('hex');
-        const { data: approval } = await supabase
+        const { data: approval, error: approvalError } = await supabase
           .from('approval_requests')
           .insert({
             user_id: context.userId,
@@ -333,7 +333,35 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
           .select('id')
           .single();
 
-        const approvalId = approval?.id || `appr_${Date.now()}_${payloadHash.slice(0, 8)}`;
+        if (approvalError || !approval?.id) {
+          hadFailure = true;
+          const error =
+            approvalError?.message || 'Could not persist approval request.';
+
+          traces.push({
+            step,
+            tool: call.name,
+            callId: call.id,
+            status: 'FAILED',
+            latencyMs: Date.now() - startedAt,
+            input: validArgs,
+            error
+          });
+
+          workingMessages.push({
+            role: 'tool',
+            name: call.name,
+            tool_call_id: call.id,
+            content: JSON.stringify({
+              ok: false,
+              errorCode: 'APPROVAL_PERSIST_FAILED',
+              message: error
+            })
+          });
+          continue;
+        }
+
+        const approvalId = approval.id;
         const card: ActionCard = {
           id: approvalId,
           type: 'APPROVAL_REQUIRED',
