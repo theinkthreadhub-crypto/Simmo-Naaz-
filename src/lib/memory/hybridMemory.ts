@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { generateEmbedding } from '@/lib/ai/embeddings';
 
@@ -17,6 +18,46 @@ export interface HybridMemoryMatch {
   rrf_score?: number;
   semantic_rank?: number | null;
   keyword_rank?: number | null;
+}
+
+function normalizeMemoryText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function memoryContentHash(memory: {
+  type?: string;
+  title?: string;
+  content: string;
+}): string {
+  return crypto
+    .createHash('sha256')
+    .update(
+      [
+        normalizeMemoryText(memory.type || ''),
+        normalizeMemoryText(memory.title || ''),
+        normalizeMemoryText(memory.content)
+      ].join('|')
+    )
+    .digest('hex');
+}
+
+function tokenSimilarity(a: string, b: string): number {
+  const aTokens = new Set(normalizeMemoryText(a).split(' ').filter(Boolean));
+  const bTokens = new Set(normalizeMemoryText(b).split(' ').filter(Boolean));
+
+  if (aTokens.size === 0 || bTokens.size === 0) return 0;
+
+  let intersection = 0;
+  for (const token of aTokens) {
+    if (bTokens.has(token)) intersection++;
+  }
+
+  const union = new Set([...aTokens, ...bTokens]).size;
+  return union === 0 ? 0 : intersection / union;
 }
 
 function memoryDocumentText(memory: {
@@ -150,6 +191,36 @@ export async function storeMemoryWithEmbedding(
   }
 ): Promise<HybridMemoryMatch | null> {
   const supabase = createClient();
+  const dedupEnabled = process.env.AI_MEMORY_DEDUP_V2 === 'true';
+  const contentHash = memoryContentHash(memory);
+
+  if (dedupEnabled) {
+    const { data: exact } = await supabase
+      .from('memories')
+      .select('id, user_id, type, title, content, source, source_id, importance, tags, metadata, created_at, updated_at')
+      .eq('user_id', userId)
+      .eq('content_hash', contentHash)
+      .maybeSingle();
+
+    if (exact) {
+      return exact as HybridMemoryMatch;
+    }
+
+    const nearMatches = await searchMemoriesHybrid(
+      userId,
+      memory.content,
+      3
+    );
+
+    const nearDuplicate = nearMatches.find(match =>
+      tokenSimilarity(match.content || '', memory.content) >= 0.86
+    );
+
+    if (nearDuplicate) {
+      return nearDuplicate;
+    }
+  }
+
   const embedding = process.env.AI_MEMORY_V2 === 'false'
     ? null
     : await generateEmbedding(memoryDocumentText(memory), 'DOCUMENT');
@@ -166,6 +237,7 @@ export async function storeMemoryWithEmbedding(
       importance: memory.importance || 'MEDIUM',
       tags: memory.tags || [],
       metadata: memory.metadata || {},
+      ...(dedupEnabled ? { content_hash: contentHash } : {}),
       embedding: embedding?.values || null,
       embedding_model: embedding?.model || null,
       embedding_updated_at: embedding ? new Date().toISOString() : null
