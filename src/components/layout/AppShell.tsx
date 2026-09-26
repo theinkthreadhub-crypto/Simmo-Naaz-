@@ -6,9 +6,16 @@ import PillNavbar from '@/components/navigation/PillNavbar';
 import MobileDock from '@/components/navigation/MobileDock';
 import AuthScreen from '@/components/auth/AuthScreen';
 import OnboardingSequence from '@/components/onboarding/OnboardingSequence';
+import ConfigurationRequired from '@/components/system/ConfigurationRequired';
+import { getPublicRuntimeConfig } from '@/lib/config/publicRuntime';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, onboardingCompleted, isLoading } = useAuth();
+  const runtimeConfig = getPublicRuntimeConfig();
+
+  if (process.env.NODE_ENV === 'production' && !runtimeConfig.supabaseReady) {
+    return <ConfigurationRequired missing={runtimeConfig.missing} />;
+  }
 
   if (isLoading) {
     return (
