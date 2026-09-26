@@ -47,18 +47,41 @@ function localProvider(explicitModel?: string): AIProvider | null {
   );
 }
 
+function deterministicFallbackAllowed(): boolean {
+  if (process.env.AI_ALLOW_DETERMINISTIC_FALLBACK === 'true') return true;
+  return process.env.NODE_ENV !== 'production';
+}
+
+function requireRealProvider(
+  providers: Array<AIProvider | null>,
+  label: string
+): AIProvider {
+  const live = providers.filter(Boolean) as AIProvider[];
+
+  if (live.length === 0) {
+    throw new Error(
+      `MENTRA_REAL_AI_NOT_CONFIGURED: No live ${label} provider is available. ` +
+      'Configure Vercel AI Gateway (OIDC/API key), Gemini AI_API_KEY, or AI_LOCAL_BASE_URL.'
+    );
+  }
+
+  return live.length === 1 ? live[0] : new ResilientProvider(live);
+}
+
 export function getAIProvider(
   selection: AIProviderSelection = {}
 ): AIProvider {
+  // Production defaults to real-provider auto routing instead of the old
+  // deterministic fallback. This follows the OpenJarvis-style principle that
+  // the agent runtime must either have a real inference engine or fail truthfully.
   const providerType = (
-    process.env.AI_PROVIDER || 'fallback'
+    process.env.AI_PROVIDER || 'auto'
   ).toLowerCase();
 
   const purpose =
     selection.purpose ||
     inferModelPurpose(selection.message || '');
 
-  const fallback = new FallbackProvider();
   const cloud = cloudProvider(purpose, selection.model);
   const gateway = gatewayProvider(
     selection.model || process.env.AI_GATEWAY_MODEL
@@ -69,19 +92,25 @@ export function getAIProvider(
       : process.env.AI_LOCAL_AGENT_MODEL
   );
 
+  const fallback = deterministicFallbackAllowed()
+    ? new FallbackProvider()
+    : null;
+
   if (
     providerType === 'gateway' ||
     providerType === 'vercel' ||
     providerType === 'vercel-ai-gateway'
   ) {
-    return new ResilientProvider(
-      [gateway, cloud, local, fallback].filter(Boolean) as AIProvider[]
+    return requireRealProvider(
+      [gateway, cloud, local, fallback],
+      'gateway'
     );
   }
 
   if (providerType === 'gemini' || providerType === 'google') {
-    return new ResilientProvider(
-      [cloud, local, fallback].filter(Boolean) as AIProvider[]
+    return requireRealProvider(
+      [cloud, gateway, local, fallback],
+      'Gemini'
     );
   }
 
@@ -89,27 +118,34 @@ export function getAIProvider(
     providerType === 'ollama' ||
     providerType === 'local'
   ) {
-    return new ResilientProvider(
-      [local, cloud, fallback].filter(Boolean) as AIProvider[]
+    return requireRealProvider(
+      [local, gateway, cloud, fallback],
+      'local'
     );
   }
 
   if (
-    providerType === 'auto' ||
-    providerType === 'hybrid'
+    providerType === 'fallback' ||
+    providerType === 'deterministic'
   ) {
-    const preferLocal =
-      purpose === 'FAST' ||
-      purpose === 'MEMORY' ||
-      purpose === 'CHAT';
-
-    return new ResilientProvider(
-      (preferLocal
-        ? [local, gateway, cloud, fallback]
-        : [gateway, cloud, local, fallback]
-      ).filter(Boolean) as AIProvider[]
-    );
+    if (!fallback) {
+      throw new Error(
+        'MENTRA_DETERMINISTIC_FALLBACK_DISABLED: Production fallback is disabled. Configure a real AI provider.'
+      );
+    }
+    return fallback;
   }
 
-  return fallback;
+  // AUTO/HYBRID: prefer low-latency private inference for lightweight work,
+  // otherwise use Vercel AI Gateway first, then direct Gemini, then local.
+  const preferLocal =
+    purpose === 'FAST' ||
+    purpose === 'MEMORY';
+
+  return requireRealProvider(
+    preferLocal
+      ? [local, gateway, cloud, fallback]
+      : [gateway, cloud, local, fallback],
+    'AI'
+  );
 }
