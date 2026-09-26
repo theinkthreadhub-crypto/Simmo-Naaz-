@@ -39,7 +39,7 @@ export default function HomePage() {
   const workingAgents = agents.filter(agent => ['WORKING', 'READY', 'MONITORING'].includes(agent.status));
 
   return (
-    <div className="story-shell story-snap -mt-20 lg:-mt-28">
+    <div className="story-shell story-snap -mt-20 w-full overflow-x-clip lg:-mt-28">
       <div className="pointer-events-none fixed right-5 top-1/2 z-40 hidden h-36 w-[2px] -translate-y-1/2 overflow-hidden rounded-full bg-white/10 lg:block">
         <motion.div
           className="h-full w-full origin-top bg-gradient-to-b from-indigo-400 to-cyan-300"
@@ -47,40 +47,40 @@ export default function HomePage() {
         />
       </div>
 
-      <section className="story-section pt-28 lg:pt-36">
+      <section className="story-section pt-24 sm:pt-28 lg:pt-36">
         <div className="story-glow left-[-6rem] top-[12%] h-80 w-80 bg-indigo-500/20" />
         <div className="mx-auto grid w-full max-w-7xl items-center gap-8 lg:grid-cols-12">
           <div className="lg:col-span-7">
             <div className="story-kicker">MENTRA / Personal operating system</div>
-            <h1 className="story-title mt-6 max-w-5xl text-[clamp(4rem,9vw,8.5rem)] font-extrabold">
+            <h1 className="story-title mt-5 max-w-5xl text-[clamp(3.15rem,15vw,8.5rem)] font-extrabold sm:mt-6">
               Move with
               <span className="story-accent block">one clear thread.</span>
             </h1>
-            <p className="mt-7 max-w-xl text-base leading-7 text-white/56">
+            <p className="mt-5 max-w-xl text-[15px] leading-7 text-white/56 sm:mt-7 sm:text-base">
               Welcome back, {displayName}. Your missions, money, memory and agents now live in one connected execution layer.
             </p>
-            <div className="mt-9 flex flex-wrap gap-3">
+            <div className="mt-7 flex w-full flex-col gap-3 sm:mt-9 sm:w-auto sm:flex-row sm:flex-wrap">
               <button
                 onClick={() => document.getElementById('command-layer')?.scrollIntoView({ behavior: 'smooth' })}
-                className="inline-flex items-center gap-2 rounded-full bg-indigo-500 px-5 py-3 text-sm font-semibold transition hover:bg-indigo-400"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-500 px-5 py-3 text-sm font-semibold transition hover:bg-indigo-400 sm:w-auto"
               >
                 Ask MENTRA <Zap className="h-4 w-4" />
               </button>
               <Link
                 href="/goals"
-                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.035] px-5 py-3 text-sm text-white/70 transition hover:bg-white/[0.07]"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.035] px-5 py-3 text-sm text-white/70 transition hover:bg-white/[0.07] sm:w-auto"
               >
                 Open goals <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
 
-            <div className="mt-10 grid max-w-xl grid-cols-3 gap-3">
+            <div className="mt-8 grid w-full max-w-xl grid-cols-3 gap-2 sm:mt-10 sm:gap-3">
               {[
                 ['Level', `0${displayLevel}`],
                 ['Streak', `${displayStreak}d`],
                 ['Agents', `${workingAgents.length}/${agents.length || 0}`]
               ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl border border-white/9 bg-white/[0.025] p-4">
+                <div key={label} className="min-w-0 rounded-2xl border border-white/9 bg-white/[0.025] p-3 sm:p-4">
                   <div className="text-[9px] uppercase tracking-[0.18em] text-white/32">{label}</div>
                   <div className="mt-2 text-xl font-semibold">{value}</div>
                 </div>
@@ -88,9 +88,9 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative h-[420px] lg:col-span-5 lg:h-[620px]">
+          <div className="relative h-[300px] w-full sm:h-[420px] lg:col-span-5 lg:h-[620px]">
             <MentraCore3D className="h-full w-full" />
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/30 px-4 py-2 text-[10px] font-mono tracking-[0.18em] text-cyan-200 backdrop-blur-xl">
+            <div className="absolute bottom-3 left-1/2 max-w-[92vw] -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/30 px-3 py-2 text-[9px] font-mono tracking-[0.14em] text-cyan-200 backdrop-blur-xl sm:bottom-4 sm:px-4 sm:text-[10px] sm:tracking-[0.18em]">
               CORE ONLINE // LVL {displayLevel}
             </div>
           </div>
@@ -104,7 +104,7 @@ export default function HomePage() {
         <div className="mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-12">
           <div className="lg:col-span-4 lg:sticky lg:top-32 lg:self-start">
             <div className="story-kicker">01 / Command layer</div>
-            <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+            <h2 className="story-title mt-5 text-[clamp(2.75rem,12vw,4.5rem)] font-bold sm:text-7xl">
               Say the goal.
               <span className="story-accent block">MENTRA routes the work.</span>
             </h2>
@@ -124,7 +124,7 @@ export default function HomePage() {
           <div className="flex items-end justify-between gap-6">
             <div>
               <div className="story-kicker">02 / Live system</div>
-              <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+              <h2 className="story-title mt-5 text-[clamp(2.75rem,12vw,4.5rem)] font-bold sm:text-7xl">
                 Everything important,
                 <span className="story-accent block">in one field of view.</span>
               </h2>
@@ -167,14 +167,14 @@ export default function HomePage() {
         <div className="mx-auto grid w-full max-w-7xl gap-10 lg:grid-cols-12">
           <div className="lg:col-span-5">
             <div className="story-kicker">03 / Daily execution</div>
-            <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+            <h2 className="story-title mt-5 text-[clamp(2.75rem,12vw,4.5rem)] font-bold sm:text-7xl">
               Turn intent
               <span className="story-accent block">into movement.</span>
             </h2>
             <p className="mt-6 max-w-md text-sm leading-7 text-white/50">
               Your active missions stay visible while goals and learning continue in the background.
             </p>
-            <div className="mt-8 flex gap-3">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/quests" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950">
                 Open quests
               </Link>
@@ -187,7 +187,7 @@ export default function HomePage() {
             {activeQuests.length > 0 ? (
               activeQuests.slice(0, 3).map(quest => <QuestCard key={quest.id} quest={quest} />)
             ) : (
-              <div className="story-card p-8">
+              <div className="story-card p-5 sm:p-8">
                 <Target className="h-5 w-5 text-cyan-200" />
                 <h3 className="mt-5 text-2xl font-semibold">No active missions yet.</h3>
                 <p className="mt-3 text-sm text-white/45">Create one clear next move and let MENTRA keep the thread alive.</p>
@@ -205,7 +205,7 @@ export default function HomePage() {
           <div className="grid gap-10 lg:grid-cols-12">
             <div className="lg:col-span-5 lg:sticky lg:top-32 lg:self-start">
               <div className="story-kicker">04 / Intelligence network</div>
-              <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+              <h2 className="story-title mt-5 text-[clamp(2.75rem,12vw,4.5rem)] font-bold sm:text-7xl">
                 Agents act.
                 <span className="story-accent block">Memory connects.</span>
               </h2>
@@ -250,7 +250,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="story-section min-h-[75svh]">
+      <section className="story-section min-h-0 lg:min-h-[75svh]">
         <div className="mx-auto w-full max-w-7xl text-center">
           <div className="story-kicker">05 / Next move</div>
           <h2 className="story-title mx-auto mt-5 max-w-4xl text-5xl font-bold sm:text-7xl lg:text-8xl">
