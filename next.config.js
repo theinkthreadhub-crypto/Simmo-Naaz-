@@ -17,7 +17,7 @@ const nextConfig = {
       "img-src 'self' data: blob: https:",
       "media-src 'self' blob: https:",
       "worker-src 'self' blob:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://graph.facebook.com https://*.browserless.io https://api.tavily.com https://serpapi.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://ai-gateway.vercel.sh https://www.googleapis.com https://oauth2.googleapis.com https://graph.facebook.com https://*.browserless.io https://api.tavily.com https://serpapi.com",
       "upgrade-insecure-requests",
     ].join('; ');
 
