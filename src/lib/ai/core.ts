@@ -255,8 +255,40 @@ export async function runMentra(
           );
           if (permission.requiresApproval) {
             hasPendingApproval = true;
-            const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validArgs)).digest('hex');
-            const approvalId = `appr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            const payloadHash = crypto
+              .createHash('sha256')
+              .update(JSON.stringify(validArgs))
+              .digest('hex');
+
+            const { data: approvalRecord, error: approvalError } = await supabase
+              .from('approval_requests')
+              .insert({
+                user_id: incoming.userId,
+                tool_name: call.name,
+                tool_input: validArgs,
+                description:
+                  permission.reason ||
+                  `Approval required before ${call.name} can execute.`,
+                status: 'PENDING'
+              })
+              .select('id')
+              .single();
+
+            if (approvalError || !approvalRecord?.id) {
+              hasToolFailure = true;
+              toolResultsForSynthesis.push({
+                tool: call.name,
+                args: validArgs,
+                result: {
+                  ok: false,
+                  errorCode: 'APPROVAL_PERSIST_FAILED',
+                  message: approvalError?.message || 'Could not persist approval request.'
+                }
+              });
+              continue;
+            }
+
+            const approvalId = approvalRecord.id;
 
             const approvalCard: ActionCard = {
               id: approvalId,
