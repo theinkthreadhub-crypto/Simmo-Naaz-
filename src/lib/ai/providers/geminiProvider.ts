@@ -82,11 +82,11 @@ function convertZodToGeminiSchema(schema: z.ZodTypeAny): Record<string, any> {
 export class GeminiProvider implements AIProvider {
   name = 'gemini';
   private apiKey: string;
-  private defaultModel: string;
+  readonly model: string;
 
   constructor(apiKey?: string, model?: string) {
     this.apiKey = apiKey || process.env.AI_API_KEY || process.env.AI_PROVIDER_API_KEY || '';
-    this.defaultModel = model || process.env.AI_MODEL_SMART || 'gemini-1.5-flash';
+    this.model = model || process.env.AI_MODEL_SMART || 'gemini-3.8-flash';
   }
 
   async generate(messages: ModelMessage[], options?: GenerateOptions): Promise<AIProviderResponse> {
@@ -94,7 +94,7 @@ export class GeminiProvider implements AIProvider {
       throw new Error('AI_API_KEY is not configured on the server.');
     }
 
-    const modelName = options?.model || this.defaultModel;
+    const modelName = options?.model || this.model;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
 
     // Convert messages to Gemini format, including native function-call turns.
