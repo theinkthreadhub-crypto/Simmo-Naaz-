@@ -43,7 +43,7 @@ export default function OnboardingSequence() {
           {/* Progress telemetry header */}
           <div className="flex items-center justify-between pb-6 border-b border-white/10">
             <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_8px_#ff4a00]" />
+              <div className="w-2.5 h-2.5 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_8px_#5b6cff]" />
               <span className="font-mono text-xs text-mentra-amber font-semibold uppercase tracking-widest">
                 INITIALIZING PLAYER PROFILE // STEP {step} OF 5
               </span>
@@ -87,7 +87,7 @@ export default function OnboardingSequence() {
               <button
                 onClick={() => setStep(2)}
                 disabled={!name.trim()}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,74,0,0.4)] disabled:opacity-50"
+                className="w-full py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(91,108,255,0.4)] disabled:opacity-50"
               >
                 <span>CONTINUE SEQUENCE</span>
                 <ArrowRight className="w-4 h-4" />
@@ -116,7 +116,7 @@ export default function OnboardingSequence() {
                       onClick={() => toggleItem(selectedAreas, setSelectedAreas, area)}
                       className={`p-3.5 rounded-2xl text-xs font-medium text-left border transition-all flex items-center justify-between ${
                         isSelected
-                          ? 'bg-mentra-orange/20 border-mentra-orange text-white shadow-[0_0_12px_rgba(255,74,0,0.3)]'
+                          ? 'bg-mentra-orange/20 border-mentra-orange text-white shadow-[0_0_12px_rgba(91,108,255,0.3)]'
                           : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
                       }`}
                     >
@@ -137,7 +137,7 @@ export default function OnboardingSequence() {
                 <button
                   onClick={() => setStep(3)}
                   disabled={selectedAreas.length === 0}
-                  className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,74,0,0.4)] disabled:opacity-50"
+                  className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(91,108,255,0.4)] disabled:opacity-50"
                 >
                   <span>SET VECTORS</span>
                   <ArrowRight className="w-4 h-4" />
@@ -180,7 +180,7 @@ export default function OnboardingSequence() {
                 <button
                   onClick={() => setStep(4)}
                   disabled={!primaryGoal.trim()}
-                  className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,74,0,0.4)] disabled:opacity-50"
+                  className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(91,108,255,0.4)] disabled:opacity-50"
                 >
                   <span>LOCK GOAL</span>
                   <ArrowRight className="w-4 h-4" />
@@ -210,7 +210,7 @@ export default function OnboardingSequence() {
                       onClick={() => setDailyTime(opt)}
                       className={`w-full p-4 rounded-2xl text-xs font-medium text-left border transition-all flex items-center justify-between ${
                         isSelected
-                          ? 'bg-mentra-orange/20 border-mentra-orange text-white shadow-[0_0_12px_rgba(255,74,0,0.3)]'
+                          ? 'bg-mentra-orange/20 border-mentra-orange text-white shadow-[0_0_12px_rgba(91,108,255,0.3)]'
                           : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
                       }`}
                     >
@@ -233,7 +233,7 @@ export default function OnboardingSequence() {
                 </button>
                 <button
                   onClick={() => setStep(5)}
-                  className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,74,0,0.4)]"
+                  className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(91,108,255,0.4)]"
                 >
                   <span>CONFIRM CADENCE</span>
                   <ArrowRight className="w-4 h-4" />
@@ -263,7 +263,7 @@ export default function OnboardingSequence() {
                       onClick={() => toggleItem(prioritizedModules, setPrioritizedModules, mod)}
                       className={`p-3.5 rounded-2xl text-xs font-medium text-left border transition-all flex items-center justify-between ${
                         isSelected
-                          ? 'bg-mentra-orange/20 border-mentra-orange text-white shadow-[0_0_12px_rgba(255,74,0,0.3)]'
+                          ? 'bg-mentra-orange/20 border-mentra-orange text-white shadow-[0_0_12px_rgba(91,108,255,0.3)]'
                           : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
                       }`}
                     >
@@ -284,7 +284,7 @@ export default function OnboardingSequence() {
                 <button
                   onClick={handleFinish}
                   disabled={isFinalizing}
-                  className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(255,74,0,0.5)] disabled:opacity-50"
+                  className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(91,108,255,0.5)] disabled:opacity-50"
                 >
                   <span>{isFinalizing ? 'CALIBRATING KERNEL...' : 'INITIALIZE SYSTEM'}</span>
                   <Sparkles className="w-4 h-4" />

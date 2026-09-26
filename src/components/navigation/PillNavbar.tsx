@@ -79,7 +79,7 @@ export default function PillNavbar() {
           href="/" 
           className="flex items-center gap-2.5 px-4 py-2 glass-pill bg-black/40 border-white/10 hover:border-mentra-orange/40 transition-all group"
         >
-          <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_8px_#ff4a00]" />
+          <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_8px_#5b6cff]" />
           <span className="font-display font-bold tracking-wider text-sm text-white group-hover:text-mentra-amber transition-colors">
             MENTRA
           </span>
@@ -99,7 +99,7 @@ export default function PillNavbar() {
                 href={item.href}
                 className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${
                   isActive
-                    ? 'bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_15px_rgba(255,74,0,0.4)]'
+                    ? 'bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_15px_rgba(91,108,255,0.4)]'
                     : 'text-white/70 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -168,7 +168,7 @@ export default function PillNavbar() {
             onClick={() => setProfileOpen(!profileOpen)}
             className="flex items-center gap-2 p-1.5 pr-3 glass-pill bg-black/40 border-white/10 hover:border-mentra-orange/40 transition-all text-left"
           >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber flex items-center justify-center text-[10px] font-bold text-white shadow-[0_0_8px_rgba(255,74,0,0.4)]">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber flex items-center justify-center text-[10px] font-bold text-white shadow-[0_0_8px_rgba(91,108,255,0.4)]">
               {displayName.charAt(0).toUpperCase()}
             </div>
             <span className="text-xs font-medium text-white/90 max-w-[100px] truncate">

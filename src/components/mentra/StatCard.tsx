@@ -23,7 +23,7 @@ export default function StatCard({
   return (
     <div className={`p-4 sm:p-5 rounded-2xl transition-all relative overflow-hidden ${
       highlight
-        ? 'glass-panel-orange bg-black/70 border-mentra-orange/40 shadow-[0_0_20px_rgba(255,74,0,0.15)]'
+        ? 'glass-panel-orange bg-black/70 border-mentra-orange/40 shadow-[0_0_20px_rgba(91,108,255,0.15)]'
         : 'glass-panel bg-black/60 border-white/10 hover:border-white/20'
     }`}>
       <div className="flex items-center justify-between">

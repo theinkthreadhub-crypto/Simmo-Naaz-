@@ -50,7 +50,7 @@ export default function MobileDock() {
       {/* Top Compact Brand Bar */}
       <div className="lg:hidden fixed top-0 inset-x-0 z-40 px-4 py-3 bg-black/60 backdrop-blur-xl border-b border-white/10 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_6px_#ff4a00]" />
+          <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_6px_#5b6cff]" />
           <span className="font-display font-bold tracking-wider text-sm text-white">MENTRA</span>
           <span className="text-[9px] uppercase font-mono tracking-widest text-white/40 px-1 py-0.5 rounded bg-white/5">
             OS
@@ -103,7 +103,7 @@ export default function MobileDock() {
           {/* Center Elevated MENTRA AI Button */}
           <Link
             href="/agents"
-            className="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber text-white shadow-[0_0_20px_rgba(255,74,0,0.5)] border-2 border-black active:scale-95 transition-all"
+            className="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber text-white shadow-[0_0_20px_rgba(91,108,255,0.5)] border-2 border-black active:scale-95 transition-all"
           >
             <Bot className="w-5 h-5" />
           </Link>
@@ -136,7 +136,7 @@ export default function MobileDock() {
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-mentra-orange shadow-[0_0_8px_#ff4a00]" />
+                <div className="w-2.5 h-2.5 rounded-full bg-mentra-orange shadow-[0_0_8px_#5b6cff]" />
                 <span className="font-display font-bold text-white text-base">MENTRA OS</span>
               </div>
               <button

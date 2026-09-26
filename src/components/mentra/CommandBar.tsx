@@ -103,7 +103,7 @@ export default function CommandBar() {
               onClick={toggleMic}
               className={`p-2 rounded-full transition-colors ${
                 isListening 
-                  ? 'bg-mentra-orange text-white shadow-[0_0_12px_#ff4a00]' 
+                  ? 'bg-mentra-orange text-white shadow-[0_0_12px_#5b6cff]' 
                   : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white'
               }`}
               title="Voice Input"
@@ -114,7 +114,7 @@ export default function CommandBar() {
             <button
               type="submit"
               disabled={isExecuting || !query.trim()}
-              className="p-2 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_15px_rgba(255,74,0,0.4)] hover:opacity-90 disabled:opacity-30 transition-all"
+              className="p-2 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_15px_rgba(91,108,255,0.4)] hover:opacity-90 disabled:opacity-30 transition-all"
             >
               <CornerDownLeft className="w-4 h-4" />
             </button>
