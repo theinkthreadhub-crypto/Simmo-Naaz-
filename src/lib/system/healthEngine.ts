@@ -68,7 +68,7 @@ export async function getSystemHealthSnapshot(userId?: string) {
       environment: envAudit.environment,
       capabilities: envAudit.capabilities,
       circuits,
-      autoRecoveryEnabled: process.env.SYSTEM_AUTO_RECOVERY === 'true',
+      autoRecoveryEnabled: process.env.SYSTEM_AUTO_RECOVERY !== 'false',
       components
     };
   }
@@ -303,7 +303,7 @@ export async function getSystemHealthSnapshot(userId?: string) {
     environment: envAudit.environment,
     capabilities: envAudit.capabilities,
     circuits,
-    autoRecoveryEnabled: process.env.SYSTEM_AUTO_RECOVERY === 'true',
+    autoRecoveryEnabled: process.env.SYSTEM_AUTO_RECOVERY !== 'false',
     components
   };
 }
