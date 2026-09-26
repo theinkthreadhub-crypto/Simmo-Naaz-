@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Flame, Shield, Activity, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
@@ -8,6 +8,24 @@ import { useMentraStore } from '@/lib/store/mentraStore';
 export default function SystemStatus() {
   const { user, profile, progress } = useAuth();
   const { quests, player } = useMentraStore();
+  const [kernelStatus, setKernelStatus] = useState('CHECKING');
+
+  useEffect(() => {
+    let active = true;
+
+    fetch('/api/system/health', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => {
+        if (active && data?.status) setKernelStatus(data.status);
+      })
+      .catch(() => {
+        if (active) setKernelStatus('UNKNOWN');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const activeQuests = quests.filter(q => q.status === 'ACTIVE');
   const displayLevel = progress?.level ?? player.level;
@@ -32,7 +50,7 @@ export default function SystemStatus() {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#10b981]" />
             <span className="text-[11px] font-mono uppercase tracking-widest text-mentra-amber">
-              MENTRA ONLINE // TELEMETRY OPTIMAL
+              MENTRA ONLINE // LIVE TELEMETRY
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-display font-bold text-white flex items-center gap-2">
@@ -65,7 +83,9 @@ export default function SystemStatus() {
             <Activity className="w-4 h-4 text-emerald-400" />
             <div>
               <div className="text-[10px] uppercase font-mono text-white/40">KERNEL</div>
-              <div className="text-xs font-mono font-bold text-emerald-300">100% OK</div>
+              <div className={`text-xs font-mono font-bold ${kernelStatus === 'HEALTHY' ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {kernelStatus}
+              </div>
             </div>
           </div>
         </div>
