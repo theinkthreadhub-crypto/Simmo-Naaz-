@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { redactForAudit } from '@/lib/safety/auditRedaction';
 import { createClient } from '@/lib/supabase/server';
 import { evaluateToolPermission, getConfiguredAutonomyMode } from '@/lib/safety/riskEngine';
 import { checkpointPersistentAgentState, loadPersistentAgentState, PersistentAgentStatus } from '@/lib/agents/persistentState';
@@ -286,7 +287,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
         await supabase.from('ai_tool_calls').insert({
           user_id: context.userId,
           tool_name: call.name,
-          input: validArgs,
+          input: redactForAudit(validArgs),
           output: {},
           status: 'LOOP_BLOCKED',
           idempotency_key: key,
@@ -299,7 +300,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
           callId: call.id,
           status: 'LOOP_BLOCKED',
           latencyMs: Date.now() - startedAt,
-          input: validArgs,
+          input: redactForAudit(validArgs),
           error
         });
         workingMessages.push({
@@ -326,7 +327,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
           .insert({
             user_id: context.userId,
             tool_name: call.name,
-            tool_input: validArgs,
+            tool_input: redactForAudit(validArgs),
             description: permission.reason || `Approval required for ${call.name}`,
             status: 'PENDING'
           })
@@ -344,7 +345,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
             callId: call.id,
             status: 'FAILED',
             latencyMs: Date.now() - startedAt,
-            input: validArgs,
+            input: redactForAudit(validArgs),
             error
           });
 
@@ -381,7 +382,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
         await supabase.from('ai_tool_calls').insert({
           user_id: context.userId,
           tool_name: call.name,
-          input: validArgs,
+          input: redactForAudit(validArgs),
           output: { approvalId, payloadHash },
           status: 'APPROVAL_REQUIRED',
           idempotency_key: key,
@@ -394,7 +395,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
           callId: call.id,
           status: 'APPROVAL_REQUIRED',
           latencyMs: Date.now() - startedAt,
-          input: validArgs,
+          input: redactForAudit(validArgs),
           output: { approvalId, payloadHash }
         });
 
@@ -439,8 +440,8 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
       await supabase.from('ai_tool_calls').insert({
         user_id: context.userId,
         tool_name: call.name,
-        input: validArgs,
-        output: result.data || {},
+        input: redactForAudit(validArgs),
+        output: redactForAudit(result.data || {}),
         status: result.ok ? 'SUCCESS' : 'FAILED',
         idempotency_key: key,
         latency_ms: latencyMs,
@@ -453,7 +454,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
         callId: call.id,
         status: result.ok ? 'SUCCESS' : 'FAILED',
         latencyMs,
-        input: validArgs,
+        input: redactForAudit(validArgs),
         output: result.data,
         error: result.ok ? undefined : (result.errorCode || result.message)
       });
