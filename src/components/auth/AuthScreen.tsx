@@ -99,8 +99,8 @@ export default function AuthScreen() {
 
   return (
     <div className="story-shell story-snap min-h-screen bg-[#070a12] text-white">
-      <header className="fixed inset-x-0 top-0 z-50 px-4 py-4 sm:px-7">
-        <div className="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/10 bg-[#070a12]/70 px-4 py-2.5 backdrop-blur-2xl">
+      <header className="fixed inset-x-0 top-0 z-50 px-3 py-3 sm:px-7 sm:py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/10 bg-[#070a12]/80 px-3 py-2.5 backdrop-blur-2xl sm:px-4">
           <Link href="/" className="flex items-center gap-2.5">
             <span className="h-2 w-2 rounded-full bg-indigo-400 shadow-[0_0_18px_rgba(91,108,255,0.9)]" />
             <span className="font-display text-sm font-bold tracking-[0.18em]">MENTRA</span>
@@ -116,30 +116,30 @@ export default function AuthScreen() {
         </div>
       </header>
 
-      <section className="story-section overflow-hidden">
+      <section className="story-section overflow-hidden pt-24 sm:pt-28">
         <div className="story-glow left-[-8rem] top-[18%] h-80 w-80 bg-indigo-500/25" />
         <div className="story-glow bottom-[10%] right-[-8rem] h-72 w-72 bg-cyan-300/15" />
         <div className="mx-auto grid w-full max-w-7xl items-center gap-10 lg:grid-cols-12">
           <div className="lg:col-span-7">
             <div className="story-kicker">Personal intelligence system</div>
-            <h1 className="story-title mt-6 max-w-5xl text-[clamp(4.4rem,11vw,10rem)] font-extrabold">
+            <h1 className="story-title mt-5 max-w-5xl text-[clamp(3.2rem,16vw,10rem)] font-extrabold sm:mt-6">
               One mind.
               <span className="story-accent block">One system.</span>
             </h1>
             <p className="mt-8 max-w-xl text-base leading-relaxed text-white/58 sm:text-lg">
               MENTRA turns goals, memory, money, learning and AI agents into one continuous operating system that moves with you.
             </p>
-            <div className="mt-10 flex flex-wrap gap-3">
-              <a href="#access" className="inline-flex items-center gap-2 rounded-full bg-indigo-500 px-5 py-3 text-sm font-semibold shadow-[0_18px_60px_-24px_rgba(91,108,255,0.95)] transition hover:bg-indigo-400">
+            <div className="mt-8 flex w-full flex-col gap-3 sm:mt-10 sm:w-auto sm:flex-row sm:flex-wrap">
+              <a href="#access" className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-500 px-5 py-3 text-sm font-semibold shadow-[0_18px_60px_-24px_rgba(91,108,255,0.95)] transition hover:bg-indigo-400 sm:w-auto">
                 Enter MENTRA <ArrowRight className="h-4 w-4" />
               </a>
-              <a href="#system" className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.035] px-5 py-3 text-sm text-white/72 transition hover:bg-white/[0.07]">
+              <a href="#system" className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.035] px-5 py-3 text-sm text-white/72 transition hover:bg-white/[0.07] sm:w-auto">
                 See how it works <ArrowDown className="h-4 w-4" />
               </a>
             </div>
           </div>
 
-          <div className="relative h-[420px] lg:col-span-5 lg:h-[620px]">
+          <div className="relative h-[280px] w-full sm:h-[420px] lg:col-span-5 lg:h-[620px]">
             <div className="absolute inset-10 rounded-full border border-indigo-300/10 bg-indigo-500/[0.035] blur-2xl" />
             <MentraCore3D className="h-full w-full" />
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/35 px-4 py-2 text-[10px] font-mono tracking-[0.18em] text-cyan-200 backdrop-blur-xl">
@@ -157,7 +157,7 @@ export default function AuthScreen() {
           <div className="grid gap-8 lg:grid-cols-12">
             <div className="lg:col-span-5 lg:sticky lg:top-28 lg:self-start">
               <div className="story-kicker">01 / Connected intelligence</div>
-              <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+              <h2 className="story-title mt-5 text-[clamp(2.75rem,12vw,4.5rem)] font-bold sm:text-7xl">
                 Stop switching.
                 <span className="story-accent block">Start flowing.</span>
               </h2>
@@ -213,7 +213,7 @@ export default function AuthScreen() {
         <div className="mx-auto grid w-full max-w-7xl items-center gap-10 lg:grid-cols-12">
           <div className="lg:col-span-6">
             <div className="story-kicker">03 / Your private system</div>
-            <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+            <h2 className="story-title mt-5 text-[clamp(2.75rem,12vw,4.5rem)] font-bold sm:text-7xl">
               Build the version
               <span className="story-accent block">that knows you.</span>
             </h2>
@@ -227,7 +227,7 @@ export default function AuthScreen() {
           </div>
 
           <div className="lg:col-span-6">
-            <div className="story-card mx-auto w-full max-w-md p-6 sm:p-8">
+            <div className="story-card mx-auto w-full max-w-md p-5 sm:p-8">
               <div className="flex items-start justify-between border-b border-white/10 pb-5">
                 <div>
                   <div className="text-xs uppercase tracking-[0.2em] text-cyan-200">
@@ -336,7 +336,7 @@ export default function AuthScreen() {
                 </button>
               )}
 
-              <div className="mt-5 flex items-center justify-between border-t border-white/8 pt-5 text-xs">
+              <div className="mt-5 flex flex-col gap-3 border-t border-white/8 pt-5 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-white/38">{isSignUp ? 'Already registered?' : 'First time here?'}</span>
                 <button
                   type="button"
