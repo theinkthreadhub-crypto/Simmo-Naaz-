@@ -107,10 +107,11 @@ export async function runMentra(
   const provider = getAIProvider({ message: cleanText });
   const maxSteps = Number(process.env.AI_MAX_TOOL_STEPS) || 4;
 
-  // Agent Runtime V2 is opt-in until production verification is complete.
-  // It enables multi-step Plan -> Tool -> Observe -> Re-plan loops while
-  // preserving the legacy execution path as the default.
-  if (process.env.AI_AGENT_RUNTIME_V2 === 'true') {
+  // OpenJarvis-style orchestration is now the default:
+  // model -> tool call -> verified observation -> re-plan -> final answer.
+  // It can only be disabled explicitly for rollback.
+  const useAgentRuntimeV2 = process.env.AI_AGENT_RUNTIME_V2 !== 'false';
+  if (useAgentRuntimeV2) {
     try {
       const runtime = await runMentraAgentRuntime({
         provider,
@@ -200,10 +201,16 @@ export async function runMentra(
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('[MENTRA AGENT RUNTIME V2 ERROR]:', err);
 
+      const configurationError =
+        errorMsg.includes('MENTRA_REAL_AI_NOT_CONFIGURED') ||
+        errorMsg.includes('MENTRA_DETERMINISTIC_FALLBACK_DISABLED');
+
       return {
         success: false,
         status: 'FAILED',
-        message: 'MENTRA Agent Runtime encountered an unexpected error.',
+        message: configurationError
+          ? 'MENTRA real AI is not connected yet. Configure a live model provider before using AI commands.'
+          : 'MENTRA Agent Runtime encountered an unexpected error.',
         cards: [],
         conversationId,
         toolCallsExecuted: [],
