@@ -6,6 +6,7 @@ import { MentraIncomingMessage } from '@/lib/ai/types';
 import { completeUserQuest } from '@/lib/db/quests';
 import { updateUserNotificationSettings } from '@/lib/notifications/preferences';
 import { speechProvider } from '@/lib/speech/speechProvider';
+import { executeApprovalDecision } from '@/lib/approvals/executor';
 
 export interface WhatsAppInboundPayload {
   object: string;
@@ -174,34 +175,29 @@ export async function processWhatsAppInboundWebhook(payload: WhatsAppInboundPayl
           }
         }
 
-        // 6c. Approval Shortcut (e.g. "APPROVE <id>" or "REJECT <id>")
+        // 6c. Approval Shortcut (e.g. "APPROVE <uuid>" or "REJECT <uuid>")
         if (upperText.startsWith('APPROVE') || upperText.startsWith('REJECT')) {
-          const parts = upperText.split('_').length > 1 ? upperText.split('_') : upperText.split(' ');
-          const decision = parts[0] === 'APPROVE' ? 'APPROVE' : 'REJECT';
-          const approvalId = parts[1];
+          const rawParts = incomingText.trim().split(/[\s_]+/);
+          const decision = rawParts[0].toUpperCase() === 'APPROVE' ? 'APPROVE' : 'REJECT';
+          const approvalId = rawParts.slice(1).join('').trim();
 
           if (approvalId) {
-            const { data: appReq } = await supabase
-              .from('approval_requests')
-              .select('*')
-              .eq('id', approvalId)
-              .eq('user_id', userId)
-              .single();
+            const approvalResult = await executeApprovalDecision(
+              userId,
+              approvalId,
+              decision
+            );
 
-            if (appReq && appReq.status === 'PENDING') {
-              await supabase
-                .from('approval_requests')
-                .update({ status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED', updated_at: new Date().toISOString() })
-                .eq('id', approvalId);
+            await whatsappClient.sendTextMessage(
+              fromPhone,
+              approvalResult.success
+                ? `⚖️ *ACTION ${approvalResult.status}*\n\n${approvalResult.message}`
+                : `⚠️ *APPROVAL ${approvalResult.status}*\n\n${approvalResult.message}`,
+              userId
+            );
 
-              await whatsappClient.sendTextMessage(
-                fromPhone,
-                `⚖️ *ACTION ${decision}D*\n\nRequest: ${appReq.description || appReq.tool_name}\nStatus: ${decision}D`,
-                userId
-              );
-              processedCount++;
-              continue;
-            }
+            processedCount++;
+            continue;
           }
         }
 
