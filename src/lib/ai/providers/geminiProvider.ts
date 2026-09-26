@@ -97,14 +97,55 @@ export class GeminiProvider implements AIProvider {
     const modelName = options?.model || this.defaultModel;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
 
-    // Convert messages to Gemini format
+    // Convert messages to Gemini format, including native function-call turns.
     const systemMsg = messages.find(m => m.role === 'system')?.content;
     const contents = messages
       .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }]
-      }));
+      .map(m => {
+        if (m.role === 'tool') {
+          let responsePayload: Record<string, any>;
+          try {
+            responsePayload = JSON.parse(m.content);
+          } catch {
+            responsePayload = { content: m.content };
+          }
+
+          return {
+            role: 'user',
+            parts: [{
+              functionResponse: {
+                name: m.name || 'tool',
+                response: responsePayload
+              }
+            }]
+          };
+        }
+
+        if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
+          const parts: Array<Record<string, any>> = [];
+          if (m.content) parts.push({ text: m.content });
+          for (const call of m.tool_calls) {
+            let args: Record<string, any> = {};
+            try {
+              args = JSON.parse(call.function.arguments || '{}');
+            } catch {
+              args = {};
+            }
+            parts.push({
+              functionCall: {
+                name: call.function.name,
+                args
+              }
+            });
+          }
+          return { role: 'model', parts };
+        }
+
+        return {
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }]
+        };
+      });
 
     // Convert tools if provided with real parameter schemas
     let toolsPayload = undefined;

@@ -7,6 +7,7 @@ import { MENTRA_TOOL_REGISTRY, ALL_MENTRA_TOOLS } from './tools/registry';
 import { createClient } from '@/lib/supabase/server';
 import { evaluateActionPermission } from '@/lib/safety/riskEngine';
 import crypto from 'crypto';
+import { runMentraAgentRuntime } from './agentRuntime';
 
 export type AIRunStatus = 'SUCCESS' | 'PARTIAL' | 'WAITING_APPROVAL' | 'FAILED';
 
@@ -102,6 +103,87 @@ export async function runMentra(
   if (callbacks?.onStatus) callbacks.onStatus('ANALYZING_INTENT');
   const provider = getAIProvider();
   const maxSteps = Number(process.env.AI_MAX_TOOL_STEPS) || 4;
+
+  // Agent Runtime V2 is opt-in until production verification is complete.
+  // It enables multi-step Plan -> Tool -> Observe -> Re-plan loops while
+  // preserving the legacy execution path as the default.
+  if (process.env.AI_AGENT_RUNTIME_V2 === 'true') {
+    try {
+      const runtime = await runMentraAgentRuntime({
+        provider,
+        messages: modelMessages,
+        tools: ALL_MENTRA_TOOLS,
+        toolRegistry: MENTRA_TOOL_REGISTRY,
+        context: {
+          userId: incoming.userId,
+          conversationId,
+          pageContext: incoming.pageContext
+        },
+        externalMessageId: incoming.externalMessageId,
+        maxSteps,
+        temperature: 0.2,
+        onStatus: callbacks?.onStatus
+      });
+
+      const responseText = runtime.finalText || 'Command processed.';
+
+      if (callbacks?.onToken && responseText) {
+        for (const word of responseText.split(' ')) {
+          callbacks.onToken(word + ' ');
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      }
+
+      await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        user_id: incoming.userId,
+        role: 'ASSISTANT',
+        content: responseText,
+        cards: runtime.cards,
+        tool_calls: runtime.traces.map(trace => ({
+          name: trace.tool,
+          status: trace.status,
+          step: trace.step,
+          latencyMs: trace.latencyMs
+        }))
+      });
+
+      await supabase.from('ai_runs').insert({
+        user_id: incoming.userId,
+        conversation_id: conversationId,
+        provider: provider.name,
+        model: process.env.AI_MODEL_SMART || process.env.AI_MODEL_FAST || 'provider-default',
+        purpose: 'AGENT_RUNTIME_V2',
+        input_tokens: runtime.usage.inputTokens,
+        output_tokens: runtime.usage.outputTokens,
+        latency_ms: runtime.traces.reduce((sum, trace) => sum + trace.latencyMs, 0),
+        status: runtime.status === 'FAILED' ? 'FAILED' : 'SUCCESS'
+      });
+
+      return {
+        success: runtime.status !== 'FAILED',
+        status: runtime.status,
+        message: responseText,
+        cards: runtime.cards,
+        conversationId,
+        toolCallsExecuted: runtime.executedTools
+      };
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[MENTRA AGENT RUNTIME V2 ERROR]:', err);
+
+      return {
+        success: false,
+        status: 'FAILED',
+        message: 'MENTRA Agent Runtime encountered an unexpected error.',
+        cards: [],
+        conversationId,
+        toolCallsExecuted: [],
+        error: errorMsg
+      };
+    }
+  }
+
   let currentStep = 0;
   const executedTools: string[] = [];
   const accumulatedCards: ActionCard[] = [];
