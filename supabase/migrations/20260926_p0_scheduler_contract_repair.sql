@@ -44,3 +44,20 @@ END;
 CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_due
   ON public.scheduled_jobs(status, scheduled_for ASC)
   WHERE status = 'SCHEDULED';
+
+
+-- AI tool-call states used by the legacy core and Agent Runtime V2.
+ALTER TABLE public.ai_tool_calls
+  DROP CONSTRAINT IF EXISTS ai_tool_calls_status_check;
+
+ALTER TABLE public.ai_tool_calls
+  ADD CONSTRAINT ai_tool_calls_status_check
+  CHECK (status IN (
+    'SUCCESS',
+    'FAILED',
+    'PENDING_APPROVAL',
+    'APPROVAL_REQUIRED',
+    'VALIDATION_FAILED',
+    'LOOP_BLOCKED',
+    'CANCELLED'
+  ));
