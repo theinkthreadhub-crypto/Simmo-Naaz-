@@ -3,6 +3,7 @@ import { whatsappClient } from '@/lib/integrations/whatsapp/client';
 import { getUserNotificationSettings, isDeliveryAllowedNow } from '@/lib/notifications/preferences';
 import { getGoogleCalendarEvents, CalendarEventSummary } from '@/lib/integrations/google/calendar';
 import { runOperativeAgentTick } from '@/lib/agents/operativeAgent';
+import { runAutomaticRecovery } from '@/lib/system/recoveryEngine';
 
 export interface JobExecutionResult {
   jobId: string;
@@ -36,6 +37,18 @@ function deferredRun(minutes: number): string {
 
 export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
   const supabase = createClient();
+
+  if (process.env.SYSTEM_AUTO_RECOVERY === 'true') {
+    try {
+      await runAutomaticRecovery();
+    } catch (error) {
+      console.warn(
+        '[SYSTEM RECOVERY]: Automatic recovery pass failed:',
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
   const nowIso = new Date().toISOString();
   const results: JobExecutionResult[] = [];
 
