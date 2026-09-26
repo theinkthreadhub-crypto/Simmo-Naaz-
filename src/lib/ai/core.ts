@@ -266,7 +266,7 @@ export async function runMentra(
               .insert({
                 user_id: incoming.userId,
                 tool_name: call.name,
-                tool_input: redactForAudit(validArgs),
+                tool_input: validArgs,
                 description:
                   permission.reason ||
                   `Approval required before ${call.name} can execute.`,
