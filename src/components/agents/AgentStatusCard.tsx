@@ -87,7 +87,7 @@ export default function AgentStatusCard({ agent }: AgentStatusCardProps) {
   return (
     <div className={`p-5 rounded-2xl border transition-all duration-200 relative overflow-hidden ${
       isAwaitingApproval
-        ? 'glass-panel-orange bg-black/80 border-mentra-orange/40 shadow-[0_0_25px_rgba(255,74,0,0.2)]'
+        ? 'glass-panel-orange bg-black/80 border-mentra-orange/40 shadow-[0_0_25px_rgba(91,108,255,0.2)]'
         : 'glass-panel bg-black/60 border-white/10 hover:border-mentra-orange/30'
     }`}>
       {/* Header */}
@@ -132,7 +132,7 @@ export default function AgentStatusCard({ agent }: AgentStatusCardProps) {
           </div>
           <button
             onClick={() => approveAgentTask(agent.id)}
-            className="px-4 py-1.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber hover:opacity-90 active:scale-95 text-white text-xs font-semibold tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(255,74,0,0.4)]"
+            className="px-4 py-1.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber hover:opacity-90 active:scale-95 text-white text-xs font-semibold tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(91,108,255,0.4)]"
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>APPROVE & RUN</span>

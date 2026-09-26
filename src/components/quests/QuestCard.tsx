@@ -95,7 +95,7 @@ export default function QuestCard({ quest, onComplete, onPostReflection }: Quest
     <div className={`p-4 sm:p-5 rounded-2xl border transition-all duration-200 relative overflow-hidden ${
       isCompleted 
         ? 'bg-black/30 border-white/5 opacity-60' 
-        : 'glass-panel bg-black/60 border-white/10 hover:border-mentra-orange/40 hover:shadow-[0_0_20px_rgba(255,74,0,0.15)]'
+        : 'glass-panel bg-black/60 border-white/10 hover:border-mentra-orange/40 hover:shadow-[0_0_20px_rgba(91,108,255,0.15)]'
     }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
@@ -139,7 +139,7 @@ export default function QuestCard({ quest, onComplete, onPostReflection }: Quest
           <button
             onClick={handleClaim}
             disabled={isCompleting}
-            className="px-4 py-2 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-mono text-xs font-semibold tracking-wider hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(255,74,0,0.3)] disabled:opacity-50"
+            className="px-4 py-2 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-mono text-xs font-semibold tracking-wider hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(91,108,255,0.3)] disabled:opacity-50"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>{isCompleting ? 'CLAIMING...' : 'COMPLETE QUEST'}</span>
