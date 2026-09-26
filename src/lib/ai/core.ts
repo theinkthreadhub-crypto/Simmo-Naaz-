@@ -7,6 +7,7 @@ import { MENTRA_TOOL_REGISTRY, ALL_MENTRA_TOOLS } from './tools/registry';
 import { createClient } from '@/lib/supabase/server';
 import { evaluateToolPermission, getConfiguredAutonomyMode } from '@/lib/safety/riskEngine';
 import crypto from 'crypto';
+import { redactForAudit } from '@/lib/safety/auditRedaction';
 import { runMentraAgentRuntime } from './agentRuntime';
 
 export type AIRunStatus = 'SUCCESS' | 'PARTIAL' | 'WAITING_APPROVAL' | 'FAILED';
@@ -228,7 +229,7 @@ export async function runMentra(
             await supabase.from('ai_tool_calls').insert({
               user_id: incoming.userId,
               tool_name: call.name,
-              input: call.arguments,
+              input: redactForAudit(call.arguments),
               output: {},
               status: 'VALIDATION_FAILED',
               idempotency_key: idempotencyKey,
@@ -265,7 +266,7 @@ export async function runMentra(
               .insert({
                 user_id: incoming.userId,
                 tool_name: call.name,
-                tool_input: validArgs,
+                tool_input: redactForAudit(validArgs),
                 description:
                   permission.reason ||
                   `Approval required before ${call.name} can execute.`,
@@ -310,7 +311,7 @@ export async function runMentra(
             await supabase.from('ai_tool_calls').insert({
               user_id: incoming.userId,
               tool_name: call.name,
-              input: validArgs,
+              input: redactForAudit(validArgs),
               output: { approvalId, status: 'APPROVAL_REQUIRED' },
               status: 'APPROVAL_REQUIRED',
               idempotency_key: idempotencyKey,
@@ -349,8 +350,8 @@ export async function runMentra(
           await supabase.from('ai_tool_calls').insert({
             user_id: incoming.userId,
             tool_name: call.name,
-            input: validArgs,
-            output: toolResult.data || {},
+            input: redactForAudit(validArgs),
+            output: redactForAudit(toolResult.data || {}),
             status: toolResult.ok ? 'SUCCESS' : 'FAILED',
             idempotency_key: idempotencyKey,
             latency_ms: toolLatency,
