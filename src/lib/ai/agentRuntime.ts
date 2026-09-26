@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
-import { evaluateActionPermission } from '@/lib/safety/riskEngine';
+import { evaluateToolPermission, getConfiguredAutonomyMode } from '@/lib/safety/riskEngine';
 import { checkpointPersistentAgentState, loadPersistentAgentState, PersistentAgentStatus } from '@/lib/agents/persistentState';
 import {
   ActionCard,
@@ -311,7 +311,12 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
         continue;
       }
 
-      const permission = evaluateActionPermission('ASSISTED', call.name, validArgs);
+      const permission = evaluateToolPermission(
+        tool.permission,
+        getConfiguredAutonomyMode(),
+        call.name,
+        validArgs
+      );
       if (permission.requiresApproval) {
         onStatus?.('WAITING_APPROVAL');
 
