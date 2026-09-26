@@ -2,6 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+const PRODUCTION_APP_URL = 'https://mentra.inkthreadhub.in';
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
@@ -36,6 +38,8 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(new URL('/', request.url));
+  // Always return production auth flows to the canonical custom domain.
+  const redirectOrigin =
+    process.env.NODE_ENV === 'production' ? PRODUCTION_APP_URL : new URL(request.url).origin;
+  return NextResponse.redirect(`${redirectOrigin}/`);
 }
