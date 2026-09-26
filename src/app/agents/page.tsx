@@ -67,7 +67,7 @@ export default function AgentsPage() {
             ACTIVE AGENT NODES ({agents.length})
           </h3>
           {approvalCount > 0 && (
-            <span className="text-xs font-mono text-amber-300 flex items-center gap-1.5 animate-pulse">
+            <span className="text-xs font-mono text-cyan-300 flex items-center gap-1.5 animate-pulse">
               <AlertTriangle className="w-3.5 h-3.5 text-mentra-orange" />
               <span>{approvalCount} ACTION(S) AWAITING APPROVAL</span>
             </span>

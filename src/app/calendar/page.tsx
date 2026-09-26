@@ -70,7 +70,7 @@ export default function CalendarPage() {
             key={idx}
             className={`p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
               block.status === 'ACTIVE'
-                ? 'glass-panel-orange bg-black/80 border-mentra-orange/40 shadow-[0_0_20px_rgba(255,74,0,0.15)]'
+                ? 'glass-panel-orange bg-black/80 border-mentra-orange/40 shadow-[0_0_20px_rgba(91,108,255,0.15)]'
                 : block.status === 'COMPLETED'
                 ? 'bg-black/40 border-white/5 opacity-70'
                 : 'glass-panel bg-black/60 border-white/10'
@@ -98,7 +98,7 @@ export default function CalendarPage() {
 
             <div className="flex items-center justify-end gap-3">
               {block.status === 'ACTIVE' && (
-                <span className="px-3 py-1 rounded-full bg-mentra-orange text-white text-xs font-mono font-semibold animate-pulse shadow-[0_0_10px_#ff4a00]">
+                <span className="px-3 py-1 rounded-full bg-mentra-orange text-white text-xs font-mono font-semibold animate-pulse shadow-[0_0_10px_#5b6cff]">
                   IN FOCUS NOW
                 </span>
               )}

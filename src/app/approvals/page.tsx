@@ -79,7 +79,7 @@ export default function ApprovalsPage() {
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 rounded-2xl glass-panel bg-black/60 border-white/10 text-xs font-mono">
             <span className="text-white/40">PENDING SIGN-OFFS: </span>
-            <span className={`font-bold ${pendingApprovals.length > 0 ? 'text-amber-400 animate-pulse' : 'text-emerald-400'}`}>
+            <span className={`font-bold ${pendingApprovals.length > 0 ? 'text-cyan-400 animate-pulse' : 'text-emerald-400'}`}>
               {pendingApprovals.length}
             </span>
           </div>

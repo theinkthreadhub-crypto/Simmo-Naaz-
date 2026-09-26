@@ -87,7 +87,7 @@ export default function ConnectionsPage() {
       case 'GOOGLE_ACCOUNT': return <Key className="w-5 h-5 text-white" />;
       case 'GMAIL': return <Mail className="w-5 h-5 text-mentra-orange" />;
       case 'GOOGLE_CALENDAR': return <Calendar className="w-5 h-5 text-mentra-amber" />;
-      case 'GOOGLE_DRIVE': return <HardDrive className="w-5 h-5 text-amber-200" />;
+      case 'GOOGLE_DRIVE': return <HardDrive className="w-5 h-5 text-cyan-200" />;
       case 'GOOGLE_SHEETS': return <FileSpreadsheet className="w-5 h-5 text-emerald-400" />;
       case 'GOOGLE_CONTACTS': return <Users className="w-5 h-5 text-white/70" />;
       case 'WHATSAPP_CLOUD_API': return <MessageSquare className="w-5 h-5 text-emerald-400" />;
@@ -117,7 +117,7 @@ export default function ConnectionsPage() {
         <div className="flex items-center gap-3">
           <div className="p-2.5 px-4 rounded-2xl glass-panel bg-black/60 border-white/10 text-xs font-mono">
             <span className="text-white/40">INTEGRATION STATE: </span>
-            <span className={isGoogleConnected ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+            <span className={isGoogleConnected ? 'text-emerald-400 font-bold' : 'text-cyan-400 font-bold'}>
               {isGoogleConnected ? 'GOOGLE ACTIVE' : 'STANDBY'}
             </span>
           </div>

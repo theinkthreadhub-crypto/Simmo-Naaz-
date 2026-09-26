@@ -50,7 +50,7 @@ export default function FinancePage() {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 active:scale-95 transition-all self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-95 transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>RECORD TRANSACTION</span>
@@ -203,7 +203,7 @@ export default function FinancePage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(255,74,0,0.4)]"
+                  className="flex-1 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(91,108,255,0.4)]"
                 >
                   <span>RECORD ENTRY</span>
                 </button>

@@ -169,7 +169,7 @@ export default function WhatsAppConnectionPage() {
                   className={`w-3 h-3 rounded-full ${
                     connection.status === 'CONNECTED'
                       ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50'
-                      : 'bg-amber-500'
+                      : 'bg-cyan-500'
                   }`}
                 />
                 <span className="text-lg font-bold text-white tracking-wide">
@@ -240,7 +240,7 @@ export default function WhatsAppConnectionPage() {
                     <div className="text-4xl font-extrabold tracking-widest text-emerald-400 font-mono">
                       {linkCode}
                     </div>
-                    <div className="text-xs text-amber-400">
+                    <div className="text-xs text-cyan-400">
                       Expires in: {expiresIn ? formatTimer(expiresIn) : '0:00'}
                     </div>
 

@@ -57,13 +57,13 @@ export default function CreatorWorkspacePage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-mono tracking-wider font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono tracking-wider font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                 CREATOR WORKSPACE
               </span>
               <span className="text-xs text-zinc-500">Content Pipeline & Creative Engine</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-              <Sparkles className="h-7 w-7 text-amber-500" />
+              <Sparkles className="h-7 w-7 text-cyan-500" />
               Creator Studio & Pipeline
             </h1>
             <p className="text-sm text-zinc-400 mt-1">
@@ -96,7 +96,7 @@ export default function CreatorWorkspacePage() {
             onClick={() => setActiveTab('pipeline')}
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'pipeline'
-                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20'
                 : 'text-zinc-400 hover:text-white bg-zinc-900/60'
             }`}
           >
@@ -106,7 +106,7 @@ export default function CreatorWorkspacePage() {
             onClick={() => setActiveTab('scripts')}
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'scripts'
-                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20'
                 : 'text-zinc-400 hover:text-white bg-zinc-900/60'
             }`}
           >
@@ -116,7 +116,7 @@ export default function CreatorWorkspacePage() {
             onClick={() => setActiveTab('assets')}
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'assets'
-                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20'
                 : 'text-zinc-400 hover:text-white bg-zinc-900/60'
             }`}
           >
@@ -134,14 +134,14 @@ export default function CreatorWorkspacePage() {
                 <span className="px-2 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-300 font-mono">1</span>
               </div>
               <div className="p-4 rounded-xl border border-zinc-800/60 bg-zinc-950/60 space-y-2">
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold border border-amber-500/30 text-amber-400 bg-amber-500/10">
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold border border-cyan-500/30 text-cyan-400 bg-cyan-500/10">
                   REEL
                 </span>
                 <h4 className="text-sm font-semibold text-zinc-100">Stop buying flimsy oversized tees</h4>
                 <p className="text-xs text-zinc-400 line-clamp-2">Visual comparison zooming into 280 GSM collar vs cheap tees</p>
                 <div className="flex items-center justify-between pt-2 border-t border-zinc-900 text-[11px] text-zinc-500">
                   <span>Instagram</span>
-                  <span className="text-amber-400 font-medium">Ready for Review</span>
+                  <span className="text-cyan-400 font-medium">Ready for Review</span>
                 </div>
               </div>
             </div>
@@ -192,7 +192,7 @@ export default function CreatorWorkspacePage() {
             <div className="p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
                 <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                  <Video className="h-5 w-5 text-amber-400" />
+                  <Video className="h-5 w-5 text-cyan-400" />
                   Hero Reel Script — Oversized Drop 2026
                 </h3>
                 <button className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border border-zinc-700 bg-zinc-800 text-zinc-300 hover:text-white">
@@ -202,17 +202,17 @@ export default function CreatorWorkspacePage() {
               </div>
 
               <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800/60 font-mono text-xs text-zinc-300 space-y-2.5 leading-relaxed">
-                <p><span className="text-amber-400 font-semibold">[0-3s Hook]:</span> Fast transition zooming into collar and thick fabric texture.</p>
-                <p><span className="text-amber-400 font-semibold">[3-7s Scene]:</span> Model styling Onyx Black Heavyweight Tee with dark cargos.</p>
-                <p><span className="text-amber-400 font-semibold">[7-12s Detail]:</span> Text overlay: &quot;280 GSM Pure Combed Cotton • Drop Shoulder Cut&quot;.</p>
-                <p><span className="text-amber-400 font-semibold">[12-15s CTA]:</span> Fast walk towards camera. &quot;If you want structured streetwear drape, tap link in bio.&quot;</p>
+                <p><span className="text-cyan-400 font-semibold">[0-3s Hook]:</span> Fast transition zooming into collar and thick fabric texture.</p>
+                <p><span className="text-cyan-400 font-semibold">[3-7s Scene]:</span> Model styling Onyx Black Heavyweight Tee with dark cargos.</p>
+                <p><span className="text-cyan-400 font-semibold">[7-12s Detail]:</span> Text overlay: &quot;280 GSM Pure Combed Cotton • Drop Shoulder Cut&quot;.</p>
+                <p><span className="text-cyan-400 font-semibold">[12-15s CTA]:</span> Fast walk towards camera. &quot;If you want structured streetwear drape, tap link in bio.&quot;</p>
               </div>
             </div>
 
             <div className="p-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-md space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
                 <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                  <Layers className="h-5 w-5 text-amber-400" />
+                  <Layers className="h-5 w-5 text-cyan-400" />
                   Structured Creative Brief
                 </h3>
               </div>
@@ -241,7 +241,7 @@ export default function CreatorWorkspacePage() {
             ]).map((ast) => (
               <div key={ast.id} className="p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/40 space-y-3">
                 <div className="h-32 rounded-lg bg-zinc-950/80 border border-zinc-800 flex items-center justify-center text-zinc-600">
-                  <ImageIcon className="h-8 w-8 opacity-40 text-amber-400" />
+                  <ImageIcon className="h-8 w-8 opacity-40 text-cyan-400" />
                 </div>
                 <div>
                   <div className="flex items-center justify-between">
