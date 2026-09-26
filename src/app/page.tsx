@@ -1,30 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { 
-  Sparkles, 
-  ArrowRight, 
-  Sword, 
-  Target, 
-  DollarSign, 
-  Brain, 
-  Bot, 
-  Flame, 
-  Plus, 
-  Calendar,
-  ShieldCheck,
-  ChevronRight,
-  Zap,
-  Mic,
-  BookOpen
-} from 'lucide-react';
+import { motion, useScroll, useSpring } from 'framer-motion';
+import { ArrowDown, ArrowRight, Bot, Brain, DollarSign, Sparkles, Sword, Target, Zap } from 'lucide-react';
 import CommandBar from '@/components/mentra/CommandBar';
 import SystemStatus from '@/components/mentra/SystemStatus';
 import QuestCard from '@/components/quests/QuestCard';
-import FinanceCard from '@/components/finance/FinanceCard';
-import SkillNode from '@/components/skills/SkillNode';
 import AgentStatusCard from '@/components/agents/AgentStatusCard';
 import MemoryCard from '@/components/mentra/MemoryCard';
 import StatCard from '@/components/mentra/StatCard';
@@ -34,330 +17,257 @@ import { useMentraStore } from '@/lib/store/mentraStore';
 const MentraCore3D = dynamic(() => import('@/components/3d/MentraCore3D'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full flex items-center justify-center">
-      <div className="w-52 h-52 rounded-full bg-mentra-orange/20 blur-3xl animate-pulse" />
+    <div className="flex h-full w-full items-center justify-center">
+      <div className="h-52 w-52 rounded-full bg-indigo-500/20 blur-3xl animate-pulse" />
     </div>
   )
 });
 
 export default function HomePage() {
   const { user, profile, progress } = useAuth();
-  const { quests, goals, skills, finance, agents, memories, player } = useMentraStore();
+  const { quests, goals, finance, agents, memories, player } = useMentraStore();
+  const { scrollYProgress } = useScroll();
+  const progressScale = useSpring(scrollYProgress, { stiffness: 120, damping: 28, mass: 0.2 });
 
   const displayLevel = progress?.level ?? player.level;
   const displayXp = progress?.current_xp ?? player.currentXp;
   const displayStreak = progress?.current_streak ?? player.streakDays;
-  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator Naaz';
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator';
 
-  const activeQuests = quests.filter(q => q.status === 'ACTIVE');
-  const workingAgents = agents.filter(a => a.status === 'WORKING' || a.status === 'READY' || a.status === 'MONITORING');
-
-  // Contextual time-of-day intelligence
-  const currentHour = new Date().getHours();
-  const isMorning = currentHour >= 5 && currentHour < 12;
-  const isEvening = currentHour >= 18 || currentHour < 5;
+  const activeQuests = quests.filter(quest => quest.status === 'ACTIVE');
+  const completedQuests = quests.filter(quest => quest.status === 'COMPLETED').length;
+  const workingAgents = agents.filter(agent => ['WORKING', 'READY', 'MONITORING'].includes(agent.status));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 animate-in fade-in duration-300">
-      
-      {/* 1. Asymmetrical Editorial Hero Section */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pt-2 sm:pt-6">
-        
-        {/* Left Side: Editorial Typography & Actions */}
-        <div className="lg:col-span-7 space-y-6 text-left">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 glass-pill border-mentra-orange/30 bg-black/50 text-xs text-mentra-amber font-mono">
-            <span className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_8px_#ff4a00]" />
-            <span>MENTRA PERSONAL SYSTEM // V3.0 PRODUCTION</span>
-          </div>
+    <div className="story-shell story-snap -mt-20 lg:-mt-28">
+      <div className="pointer-events-none fixed right-5 top-1/2 z-40 hidden h-36 w-[2px] -translate-y-1/2 overflow-hidden rounded-full bg-white/10 lg:block">
+        <motion.div
+          className="h-full w-full origin-top bg-gradient-to-b from-indigo-400 to-cyan-300"
+          style={{ scaleY: progressScale }}
+        />
+      </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-display font-extrabold tracking-tight text-white leading-[1.08]">
-            Your life. <br />
-            <span className="bg-gradient-to-r from-mentra-orange via-mentra-amber to-amber-200 bg-clip-text text-transparent">
-              One intelligent system.
-            </span>
-          </h1>
-
-          <p className="text-base sm:text-lg text-white/70 max-w-xl font-sans leading-relaxed">
-            Goals, capital velocity, adaptive skill learning, neural memory, and autonomous AI agents — connected around <span className="font-serif-accent text-white text-xl">your evolution</span>.
-          </p>
-
-          {/* Primary Action Pills */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
-              onClick={() => {
-                const el = document.getElementById('command-center-bar');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="px-6 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs sm:text-sm tracking-wider flex items-center gap-2 shadow-[0_0_25px_rgba(255,74,0,0.5)] hover:opacity-90 active:scale-98 transition-all"
-            >
-              <Zap className="w-4 h-4" />
-              <span>Ask MENTRA</span>
-            </button>
-
-            <Link
-              href="/skills/skill_public_speaking/coach"
-              className="px-6 py-3.5 rounded-full glass-pill bg-white/5 hover:bg-white/10 border-white/15 text-white font-medium text-xs sm:text-sm tracking-wide flex items-center gap-2 transition-all"
-            >
-              <Mic className="w-4 h-4 text-mentra-orange" />
-              <span>Public Speaking Coach</span>
-              <ArrowRight className="w-4 h-4 text-mentra-amber" />
-            </Link>
-          </div>
-
-          {/* Player Quick Stats Ribbon */}
-          <div className="pt-4 grid grid-cols-3 gap-3 max-w-lg">
-            <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-              <div className="text-[10px] font-mono text-white/40 uppercase">RANK & LEVEL</div>
-              <div className="text-sm sm:text-base font-mono font-bold text-white mt-0.5">LEVEL 0{displayLevel}</div>
-            </div>
-            <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-              <div className="text-[10px] font-mono text-white/40 uppercase">ACTIVE STREAK</div>
-              <div className="text-sm sm:text-base font-mono font-bold text-mentra-amber mt-0.5">{displayStreak} Days 🔥</div>
-            </div>
-            <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-              <div className="text-[10px] font-mono text-white/40 uppercase">AI FLEET</div>
-              <div className="text-sm sm:text-base font-mono font-bold text-emerald-400 mt-0.5">{workingAgents.length} Online</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Side: 3D MENTRA Core Intelligence Visual */}
-        <div className="lg:col-span-5 h-[360px] sm:h-[420px] relative flex items-center justify-center">
-          <div className="w-full h-full relative">
-            <MentraCore3D className="w-full h-full" />
-          </div>
-        </div>
-
-      </section>
-
-      {/* Contextual Intelligence Notification Banner */}
-      <section className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-mentra-orange/15 via-black/60 to-black/60 border border-mentra-orange/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-mentra-orange/20 text-mentra-amber">
-            {isEvening ? <BookOpen className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
-          </div>
-          <div>
-            <div className="text-[11px] font-mono uppercase text-mentra-amber">
-              {isMorning ? '🌅 MORNING FOCUS PROTOCOL' : isEvening ? '🌙 EVENING REFLECTION WINDOW' : '⚡ MIDDAY EXECUTION VELOCITY'}
-            </div>
-            <div className="text-xs sm:text-sm text-white/90 font-sans">
-              {isMorning 
-                ? `Operator ${displayName}, you have ${activeQuests.length} missions scheduled today. Maintain steady focus cadence.` 
-                : isEvening 
-                ? 'Time to lock in today\'s lessons and convert key decisions into neural memory.'
-                : 'Active skill trajectory ready: Practice your 60-second speech baseline (+45 XP).'}
-            </div>
-          </div>
-        </div>
-
-        <Link
-          href={isEvening ? '/journal' : '/skills/skill_public_speaking/coach'}
-          className="px-4 py-2 rounded-full bg-mentra-orange text-white text-xs font-mono font-semibold self-start sm:self-auto hover:opacity-90 transition-all flex items-center gap-1.5 flex-shrink-0"
-        >
-          <span>{isEvening ? 'WRITE JOURNAL' : 'START PRACTICE'}</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </section>
-
-      {/* 2. System Status & Natural Language Command Hub */}
-      <section id="command-center-bar" className="space-y-4 pt-4">
-        <SystemStatus />
-        <CommandBar />
-      </section>
-
-      {/* 3. Floating Glass Intelligence Cards Matrix */}
-      <section className="space-y-6">
-        <div className="flex items-center justify-between pb-2 border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-mentra-orange" />
-            <h2 className="text-lg font-bold font-display uppercase tracking-wider text-white">
-              INTELLIGENCE MATRIX
-            </h2>
-          </div>
-          <span className="text-xs font-mono text-white/40">REAL-TIME TELEMETRY HUD</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Player Level"
-            value={`0${displayLevel}`}
-            subtitle={`XP: ${displayXp} / 1000 (${Math.round((displayXp / 1000) * 100)}%)`}
-            icon={Sparkles}
-            highlight={true}
-          />
-          <StatCard
-            title="Active Quests"
-            value={activeQuests.length}
-            subtitle={`${quests.filter(q => q.status === 'COMPLETED').length} missions completed`}
-            icon={Sword}
-          />
-          <StatCard
-            title="Capital Velocity"
-            value={`₹${finance.monthlyIncome.toLocaleString()}`}
-            subtitle={`Savings: ₹${finance.monthlySavings.toLocaleString()}`}
-            icon={DollarSign}
-            trend="+14%"
-          />
-          <StatCard
-            title="Autonomous Agents"
-            value={`${workingAgents.length} / ${agents.length}`}
-            subtitle="All agent permissions active"
-            icon={Bot}
-          />
-        </div>
-      </section>
-
-      {/* 4. Adaptive Skill Coach & Daily Missions Section */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Left: Daily Quests */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sword className="w-4 h-4 text-mentra-orange" />
-              <h3 className="text-base font-bold font-display text-white">
-                TODAY&apos;S MISSIONS ({activeQuests.length})
-              </h3>
-            </div>
-            <Link 
-              href="/quests"
-              className="text-xs font-mono text-mentra-amber hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <span>QUEST MATRIX</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {activeQuests.length === 0 ? (
-            <div className="p-8 glass-panel text-center rounded-2xl border-white/10 space-y-3">
-              <div className="text-xs font-mono text-mentra-amber uppercase tracking-widest">
-                NO ACTIVE QUESTS
-              </div>
-              <p className="text-sm text-white/60">
-                Your campaign hasn&apos;t started yet. Initialize your first daily or main mission.
-              </p>
-              <Link
-                href="/quests"
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold shadow-lg"
+      <section className="story-section pt-28 lg:pt-36">
+        <div className="story-glow left-[-6rem] top-[12%] h-80 w-80 bg-indigo-500/20" />
+        <div className="mx-auto grid w-full max-w-7xl items-center gap-8 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <div className="story-kicker">MENTRA / Personal operating system</div>
+            <h1 className="story-title mt-6 max-w-5xl text-[clamp(4rem,9vw,8.5rem)] font-extrabold">
+              Move with
+              <span className="story-accent block">one clear thread.</span>
+            </h1>
+            <p className="mt-7 max-w-xl text-base leading-7 text-white/56">
+              Welcome back, {displayName}. Your missions, money, memory and agents now live in one connected execution layer.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <button
+                onClick={() => document.getElementById('command-layer')?.scrollIntoView({ behavior: 'smooth' })}
+                className="inline-flex items-center gap-2 rounded-full bg-indigo-500 px-5 py-3 text-sm font-semibold transition hover:bg-indigo-400"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create First Mission</span>
+                Ask MENTRA <Zap className="h-4 w-4" />
+              </button>
+              <Link
+                href="/goals"
+                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.035] px-5 py-3 text-sm text-white/70 transition hover:bg-white/[0.07]"
+              >
+                Open goals <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {activeQuests.slice(0, 3).map(quest => (
-                <QuestCard key={quest.id} quest={quest} />
+
+            <div className="mt-10 grid max-w-xl grid-cols-3 gap-3">
+              {[
+                ['Level', `0${displayLevel}`],
+                ['Streak', `${displayStreak}d`],
+                ['Agents', `${workingAgents.length}/${agents.length || 0}`]
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-white/9 bg-white/[0.025] p-4">
+                  <div className="text-[9px] uppercase tracking-[0.18em] text-white/32">{label}</div>
+                  <div className="mt-2 text-xl font-semibold">{value}</div>
+                </div>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* Right: Adaptive Skill Learning Feature Widget */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Brain className="w-4 h-4 text-mentra-orange" />
-              <h3 className="text-base font-bold font-display text-white">
-                ADAPTIVE LEARNING COACH
-              </h3>
-            </div>
-            <Link 
-              href="/skills"
-              className="text-xs font-mono text-mentra-amber hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <span>SKILL MATRIX</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
           </div>
 
-          <div className="p-6 rounded-3xl glass-panel-orange bg-black/70 border-white/15 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-mono text-mentra-amber uppercase">
-                <Mic className="w-4 h-4 text-mentra-orange" />
-                <span>PUBLIC SPEAKING &amp; RHETORIC</span>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-mentra-orange/20 text-mentra-amber">
-                LEVEL 01
-              </span>
+          <div className="relative h-[420px] lg:col-span-5 lg:h-[620px]">
+            <MentraCore3D className="h-full w-full" />
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/30 px-4 py-2 text-[10px] font-mono tracking-[0.18em] text-cyan-200 backdrop-blur-xl">
+              CORE ONLINE // LVL {displayLevel}
             </div>
+          </div>
+        </div>
+        <div className="absolute bottom-5 left-1/2 hidden -translate-x-1/2 items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/25 lg:flex">
+          Scroll <ArrowDown className="h-3 w-3" />
+        </div>
+      </section>
 
-            <div className="space-y-1">
-              <h4 className="text-sm font-bold text-white font-display">
-                Lesson 1.1: 60-Second Baseline Diagnostic
-              </h4>
-              <p className="text-xs text-white/70 font-sans leading-relaxed">
-                Capture your baseline speaking telemetry, pacing, and filler word frequency.
+      <section id="command-layer" className="story-section">
+        <div className="mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-12">
+          <div className="lg:col-span-4 lg:sticky lg:top-32 lg:self-start">
+            <div className="story-kicker">01 / Command layer</div>
+            <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+              Say the goal.
+              <span className="story-accent block">MENTRA routes the work.</span>
+            </h2>
+            <p className="mt-6 max-w-md text-sm leading-7 text-white/50">
+              One natural-language entry point across your system. Context stays attached while the right agent or workflow takes over.
+            </p>
+          </div>
+          <div className="space-y-4 lg:col-span-8">
+            <SystemStatus />
+            <CommandBar />
+          </div>
+        </div>
+      </section>
+
+      <section className="story-section">
+        <div className="mx-auto w-full max-w-7xl">
+          <div className="flex items-end justify-between gap-6">
+            <div>
+              <div className="story-kicker">02 / Live system</div>
+              <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+                Everything important,
+                <span className="story-accent block">in one field of view.</span>
+              </h2>
+            </div>
+            <div className="story-number hidden lg:block">02</div>
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="Player Level"
+              value={`0${displayLevel}`}
+              subtitle={`XP: ${displayXp} / 1000`}
+              icon={Sparkles}
+              highlight
+            />
+            <StatCard
+              title="Active Quests"
+              value={activeQuests.length}
+              subtitle={`${completedQuests} completed`}
+              icon={Sword}
+            />
+            <StatCard
+              title="Capital Velocity"
+              value={`₹${finance.monthlyIncome.toLocaleString()}`}
+              subtitle={`Savings: ₹${finance.monthlySavings.toLocaleString()}`}
+              icon={DollarSign}
+              trend="+14%"
+            />
+            <StatCard
+              title="Autonomous Agents"
+              value={`${workingAgents.length} / ${agents.length}`}
+              subtitle="Permission-aware execution"
+              icon={Bot}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="story-section">
+        <div className="mx-auto grid w-full max-w-7xl gap-10 lg:grid-cols-12">
+          <div className="lg:col-span-5">
+            <div className="story-kicker">03 / Daily execution</div>
+            <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+              Turn intent
+              <span className="story-accent block">into movement.</span>
+            </h2>
+            <p className="mt-6 max-w-md text-sm leading-7 text-white/50">
+              Your active missions stay visible while goals and learning continue in the background.
+            </p>
+            <div className="mt-8 flex gap-3">
+              <Link href="/quests" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950">
+                Open quests
+              </Link>
+              <Link href="/goals" className="rounded-full border border-white/12 px-5 py-3 text-sm text-white/65">
+                Goals
+              </Link>
+            </div>
+          </div>
+          <div className="space-y-3 lg:col-span-7">
+            {activeQuests.length > 0 ? (
+              activeQuests.slice(0, 3).map(quest => <QuestCard key={quest.id} quest={quest} />)
+            ) : (
+              <div className="story-card p-8">
+                <Target className="h-5 w-5 text-cyan-200" />
+                <h3 className="mt-5 text-2xl font-semibold">No active missions yet.</h3>
+                <p className="mt-3 text-sm text-white/45">Create one clear next move and let MENTRA keep the thread alive.</p>
+                <Link href="/quests" className="mt-6 inline-flex items-center gap-2 text-sm text-cyan-200">
+                  Create mission <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="story-section">
+        <div className="mx-auto w-full max-w-7xl">
+          <div className="grid gap-10 lg:grid-cols-12">
+            <div className="lg:col-span-5 lg:sticky lg:top-32 lg:self-start">
+              <div className="story-kicker">04 / Intelligence network</div>
+              <h2 className="story-title mt-5 text-5xl font-bold sm:text-7xl">
+                Agents act.
+                <span className="story-accent block">Memory connects.</span>
+              </h2>
+              <p className="mt-6 max-w-md text-sm leading-7 text-white/50">
+                Specialists handle narrow jobs; memory keeps their work aligned with your longer story.
               </p>
             </div>
 
-            <Link
-              href="/skills/skill_public_speaking/coach"
-              className="w-full py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-mono text-xs font-semibold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(255,74,0,0.3)] hover:opacity-90 transition-all"
-            >
-              <span>ENTER COACH &amp; RECORD RUN</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            <div className="space-y-4 lg:col-span-7">
+              <div className="story-card p-5 sm:p-6">
+                <div className="mb-5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-cyan-200" />
+                    <span className="text-xs uppercase tracking-[0.2em] text-white/55">Agent fleet</span>
+                  </div>
+                  <Link href="/agents" className="text-xs text-indigo-200">Open fleet</Link>
+                </div>
+                <div className="space-y-3">
+                  {agents.slice(0, 2).map(agent => <AgentStatusCard key={agent.id} agent={agent} />)}
+                </div>
+              </div>
+
+              <div className="story-card p-5 sm:p-6">
+                <div className="mb-5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-cyan-200" />
+                    <span className="text-xs uppercase tracking-[0.2em] text-white/55">Memory vault</span>
+                  </div>
+                  <Link href="/memory" className="text-xs text-indigo-200">Open memory</Link>
+                </div>
+                <div className="space-y-3">
+                  {memories.slice(0, 2).map(memory => <MemoryCard key={memory.id} memory={memory} />)}
+                  {memories.length === 0 && (
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-5 text-sm text-white/42">
+                      MENTRA will build this layer as you make decisions and save context.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-
       </section>
 
-      {/* 5. Autonomous Fleet & Neural Memory Preview */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Left: Autonomous Agents Status */}
-        <div className="lg:col-span-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bot className="w-4 h-4 text-mentra-orange" />
-              <h3 className="text-base font-bold font-display text-white">
-                AUTONOMOUS AGENT FLEET
-              </h3>
-            </div>
-            <Link 
-              href="/agents"
-              className="text-xs font-mono text-mentra-amber hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <span>FLEET COMMAND</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="space-y-3">
-            {agents.slice(0, 2).map(agent => (
-              <AgentStatusCard key={agent.id} agent={agent} />
-            ))}
-          </div>
+      <section className="story-section min-h-[75svh]">
+        <div className="mx-auto w-full max-w-7xl text-center">
+          <div className="story-kicker">05 / Next move</div>
+          <h2 className="story-title mx-auto mt-5 max-w-4xl text-5xl font-bold sm:text-7xl lg:text-8xl">
+            Less dashboard.
+            <span className="story-accent block">More direction.</span>
+          </h2>
+          <p className="mx-auto mt-6 max-w-xl text-sm leading-7 text-white/50">
+            MENTRA is designed to keep your next decision obvious without losing the context behind it.
+          </p>
+          <button
+            onClick={() => document.getElementById('command-layer')?.scrollIntoView({ behavior: 'smooth' })}
+            className="mt-9 inline-flex items-center gap-2 rounded-full bg-indigo-500 px-6 py-3.5 text-sm font-semibold transition hover:bg-indigo-400"
+          >
+            Ask MENTRA <ArrowRight className="h-4 w-4" />
+          </button>
         </div>
-
-        {/* Right: Neural Memory Vault */}
-        <div className="lg:col-span-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Brain className="w-4 h-4 text-mentra-amber" />
-              <h3 className="text-base font-bold font-display text-white">
-                NEURAL MEMORY VAULT
-              </h3>
-            </div>
-            <Link 
-              href="/memory"
-              className="text-xs font-mono text-mentra-amber hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <span>MEMORY VAULT</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="space-y-3">
-            {memories.slice(0, 2).map(mem => (
-              <MemoryCard key={mem.id} memory={mem} />
-            ))}
-          </div>
-        </div>
-
       </section>
-
     </div>
   );
 }

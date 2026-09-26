@@ -9,23 +9,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#100402',
-        foreground: '#ffffff',
+        background: '#070a12',
+        foreground: '#f8fafc',
+        amber: {
+          200: '#c7d2fe',
+        },
         mentra: {
-          'bg-deep': '#100402',
-          'bg-dark': '#1a0803',
-          'surface-warm': '#271007',
-          orange: '#ff4a00',
-          'orange-glow': 'rgba(255, 74, 0, 0.45)',
-          amber: '#ff8a1f',
-          'amber-soft': '#ffb15a',
-          text: '#ffffff',
-          'text-secondary': 'rgba(255, 255, 255, 0.72)',
-          muted: 'rgba(255, 255, 255, 0.46)',
-          hairline: 'rgba(255, 255, 255, 0.12)',
-          glass: 'rgba(56, 20, 6, 0.42)',
-          'glass-strong': 'rgba(34, 11, 3, 0.68)',
-          'hairline-orange': 'rgba(255, 74, 0, 0.3)',
+          'bg-deep': '#070a12',
+          'bg-dark': '#0a0f1c',
+          'surface-warm': '#101728',
+          orange: '#5b6cff',
+          'orange-glow': 'rgba(91, 108, 255, 0.38)',
+          amber: '#67e8f9',
+          'amber-soft': '#a5b4fc',
+          text: '#f8fafc',
+          'text-secondary': 'rgba(248, 250, 252, 0.72)',
+          muted: 'rgba(248, 250, 252, 0.46)',
+          hairline: 'rgba(255, 255, 255, 0.10)',
+          glass: 'rgba(10, 15, 28, 0.58)',
+          'glass-strong': 'rgba(8, 12, 22, 0.84)',
+          'hairline-orange': 'rgba(91, 108, 255, 0.30)',
           emerald: '#10b981',
           rose: '#f43f5e'
         }
