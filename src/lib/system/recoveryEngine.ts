@@ -53,7 +53,7 @@ export async function runAutomaticRecovery(
   userId?: string,
   force: boolean = false
 ): Promise<RecoverySummary> {
-  const enabled = force || process.env.SYSTEM_AUTO_RECOVERY === 'true';
+  const enabled = force || process.env.SYSTEM_AUTO_RECOVERY !== 'false';
   const startedAt = new Date().toISOString();
   const actions: RecoveryAction[] = [];
 
