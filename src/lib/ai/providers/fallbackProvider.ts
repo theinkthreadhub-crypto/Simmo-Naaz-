@@ -7,6 +7,7 @@ import { AIProvider, AIProviderResponse, ModelMessage, GenerateOptions } from '.
  */
 export class FallbackProvider implements AIProvider {
   name = 'fallback_intelligence';
+  model = 'deterministic-local';
 
   async generate(messages: ModelMessage[], options?: GenerateOptions): Promise<AIProviderResponse> {
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
