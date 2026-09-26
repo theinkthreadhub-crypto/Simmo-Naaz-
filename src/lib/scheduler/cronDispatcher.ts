@@ -42,7 +42,6 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
     .select('*')
     .eq('status', 'SCHEDULED')
     .lte('scheduled_for', nowIso)
-    .lt('attempt_count', 3)
     .order('scheduled_for', { ascending: true })
     .limit(10);
 
@@ -232,7 +231,7 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
       }
 
       // Persist scheduler state using the Phase-6 schema contract.
-      const recurringRun = nextRecurringRun(job.scheduled_for || nowIso, job.recurrence);
+      const recurringRun = nextRecurringRun(nowIso, job.recurrence);
       const nextRun = jobStatus === 'SKIPPED' ? deferredRun(15) : recurringRun;
 
       await supabase
@@ -241,7 +240,7 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
           status: nextRun ? 'SCHEDULED' : 'COMPLETE',
           scheduled_for: nextRun || job.scheduled_for,
           next_run_at: nextRun,
-          attempt_count: nextRun && jobStatus !== 'SKIPPED' ? 0 : claimedJob.attempt_count,
+          attempt_count: nextRun ? 0 : claimedJob.attempt_count,
           updated_at: new Date().toISOString()
         })
         .eq('id', job.id);
