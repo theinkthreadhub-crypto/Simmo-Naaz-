@@ -327,7 +327,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
           .insert({
             user_id: context.userId,
             tool_name: call.name,
-            tool_input: redactForAudit(validArgs),
+            tool_input: validArgs,
             description: permission.reason || `Approval required for ${call.name}`,
             status: 'PENDING'
           })
