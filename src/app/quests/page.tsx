@@ -136,7 +136,7 @@ export default function QuestsPage() {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 active:scale-95 transition-all self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-95 transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>INITIALIZE MISSION</span>
@@ -153,7 +153,7 @@ export default function QuestsPage() {
               onClick={() => setFilter(tab)}
               className={`px-4 py-1.5 rounded-full text-xs font-mono font-medium transition-all flex-shrink-0 ${
                 filter === tab
-                  ? 'bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_12px_rgba(255,74,0,0.4)]'
+                  ? 'bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_12px_rgba(91,108,255,0.4)]'
                   : 'text-white/60 hover:text-white hover:bg-white/5'
               }`}
             >
@@ -183,7 +183,7 @@ export default function QuestsPage() {
       {/* CREATE QUEST MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-white/15 shadow-[0_0_50px_rgba(255,74,0,0.3)] space-y-6 max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-white/15 shadow-[0_0_50px_rgba(91,108,255,0.3)] space-y-6 max-h-[90vh] overflow-y-auto">
             
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase">
@@ -289,7 +289,7 @@ export default function QuestsPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || !title.trim()}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 active:scale-98 transition-all disabled:opacity-40"
+                className="w-full py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-98 transition-all disabled:opacity-40"
               >
                 {isSubmitting ? 'PERSISTING MISSION...' : 'AUTHORIZE & LAUNCH MISSION'}
               </button>
@@ -301,7 +301,7 @@ export default function QuestsPage() {
       {/* POST-MISSION REFLECTION MODAL */}
       {reflectionModalQuest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-mentra-orange/30 shadow-[0_0_50px_rgba(255,74,0,0.3)] space-y-5">
+          <div className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-mentra-orange/30 shadow-[0_0_50px_rgba(91,108,255,0.3)] space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase font-bold">
                 <MessageSquare className="w-4 h-4 text-mentra-orange" />

@@ -239,7 +239,7 @@ export default function SkillCoachPage() {
               </div>
               <Link
                 href={`/skills/${skillId}/learn/${todayLesson.id || 'lesson_1_1'}`}
-                className="px-6 py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 active:scale-98 transition-all flex items-center justify-center gap-2"
+                className="px-6 py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-98 transition-all flex items-center justify-center gap-2"
               >
                 <Mic className="w-4 h-4" />
                 <span>ENTER FOCUSED PRACTICE MODE</span>

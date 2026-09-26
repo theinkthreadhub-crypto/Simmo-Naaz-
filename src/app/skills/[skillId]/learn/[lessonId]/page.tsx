@@ -112,7 +112,7 @@ export default function FocusedLearningSessionPage() {
             particleCount: 40,
             spread: 60,
             origin: { y: 0.7 },
-            colors: ['#ff4a00', '#f59e0b', '#ffffff']
+            colors: ['#5b6cff', '#67e8f9', '#ffffff']
           });
         }
       }
@@ -178,7 +178,7 @@ export default function FocusedLearningSessionPage() {
 
             <button
               onClick={() => setStep('DEMO')}
-              className="mt-6 px-8 py-4 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-sm font-mono tracking-wider shadow-[0_0_30px_rgba(255,74,0,0.5)] hover:opacity-90 active:scale-98 transition-all inline-flex items-center gap-2"
+              className="mt-6 px-8 py-4 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-sm font-mono tracking-wider shadow-[0_0_30px_rgba(91,108,255,0.5)] hover:opacity-90 active:scale-98 transition-all inline-flex items-center gap-2"
             >
               <span>SEE DEMONSTRATION & FRAMEWORK</span>
               <ArrowRight className="w-4 h-4" />
@@ -225,7 +225,7 @@ export default function FocusedLearningSessionPage() {
             <div className="pt-4 text-center">
               <button
                 onClick={() => setStep('PRACTICE')}
-                className="px-8 py-4 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-sm font-mono tracking-wider shadow-[0_0_30px_rgba(255,74,0,0.5)] hover:opacity-90 active:scale-98 transition-all inline-flex items-center gap-2"
+                className="px-8 py-4 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-sm font-mono tracking-wider shadow-[0_0_30px_rgba(91,108,255,0.5)] hover:opacity-90 active:scale-98 transition-all inline-flex items-center gap-2"
               >
                 <span>COMMENCE LIVE PRACTICE</span>
                 <Mic className="w-4 h-4" />
@@ -261,7 +261,7 @@ export default function FocusedLearningSessionPage() {
                 {!isRecording ? (
                   <button
                     onClick={handleStartRecording}
-                    className="p-5 rounded-full bg-mentra-orange text-white shadow-[0_0_30px_rgba(255,74,0,0.6)] hover:scale-105 active:scale-95 transition-all"
+                    className="p-5 rounded-full bg-mentra-orange text-white shadow-[0_0_30px_rgba(91,108,255,0.6)] hover:scale-105 active:scale-95 transition-all"
                   >
                     <Mic className="w-7 h-7" />
                   </button>
@@ -314,7 +314,7 @@ export default function FocusedLearningSessionPage() {
             <button
               onClick={handleSubmitAttempt}
               disabled={isSubmitting || durationSeconds === 0}
-              className="w-full py-4 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_25px_rgba(255,74,0,0.5)] hover:opacity-90 active:scale-98 transition-all disabled:opacity-40"
+              className="w-full py-4 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_25px_rgba(91,108,255,0.5)] hover:opacity-90 active:scale-98 transition-all disabled:opacity-40"
             >
               {isSubmitting ? 'ANALYZING SPEECH TELEMETRY...' : 'SUBMIT PRACTICE & GET ADAPTIVE FEEDBACK'}
             </button>
@@ -409,7 +409,7 @@ export default function FocusedLearningSessionPage() {
 
               <button
                 onClick={handleCompleteAndReturn}
-                className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-mono text-xs font-semibold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 transition-all"
+                className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-mono text-xs font-semibold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 transition-all"
               >
                 <span>COMPLETE & RETURN TO COACH</span>
                 <ArrowRight className="w-4 h-4" />
