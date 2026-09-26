@@ -14,6 +14,8 @@ import { addXPServer } from '@/lib/progression/playerProgression';
 import { QUEST_REWARD_RULES, QuestDifficulty } from '@/types/mentra';
 import { scheduleOperativeAgent } from '@/lib/agents/operativeAgent';
 import { getMentraSkill, listMentraSkills } from '@/lib/skills/catalog';
+import { browserAgent } from '@/lib/agents/browserAgent';
+import { sanitizeExternalContent } from '@/lib/safety/promptInjectionShield';
 
 // ==============================================================================
 // 1. PROGRESS & PROFILE TOOLS
@@ -636,6 +638,152 @@ export const listMonitorsTool: ToolDefinition = {
   }
 };
 
+export const browserReadTool: ToolDefinition = {
+  name: 'browserRead',
+  description: 'Open a public URL and read visible page content through the controlled browser layer.',
+  permission: 'READ',
+  schema: z.object({
+    url: z.string().url()
+  }),
+  execute: async (input, context) => {
+    const result = await browserAgent.readPage(input.url);
+    await browserAgent.logBrowserAction(
+      context.userId,
+      context.conversationId || `browser_${Date.now()}`,
+      result,
+      'LOW_RISK_EXTERNAL'
+    );
+
+    const safeContent = result.extractedContent
+      ? sanitizeExternalContent(result.extractedContent, 'BROWSER_PAGE').sanitizedContent
+      : undefined;
+
+    return {
+      ok: result.success,
+      data: { ...result, extractedContent: safeContent },
+      errorCode: result.success ? undefined : result.status,
+      message: result.success
+        ? `Read ${result.targetUrl} successfully.`
+        : (result.error || 'Browser read failed.')
+    };
+  }
+};
+
+export const browserClickTool: ToolDefinition = {
+  name: 'browserClick',
+  description: 'Click a specific CSS selector on a public webpage. Requires explicit approval.',
+  permission: 'APPROVAL_REQUIRED',
+  schema: z.object({
+    url: z.string().url(),
+    selector: z.string().min(1).max(500)
+  }),
+  execute: async (input, context) => {
+    const result = await browserAgent.click(
+      input.url,
+      input.selector,
+      Boolean(context.approved)
+    );
+
+    await browserAgent.logBrowserAction(
+      context.userId,
+      context.conversationId || `browser_${Date.now()}`,
+      result,
+      'SENSITIVE'
+    );
+
+    const safeContent = result.extractedContent
+      ? sanitizeExternalContent(result.extractedContent, 'BROWSER_PAGE').sanitizedContent
+      : undefined;
+
+    return {
+      ok: result.success,
+      data: { ...result, extractedContent: safeContent },
+      errorCode: result.success ? undefined : result.status,
+      message: result.success
+        ? `Clicked ${input.selector} on ${result.targetUrl}.`
+        : (result.error || 'Browser click failed.')
+    };
+  }
+};
+
+export const browserTypeTool: ToolDefinition = {
+  name: 'browserType',
+  description: 'Type text into a CSS selector on a public webpage. Requires explicit approval.',
+  permission: 'APPROVAL_REQUIRED',
+  schema: z.object({
+    url: z.string().url(),
+    selector: z.string().min(1).max(500),
+    text: z.string().max(4000)
+  }),
+  execute: async (input, context) => {
+    const result = await browserAgent.type(
+      input.url,
+      input.selector,
+      input.text,
+      Boolean(context.approved)
+    );
+
+    await browserAgent.logBrowserAction(
+      context.userId,
+      context.conversationId || `browser_${Date.now()}`,
+      result,
+      'SENSITIVE'
+    );
+
+    const safeContent = result.extractedContent
+      ? sanitizeExternalContent(result.extractedContent, 'BROWSER_PAGE').sanitizedContent
+      : undefined;
+
+    return {
+      ok: result.success,
+      data: { ...result, extractedContent: safeContent },
+      errorCode: result.success ? undefined : result.status,
+      message: result.success
+        ? `Typed into ${input.selector} on ${result.targetUrl}.`
+        : (result.error || 'Browser typing failed.')
+    };
+  }
+};
+
+export const browserSubmitTool: ToolDefinition = {
+  name: 'browserSubmit',
+  description: 'Fill named fields and submit a form selected by CSS selector. Requires explicit approval.',
+  permission: 'APPROVAL_REQUIRED',
+  schema: z.object({
+    url: z.string().url(),
+    selector: z.string().min(1).max(500),
+    fields: z.record(z.union([z.string(), z.number(), z.boolean()]))
+  }),
+  execute: async (input, context) => {
+    const result = await browserAgent.submit(
+      input.url,
+      input.selector,
+      input.fields,
+      Boolean(context.approved)
+    );
+
+    await browserAgent.logBrowserAction(
+      context.userId,
+      context.conversationId || `browser_${Date.now()}`,
+      result,
+      'SENSITIVE'
+    );
+
+    const safeContent = result.extractedContent
+      ? sanitizeExternalContent(result.extractedContent, 'BROWSER_PAGE').sanitizedContent
+      : undefined;
+
+    return {
+      ok: result.success,
+      data: { ...result, extractedContent: safeContent },
+      errorCode: result.success ? undefined : result.status,
+      message: result.success
+        ? `Submitted the approved form on ${result.targetUrl}.`
+        : (result.error || 'Browser form submission failed.')
+    };
+  }
+};
+
 // ==============================================================================
 // 8. GOOGLE WORKSPACE & RESEARCH TOOLS (PHASE 5)
 // ==============================================================================
@@ -1088,6 +1236,10 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   routeToAgent: routeToAgentTool,
   scheduleMonitor: scheduleMonitorTool,
   listMonitors: listMonitorsTool,
+  browserRead: browserReadTool,
+  browserClick: browserClickTool,
+  browserType: browserTypeTool,
+  browserSubmit: browserSubmitTool,
   
   // Phase 5 Google Workspace & Research Tools
   searchGmail: searchGmailTool,
