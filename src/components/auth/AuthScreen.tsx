@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowDown, ArrowRight, Bot, Brain, Layers3, Lock, Mail, ShieldCheck, Sparkles, Terminal, User } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { supabase } from '@/lib/supabase/client';
 
 const MentraCore3D = dynamic(() => import('@/components/3d/MentraCore3D'), {
   ssr: false,
@@ -46,6 +47,7 @@ export default function AuthScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -66,6 +68,33 @@ export default function AuthScreen() {
     if (result.error) setErrorMsg(result.error);
     if (result.message) setSuccessMsg(result.message);
     setLoading(false);
+  };
+
+  const handlePasswordReset = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setResetLoading(true);
+    try {
+      const redirectTo =
+        process.env.NODE_ENV === 'production'
+          ? 'https://mentra.inkthreadhub.in/auth/reset-password'
+          : `${window.location.origin}/auth/reset-password`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        'theinkthreadhub@gmail.com',
+        { redirectTo }
+      );
+
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        setSuccessMsg('Password reset link sent to the operator email. Open the latest email and set a new password.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Unable to send password reset link.');
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   return (
@@ -295,6 +324,17 @@ export default function AuthScreen() {
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </form>
+
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={handlePasswordReset}
+                  disabled={resetLoading}
+                  className="mt-4 w-full text-center text-xs text-indigo-200 transition hover:text-white disabled:opacity-50"
+                >
+                  {resetLoading ? 'Sending reset link…' : 'Reset operator password'}
+                </button>
+              )}
 
               <div className="mt-5 flex items-center justify-between border-t border-white/8 pt-5 text-xs">
                 <span className="text-white/38">{isSignUp ? 'Already registered?' : 'First time here?'}</span>
