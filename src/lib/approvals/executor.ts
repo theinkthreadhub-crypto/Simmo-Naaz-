@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { redactForAudit } from '@/lib/safety/auditRedaction';
 import { MENTRA_TOOL_REGISTRY } from '@/lib/ai/tools/registry';
 
 export type ApprovalDecision = 'APPROVE' | 'REJECT';
@@ -180,7 +181,7 @@ export async function executeApprovalDecision(
     user_id: userId,
     tool_name: approval.tool_name,
     input: parsed.data,
-    output: toolResult.data || {},
+    output: redactForAudit(toolResult.data || {}),
     status: toolResult.ok ? 'SUCCESS' : 'FAILED',
     idempotency_key: `approval_${approvalId}`,
     latency_ms: latencyMs,
