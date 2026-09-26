@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { whatsappClient } from '@/lib/integrations/whatsapp/client';
 import { getUserNotificationSettings, isDeliveryAllowedNow } from '@/lib/notifications/preferences';
 import { getGoogleCalendarEvents, CalendarEventSummary } from '@/lib/integrations/google/calendar';
+import { runOperativeAgentTick } from '@/lib/agents/operativeAgent';
 
 export interface JobExecutionResult {
   jobId: string;
@@ -14,7 +15,9 @@ function nextRecurringRun(fromIso: string, recurrence?: string | null): string |
   if (!recurrence || recurrence === 'NONE') return null;
 
   const next = new Date(fromIso);
-  if (recurrence === 'DAILY') {
+  if (recurrence === 'HOURLY') {
+    next.setUTCHours(next.getUTCHours() + 1);
+  } else if (recurrence === 'DAILY') {
     next.setUTCDate(next.getUTCDate() + 1);
   } else if (recurrence === 'WEEKLY') {
     next.setUTCDate(next.getUTCDate() + 7);
@@ -221,6 +224,37 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
             );
           }
           outputMessage = 'Learning reminder dispatched.';
+          break;
+        }
+
+        case 'AGENT_SCHEDULE': {
+          const operative = await runOperativeAgentTick(job.user_id, job.payload || {});
+          const deliveryCheck = isDeliveryAllowedNow(userSettings, 'AGENT');
+
+          if (
+            operative.shouldNotify &&
+            deliveryCheck.allowed &&
+            userSettings.preferred_channel === 'WHATSAPP'
+          ) {
+            const { data: waConn } = await supabase
+              .from('whatsapp_connections')
+              .select('phone_number')
+              .eq('user_id', job.user_id)
+              .eq('status', 'CONNECTED')
+              .maybeSingle();
+
+            if (waConn?.phone_number) {
+              await whatsappClient.sendTextMessage(
+                waConn.phone_number,
+                `🧠 *MENTRA OPERATIVE ALERT*\n\n${operative.message}`,
+                job.user_id
+              );
+            }
+          }
+
+          outputMessage = operative.shouldNotify
+            ? `Operative monitor evaluated and produced an alert: ${operative.message}`
+            : 'Operative monitor evaluated; no alert condition was met.';
           break;
         }
 
