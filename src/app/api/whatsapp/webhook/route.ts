@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyWebhookChallenge, verifyWebhookSignature } from '@/lib/integrations/whatsapp/security';
+import {
+  filterAllowedSenders,
+  verifyWebhookChallenge,
+  verifyWebhookSignature
+} from '@/lib/integrations/whatsapp/security';
 import { processWhatsAppInboundWebhook, WhatsAppInboundPayload } from '@/lib/integrations/whatsapp/handler';
+import { runAsTrustedServer } from '@/lib/supabase/trustedScope';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /**
  * GET Handler: Meta Webhook Verification Handshake
@@ -38,11 +46,20 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Parse Payload
-    const payload: WhatsAppInboundPayload = JSON.parse(rawBody);
+    const parsedPayload: WhatsAppInboundPayload = JSON.parse(rawBody);
 
-    // 3. Process asynchronously or synchronously depending on load
-    // WhatsApp requires < 3s HTTP ACK, so we acknowledge promptly while processing
-    const result = await processWhatsAppInboundWebhook(payload);
+    // Only the owner numbers in WHATSAPP_ALLOWED_NUMBERS may talk to MENTRA.
+    const { payload, ignored } = filterAllowedSenders(parsedPayload);
+    if (ignored > 0) {
+      console.warn(`[WhatsAppWebhook] Ignored ${ignored} message(s) from numbers outside WHATSAPP_ALLOWED_NUMBERS.`);
+    }
+
+    // 3. Meta webhooks carry no user cookie. After the HMAC check passes, run the
+    // pipeline in the trusted server scope so Supabase reads/writes are not
+    // blocked by RLS. The handler scopes every query to the linked user.
+    const result = await runAsTrustedServer('whatsapp_webhook', () =>
+      processWhatsAppInboundWebhook(payload)
+    );
 
     return NextResponse.json({ success: true, processed: result.processed });
   } catch (err: unknown) {

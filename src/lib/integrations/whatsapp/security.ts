@@ -47,3 +47,43 @@ export function verifyWebhookSignature(signatureHeader: string | null, rawBody: 
     return false;
   }
 }
+
+/** Digits only, with the country code (e.g. 916392995127). */
+export function normalizeWhatsAppNumber(phone: string): string {
+  return String(phone || '').replace(/[^0-9]/g, '');
+}
+
+/**
+ * WHATSAPP_ALLOWED_NUMBERS: comma-separated owner numbers with country code,
+ * e.g. "916392995127". When set, MENTRA only talks to these numbers and
+ * silently ignores everyone else. When empty, the 6-digit link flow decides.
+ */
+export function getAllowedWhatsAppNumbers(): string[] {
+  return (process.env.WHATSAPP_ALLOWED_NUMBERS || '')
+    .split(',')
+    .map(normalizeWhatsAppNumber)
+    .filter(Boolean);
+}
+
+export function isAllowedWhatsAppSender(phone: string): boolean {
+  const allowed = getAllowedWhatsAppNumbers();
+  if (allowed.length === 0) return true;
+  return allowed.includes(normalizeWhatsAppNumber(phone));
+}
+
+/** Removes messages from senders that are not on the allowlist. */
+export function filterAllowedSenders<
+  T extends { entry?: Array<{ changes?: Array<{ value?: { messages?: Array<{ from: string }> } }> }> }
+>(payload: T): { payload: T; ignored: number } {
+  let ignored = 0;
+  for (const entry of payload.entry || []) {
+    for (const change of entry.changes || []) {
+      const value = change.value;
+      if (!value?.messages) continue;
+      const kept = value.messages.filter(message => isAllowedWhatsAppSender(message.from));
+      ignored += value.messages.length - kept.length;
+      value.messages = kept;
+    }
+  }
+  return { payload, ignored };
+}

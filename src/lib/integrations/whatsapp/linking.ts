@@ -10,7 +10,8 @@ export interface WhatsAppConnectionRecord {
   status: 'NOT_CONFIGURED' | 'READY_TO_CONNECT' | 'WAITING_LINK' | 'CONNECTED' | 'TOKEN_ERROR' | 'DISCONNECTED';
 }
 
-// In-memory fallback cache for development/test harness environments
+// In-memory cache. On serverless each request may hit a different instance,
+// so Supabase is the source of truth and every write below is awaited.
 const memLinkCodes = new Map<string, { userId: string; code: string; expiresAt: number; used: boolean }>();
 const memConnections = new Map<string, { userId: string; phoneNumber: string; status: string }>();
 
@@ -19,29 +20,26 @@ export async function generateWhatsAppLinkCode(userId: string): Promise<string> 
   const code = (randomBytes.readUIntBE(0, 3) % 900000 + 100000).toString();
   const expiresAtMs = Date.now() + 15 * 60 * 1000;
 
-  // Set in-memory immediately
   memLinkCodes.set(code, { userId, code, expiresAt: expiresAtMs, used: false });
 
-  // Async sync to Supabase (non-blocking)
-  Promise.resolve().then(async () => {
-    try {
-      const supabase = createClient();
-      await supabase
-        .from('whatsapp_link_codes')
-        .update({ used: true })
-        .eq('user_id', userId)
-        .eq('used', false);
+  try {
+    const supabase = createClient();
+    await supabase
+      .from('whatsapp_link_codes')
+      .update({ used: true })
+      .eq('user_id', userId)
+      .eq('used', false);
 
-      await supabase.from('whatsapp_link_codes').insert({
-        user_id: userId,
-        code,
-        expires_at: new Date(expiresAtMs).toISOString(),
-        used: false
-      });
-    } catch {
-      // Ignored if local offline
-    }
-  });
+    const { error } = await supabase.from('whatsapp_link_codes').insert({
+      user_id: userId,
+      code,
+      expires_at: new Date(expiresAtMs).toISOString(),
+      used: false
+    });
+    if (error) console.warn('[WhatsAppLinking] Could not store link code:', error.message);
+  } catch (error) {
+    console.warn('[WhatsAppLinking] Could not store link code:', error);
+  }
 
   return code;
 }
@@ -61,21 +59,40 @@ export async function resolveUserByPhone(phoneNumber: string): Promise<string | 
       .select('user_id, status')
       .eq('phone_number', cleanPhone)
       .eq('status', 'CONNECTED')
-      .single();
+      .maybeSingle();
 
-    if (data?.user_id) return data.user_id;
+    if (data?.user_id) {
+      memConnections.set(cleanPhone, { userId: data.user_id, phoneNumber: cleanPhone, status: 'CONNECTED' });
+      return data.user_id;
+    }
   } catch {
-    // fallback
+    // fall through
   }
 
   return null;
+}
+
+async function saveConnection(userId: string, cleanPhone: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from('whatsapp_connections').upsert(
+    {
+      user_id: userId,
+      phone_number: cleanPhone,
+      display_phone_number: `+${cleanPhone}`,
+      verified: true,
+      status: 'CONNECTED',
+      last_active_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: 'user_id' }
+  );
+  if (error) throw new Error(error.message);
 }
 
 export async function linkUserByCode(phoneNumber: string, submittedCode: string): Promise<{ success: boolean; message: string; userId?: string }> {
   const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
   const cleanCode = submittedCode.trim().replace(/[^0-9]/g, '');
 
-  // Check in-memory store first
   const memRecord = memLinkCodes.get(cleanCode);
   if (memRecord) {
     if (memRecord.used) {
@@ -85,34 +102,18 @@ export async function linkUserByCode(phoneNumber: string, submittedCode: string)
       return { success: false, message: 'Verification code has expired.' };
     }
 
-    memRecord.used = true;
-    memConnections.set(cleanPhone, {
-      userId: memRecord.userId,
-      phoneNumber: cleanPhone,
-      status: 'CONNECTED'
-    });
+    try {
+      await saveConnection(memRecord.userId, cleanPhone);
+    } catch (error) {
+      return { success: false, message: `Could not save the link: ${error instanceof Error ? error.message : String(error)}` };
+    }
 
-    // Async sync to Supabase
-    Promise.resolve().then(async () => {
-      try {
-        const supabase = createClient();
-        await supabase.from('whatsapp_connections').upsert({
-          user_id: memRecord.userId,
-          phone_number: cleanPhone,
-          display_phone_number: `+${cleanPhone}`,
-          verified: true,
-          status: 'CONNECTED',
-          last_active_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
-      } catch {
-        // Ignored
-      }
-    });
+    memRecord.used = true;
+    memConnections.set(cleanPhone, { userId: memRecord.userId, phoneNumber: cleanPhone, status: 'CONNECTED' });
 
     return {
       success: true,
-      message: 'WhatsApp successfully linked to your MENTRA Sovereign Intelligence session.',
+      message: 'WhatsApp successfully linked to your MENTRA account.',
       userId: memRecord.userId
     };
   }
@@ -124,7 +125,7 @@ export async function linkUserByCode(phoneNumber: string, submittedCode: string)
       .select('*')
       .eq('code', cleanCode)
       .eq('used', false)
-      .single();
+      .maybeSingle();
 
     if (error || !linkRecord) {
       return { success: false, message: 'Invalid or already used verification code.' };
@@ -140,21 +141,12 @@ export async function linkUserByCode(phoneNumber: string, submittedCode: string)
       .update({ used: true })
       .eq('id', linkRecord.id);
 
-    await supabase
-      .from('whatsapp_connections')
-      .upsert({
-        user_id: linkRecord.user_id,
-        phone_number: cleanPhone,
-        display_phone_number: `+${cleanPhone}`,
-        verified: true,
-        status: 'CONNECTED',
-        last_active_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
+    await saveConnection(linkRecord.user_id, cleanPhone);
+    memConnections.set(cleanPhone, { userId: linkRecord.user_id, phoneNumber: cleanPhone, status: 'CONNECTED' });
 
     return {
       success: true,
-      message: 'WhatsApp successfully linked to your MENTRA Sovereign Intelligence session.',
+      message: 'WhatsApp successfully linked to your MENTRA account.',
       userId: linkRecord.user_id
     };
   } catch (err: unknown) {
@@ -164,24 +156,21 @@ export async function linkUserByCode(phoneNumber: string, submittedCode: string)
 }
 
 export async function unlinkWhatsApp(userId: string): Promise<boolean> {
-  // Clear from memory
   memConnections.forEach((conn, phone) => {
     if (conn.userId === userId) {
       memConnections.delete(phone);
     }
   });
 
-  Promise.resolve().then(async () => {
-    try {
-      const supabase = createClient();
-      await supabase
-        .from('whatsapp_connections')
-        .update({ status: 'DISCONNECTED', verified: false, updated_at: new Date().toISOString() })
-        .eq('user_id', userId);
-    } catch {
-      // Ignored
-    }
-  });
+  try {
+    const supabase = createClient();
+    await supabase
+      .from('whatsapp_connections')
+      .update({ status: 'DISCONNECTED', verified: false, updated_at: new Date().toISOString() })
+      .eq('user_id', userId);
+  } catch {
+    // Ignored
+  }
 
   return true;
 }

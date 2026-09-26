@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies, headers } from 'next/headers';
 import crypto from 'crypto';
+import { isTrustedServerScope } from './trustedScope';
 
 function safeSecretEqual(provided: string | null | undefined, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
@@ -45,8 +46,9 @@ export function createClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
   // Internal scheduler/worker requests are authenticated separately before
-  // reaching application logic. Only those requests may use service-role.
-  if (serviceRoleKey && isInternalServiceRequest(headerStore)) {
+  // reaching application logic. Verified webhooks run inside a trusted server
+  // scope (see ./trustedScope). Only those requests may use service-role.
+  if (serviceRoleKey && (isInternalServiceRequest(headerStore) || isTrustedServerScope())) {
     return createSupabaseClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
