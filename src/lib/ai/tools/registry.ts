@@ -12,7 +12,7 @@ import { getUserSkills } from '@/lib/db/skills';
 import { getUserIntegrations } from '@/lib/db/integrations';
 import { addXPServer } from '@/lib/progression/playerProgression';
 import { QUEST_REWARD_RULES, QuestDifficulty } from '@/types/mentra';
-import { scheduleOperativeAgent } from '@/lib/agents/operativeAgent';
+import { scheduleOperativeAgent } from '@/lib/agents/monitorScheduler';
 import { getMentraSkill, listMentraSkills } from '@/lib/skills/catalog';
 import { browserAgent } from '@/lib/agents/browserAgent';
 import { sanitizeExternalContent } from '@/lib/safety/promptInjectionShield';
