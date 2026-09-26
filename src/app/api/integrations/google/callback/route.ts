@@ -3,13 +3,18 @@ import { createClient } from '@/lib/supabase/server';
 import { exchangeCodeForGoogleTokens, getGoogleUserProfile } from '@/lib/integrations/google/client';
 import { encryptToken } from '@/lib/integrations/crypto';
 
+const PRODUCTION_APP_URL = 'https://mentra.inkthreadhub.in';
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const error = url.searchParams.get('error');
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3010';
+  const origin =
+    process.env.NODE_ENV === 'production'
+      ? PRODUCTION_APP_URL
+      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3010';
 
   if (error || !code || !state) {
     return NextResponse.redirect(`${origin}/connections?status=error&message=${error || 'MISSING_AUTH_CODE'}`);
