@@ -32,6 +32,39 @@ export function auditEnvironment(): EnvironmentAudit {
     return { ready: missing.length === 0, missing };
   };
 
+  const aiProvider = (env.AI_PROVIDER || 'fallback').toLowerCase();
+  const gatewayAuthReady = Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN);
+  const geminiAuthReady = Boolean(env.AI_API_KEY || env.AI_PROVIDER_API_KEY);
+  const localAiReady = Boolean(env.AI_LOCAL_BASE_URL);
+
+  let aiRequiredEnv: string[] = [];
+  let aiMissingEnv: string[] = [];
+  let aiStatus: CapabilityStatus = 'DEGRADED';
+  let aiDescription = 'Deterministic fallback is active; full model reasoning is not enabled.';
+
+  if (['gateway', 'vercel', 'vercel-ai-gateway'].includes(aiProvider)) {
+    aiRequiredEnv = ['AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'];
+    aiMissingEnv = gatewayAuthReady ? [] : ['AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'];
+    aiStatus = gatewayAuthReady ? 'CONNECTED' : 'CONFIG_REQUIRED';
+    aiDescription = 'Vercel AI Gateway reasoning and tool-calling runtime.';
+  } else if (['gemini', 'google'].includes(aiProvider)) {
+    aiRequiredEnv = ['AI_API_KEY'];
+    aiMissingEnv = geminiAuthReady ? [] : ['AI_API_KEY'];
+    aiStatus = geminiAuthReady ? 'CONNECTED' : 'CONFIG_REQUIRED';
+    aiDescription = 'Gemini reasoning and tool-calling runtime.';
+  } else if (['ollama', 'local'].includes(aiProvider)) {
+    aiRequiredEnv = ['AI_LOCAL_BASE_URL'];
+    aiMissingEnv = localAiReady ? [] : ['AI_LOCAL_BASE_URL'];
+    aiStatus = localAiReady ? 'CONNECTED' : 'CONFIG_REQUIRED';
+    aiDescription = 'Local/private model reasoning runtime.';
+  } else if (['auto', 'hybrid'].includes(aiProvider)) {
+    const anyModelReady = gatewayAuthReady || geminiAuthReady || localAiReady;
+    aiRequiredEnv = ['AI_GATEWAY_API_KEY/VERCEL_OIDC_TOKEN, AI_API_KEY, or AI_LOCAL_BASE_URL'];
+    aiMissingEnv = anyModelReady ? [] : ['at least one model provider'];
+    aiStatus = anyModelReady ? 'CONNECTED' : 'CONFIG_REQUIRED';
+    aiDescription = 'Resilient multi-provider AI routing.';
+  }
+
   const capabilities: Record<string, ServiceCapability> = {
     supabase_auth: {
       name: 'Supabase Authentication & DB',
@@ -44,10 +77,10 @@ export function auditEnvironment(): EnvironmentAudit {
     ai_core: {
       name: 'AI Agent Core',
       category: 'AI',
-      requiredEnv: ['AI_API_KEY'],
-      missingEnv: check(['AI_API_KEY']).missing,
-      status: check(['AI_API_KEY']).ready ? 'CONNECTED' : 'CONFIG_REQUIRED',
-      description: 'Multi-turn orchestration, tool execution, and natural language reasoning.'
+      requiredEnv: aiRequiredEnv,
+      missingEnv: aiMissingEnv,
+      status: aiStatus,
+      description: aiDescription
     },
     google_workspace: {
       name: 'Google Workspace Integration',
