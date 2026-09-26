@@ -68,7 +68,7 @@ export async function processWhatsAppInboundWebhook(payload: WhatsAppInboundPayl
           .from('inbound_messages')
           .select('id')
           .eq('provider_message_id', externalMsgId)
-          .single();
+          .maybeSingle();
 
         if (existingInbound) {
           console.log(`[WhatsAppWebhook] Duplicate message ${externalMsgId} ignored.`);
@@ -86,18 +86,20 @@ export async function processWhatsAppInboundWebhook(payload: WhatsAppInboundPayl
           incomingText = '[VOICE_NOTE_RECEIVED]';
         }
 
-        // 3. Log Inbound Message
+        // 3. Resolve user before logging so linked messages are attributable.
+        let userId = await resolveUserByPhone(fromPhone);
+
+        // 4. Log inbound message using the Phase-6 schema contract.
         await supabase.from('inbound_messages').insert({
+          user_id: userId,
           channel: 'WHATSAPP',
-          sender: fromPhone,
           provider_message_id: externalMsgId,
+          sender_phone: fromPhone,
           message_type: msg.type.toUpperCase(),
-          raw_payload: msg,
+          text: incomingText || null,
+          status: 'PROCESSED',
           created_at: new Date().toISOString()
         });
-
-        // 4. Resolve User Identity
-        let userId = await resolveUserByPhone(fromPhone);
 
         // 5. Handle Unlinked User / Linking Codes
         if (!userId) {
@@ -153,7 +155,7 @@ export async function processWhatsAppInboundWebhook(payload: WhatsAppInboundPayl
             .from('quests')
             .select('*')
             .eq('user_id', userId)
-            .eq('status', 'IN_PROGRESS')
+            .eq('status', 'ACTIVE')
             .order('created_at', { ascending: false })
             .limit(3);
 
@@ -194,7 +196,7 @@ export async function processWhatsAppInboundWebhook(payload: WhatsAppInboundPayl
 
               await whatsappClient.sendTextMessage(
                 fromPhone,
-                `⚖️ *ACTION ${decision}D*\n\nRequest: ${appReq.action_description || appReq.tool_name}\nStatus: ${decision}D`,
+                `⚖️ *ACTION ${decision}D*\n\nRequest: ${appReq.description || appReq.tool_name}\nStatus: ${decision}D`,
                 userId
               );
               processedCount++;
