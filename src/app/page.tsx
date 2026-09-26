@@ -57,7 +57,7 @@ export default function HomePage() {
               <span className="story-accent block">one clear thread.</span>
             </h1>
             <p className="mt-5 max-w-xl text-[15px] leading-7 text-white/56 sm:mt-7 sm:text-base">
-              Welcome back, {displayName}. Your missions, money, memory and agents now live in one connected execution layer.
+              Welcome back, {displayName}. This dashboard shows persisted MENTRA data and verified runtime state.
             </p>
             <div className="mt-7 flex w-full flex-col gap-3 sm:mt-9 sm:w-auto sm:flex-row sm:flex-wrap">
               <button
@@ -91,7 +91,7 @@ export default function HomePage() {
           <div className="relative h-[300px] w-full sm:h-[420px] lg:col-span-5 lg:h-[620px]">
             <MentraCore3D className="h-full w-full" />
             <div className="absolute bottom-3 left-1/2 max-w-[92vw] -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/30 px-3 py-2 text-[9px] font-mono tracking-[0.14em] text-cyan-200 backdrop-blur-xl sm:bottom-4 sm:px-4 sm:text-[10px] sm:tracking-[0.18em]">
-              CORE ONLINE // LVL {displayLevel}
+              MENTRA CORE // LVL {displayLevel}
             </div>
           </div>
         </div>
@@ -109,7 +109,7 @@ export default function HomePage() {
               <span className="story-accent block">MENTRA routes the work.</span>
             </h2>
             <p className="mt-6 max-w-md text-sm leading-7 text-white/50">
-              One natural-language entry point across your system. Context stays attached while the right agent or workflow takes over.
+              One natural-language entry point across your stored context. Tools only report actions that actually execute.
             </p>
           </div>
           <div className="space-y-4 lg:col-span-8">
@@ -123,7 +123,7 @@ export default function HomePage() {
         <div className="mx-auto w-full max-w-7xl">
           <div className="flex items-end justify-between gap-6">
             <div>
-              <div className="story-kicker">02 / Live system</div>
+              <div className="story-kicker">02 / Verified system</div>
               <h2 className="story-title mt-5 text-[clamp(2.75rem,12vw,4.5rem)] font-bold sm:text-7xl">
                 Everything important,
                 <span className="story-accent block">in one field of view.</span>
@@ -154,7 +154,7 @@ export default function HomePage() {
               trend="+14%"
             />
             <StatCard
-              title="Autonomous Agents"
+              title="Tracked Agents"
               value={`${workingAgents.length} / ${agents.length}`}
               subtitle="Permission-aware execution"
               icon={Bot}
@@ -206,7 +206,7 @@ export default function HomePage() {
             <div className="lg:col-span-5 lg:sticky lg:top-32 lg:self-start">
               <div className="story-kicker">04 / Intelligence network</div>
               <h2 className="story-title mt-5 text-[clamp(2.75rem,12vw,4.5rem)] font-bold sm:text-7xl">
-                Agents act.
+                Agents execute verified tools.
                 <span className="story-accent block">Memory connects.</span>
               </h2>
               <p className="mt-6 max-w-md text-sm leading-7 text-white/50">
@@ -224,7 +224,9 @@ export default function HomePage() {
                   <Link href="/agents" className="text-xs text-indigo-200">Open fleet</Link>
                 </div>
                 <div className="space-y-3">
-                  {agents.slice(0, 2).map(agent => <AgentStatusCard key={agent.id} agent={agent} />)}
+                  {agents.length === 0 ? (
+                    <div className="story-card p-5 text-sm text-white/45">No verified agent runtime cards are available yet. Open Agents to start a real run.</div>
+                  ) : agents.slice(0, 2).map(agent => <AgentStatusCard key={agent.id} agent={agent} />)}
                 </div>
               </div>
 

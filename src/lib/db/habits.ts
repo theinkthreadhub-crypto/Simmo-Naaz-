@@ -1,198 +1,75 @@
 import { createClient } from '@/lib/supabase/server';
+import { addXPServer } from '@/lib/progression/playerProgression';
 
 export interface Habit {
-  id: string;
-  userId: string;
-  title: string;
-  description?: string;
-  lifeArea: string;
-  frequency: 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'CUSTOM';
-  targetCount: number;
-  preferredTime?: string;
-  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
-  relatedGoalId?: string;
-  relatedSkillId?: string;
-  status: 'ACTIVE' | 'ARCHIVED';
-  xpReward: number;
-  currentStreak?: number;
-  completedToday?: boolean;
-  createdAt: string;
+  id:string;userId:string;title:string;description?:string;lifeArea:string;
+  frequency:'DAILY'|'WEEKDAYS'|'WEEKLY'|'CUSTOM';targetCount:number;preferredTime?:string;
+  difficulty:'EASY'|'MEDIUM'|'HARD';relatedGoalId?:string;relatedSkillId?:string;
+  status:'ACTIVE'|'ARCHIVED';xpReward:number;currentStreak?:number;completedToday?:boolean;createdAt:string;
 }
-
 export interface HabitCompletion {
-  id: string;
-  habitId: string;
-  userId: string;
-  completionDate: string;
-  completedAt: string;
-  notes?: string;
-  source: string;
-  xpAwarded: number;
+  id:string;habitId:string;userId:string;completionDate:string;completedAt:string;notes?:string;source:string;xpAwarded:number;
 }
 
-const memHabits = new Map<string, Habit>();
-const memCompletions = new Set<string>(); // key: `${habitId}_${date}`
+function mapHabit(h:any,completedToday=false):Habit{return{
+  id:h.id,userId:h.user_id,title:h.title,description:h.description||'',lifeArea:h.life_area,
+  frequency:h.frequency,targetCount:Number(h.target_count||1),preferredTime:h.preferred_time||undefined,
+  difficulty:h.difficulty,relatedGoalId:h.related_goal_id||undefined,relatedSkillId:h.related_skill_id||undefined,
+  status:h.status,xpReward:Number(h.xp_reward||0),completedToday,createdAt:h.created_at
+};}
 
-export async function createHabit(
-  userId: string,
-  habit: {
-    title: string;
-    description?: string;
-    lifeArea?: string;
-    frequency?: 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'CUSTOM';
-    targetCount?: number;
-    preferredTime?: string;
-    difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-    relatedGoalId?: string;
-    relatedSkillId?: string;
-    xpReward?: number;
-  }
-): Promise<Habit> {
-  const id = `hab_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-
-  const newHabit: Habit = {
-    id,
-    userId,
-    title: habit.title,
-    description: habit.description || '',
-    lifeArea: habit.lifeArea || 'Personal Growth',
-    frequency: habit.frequency || 'DAILY',
-    targetCount: habit.targetCount || 1,
-    preferredTime: habit.preferredTime || 'MORNING',
-    difficulty: habit.difficulty || 'MEDIUM',
-    relatedGoalId: habit.relatedGoalId,
-    relatedSkillId: habit.relatedSkillId,
-    status: 'ACTIVE',
-    xpReward: habit.xpReward || 15,
-    createdAt: new Date().toISOString()
-  };
-
-  memHabits.set(id, newHabit);
-
-  Promise.resolve().then(async () => {
-    try {
-      const supabase = createClient();
-      await supabase.from('habits').insert({
-        id,
-        user_id: userId,
-        title: newHabit.title,
-        description: newHabit.description,
-        life_area: newHabit.lifeArea,
-        frequency: newHabit.frequency,
-        target_count: newHabit.targetCount,
-        preferred_time: newHabit.preferredTime,
-        difficulty: newHabit.difficulty,
-        related_goal_id: newHabit.relatedGoalId || null,
-        related_skill_id: newHabit.relatedSkillId || null,
-        status: 'ACTIVE',
-        xp_reward: newHabit.xpReward,
-        created_at: newHabit.createdAt
-      });
-    } catch {
-      // Offline fallback
-    }
-  });
-
-  return newHabit;
+export async function createHabit(userId:string,habit:{
+  title:string;description?:string;lifeArea?:string;frequency?:Habit['frequency'];targetCount?:number;
+  preferredTime?:string;difficulty?:Habit['difficulty'];relatedGoalId?:string;relatedSkillId?:string;xpReward?:number;
+}):Promise<Habit>{
+  const supabase=createClient();
+  const {data,error}=await supabase.from('habits').insert({
+    user_id:userId,title:habit.title,description:habit.description||'',life_area:habit.lifeArea||'Personal Growth',
+    frequency:habit.frequency||'DAILY',target_count:Number(habit.targetCount||1),preferred_time:habit.preferredTime||null,
+    difficulty:habit.difficulty||'MEDIUM',related_goal_id:habit.relatedGoalId||null,
+    related_skill_id:habit.relatedSkillId||null,status:'ACTIVE',xp_reward:Math.max(0,Number(habit.xpReward??15))
+  }).select().single();
+  if(error||!data)throw new Error(error?.message||'Failed to create habit.');
+  return mapHabit(data);
 }
 
-export async function completeHabitToday(
-  userId: string,
-  habitId: string,
-  source: string = 'WEB'
-): Promise<{ success: boolean; message: string; xpAwarded: number }> {
-  const today = new Date().toISOString().split('T')[0];
-  const compKey = `${habitId}_${today}`;
+export async function completeHabitToday(userId:string,habitId:string,source='WEB'):Promise<{success:boolean;message:string;xpAwarded:number}>{
+  const supabase=createClient();
+  const today=new Date().toISOString().split('T')[0];
 
-  if (memCompletions.has(compKey)) {
-    return { success: false, message: 'Habit already completed today.', xpAwarded: 0 };
+  const {data:habit,error:habitError}=await supabase.from('habits').select('*').eq('id',habitId).eq('user_id',userId).eq('status','ACTIVE').maybeSingle();
+  if(habitError)throw new Error(habitError.message);
+  if(!habit)return{success:false,message:'Habit not found.',xpAwarded:0};
+
+  const xpReward=Math.max(0,Number(habit.xp_reward||0));
+  const {data:completion,error}=await supabase.from('habit_completions').insert({
+    habit_id:habitId,user_id:userId,completion_date:today,source,xp_awarded:xpReward
+  }).select().single();
+
+  if(error){
+    if(error.code==='23505')return{success:false,message:'Habit already completed today.',xpAwarded:0};
+    throw new Error(error.message);
   }
 
-  const habit = memHabits.get(habitId);
-  const xpReward = habit?.xpReward || 15;
-
-  memCompletions.add(compKey);
-
-  Promise.resolve().then(async () => {
-    try {
-      const supabase = createClient();
-      await supabase.from('habit_completions').insert({
-        habit_id: habitId,
-        user_id: userId,
-        completion_date: today,
-        completed_at: new Date().toISOString(),
-        source,
-        xp_awarded: xpReward
-      });
-
-      await supabase.rpc('increment_player_xp', { p_user_id: userId, p_xp: xpReward });
-    } catch {
-      // Offline fallback
-    }
-  });
-
-  return {
-    success: true,
-    message: `Habit completed! +${xpReward} XP awarded.`,
-    xpAwarded: xpReward
-  };
-}
-
-export async function listUserHabits(userId: string): Promise<Habit[]> {
-  const today = new Date().toISOString().split('T')[0];
-
-  try {
-    const supabase = createClient();
-    const { data: habits } = await supabase
-      .from('habits')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'ACTIVE')
-      .order('created_at', { ascending: false });
-
-    if (habits && habits.length > 0) {
-      const { data: completions } = await supabase
-        .from('habit_completions')
-        .select('habit_id')
-        .eq('user_id', userId)
-        .eq('completion_date', today);
-
-      const completedIds = new Set((completions || []).map((c: any) => c.habit_id));
-
-      return habits.map((h: any) => ({
-        id: h.id,
-        userId: h.user_id,
-        title: h.title,
-        description: h.description,
-        lifeArea: h.life_area,
-        frequency: h.frequency,
-        targetCount: h.target_count,
-        preferredTime: h.preferred_time,
-        difficulty: h.difficulty,
-        relatedGoalId: h.related_goal_id,
-        relatedSkillId: h.related_skill_id,
-        status: h.status,
-        xpReward: h.xp_reward,
-        completedToday: completedIds.has(h.id),
-        createdAt: h.created_at
-      }));
-    }
-  } catch {
-    // Fallback
+  if(xpReward>0){
+    const xp=await addXPServer(userId,xpReward,'ACHIEVEMENT',`habit_${completion.id}`,`Completed habit: ${habit.title}`);
+    if(!xp.success&&xp.error!=='Reward already awarded for this action.')throw new Error(xp.error||'XP_AWARD_FAILED');
   }
 
-  const list: Habit[] = [];
-  memHabits.forEach((h) => {
-    if (h.userId === userId) {
-      list.push({
-        ...h,
-        completedToday: memCompletions.has(`${h.id}_${today}`)
-      });
-    }
-  });
-  return list;
+  return{success:true,message:`Habit completed. +${xpReward} XP.`,xpAwarded:xpReward};
 }
 
-export const getHabits = listUserHabits;
-export const completeHabit = (habitId: string, userId: string, source: string = 'WEB') =>
-  completeHabitToday(userId, habitId, source);
+export async function listUserHabits(userId:string):Promise<Habit[]>{
+  const supabase=createClient();
+  const today=new Date().toISOString().split('T')[0];
+  const [{data:habits,error:habitError},{data:completions,error:completionError}]=await Promise.all([
+    supabase.from('habits').select('*').eq('user_id',userId).eq('status','ACTIVE').order('created_at',{ascending:false}),
+    supabase.from('habit_completions').select('habit_id').eq('user_id',userId).eq('completion_date',today)
+  ]);
+  if(habitError)throw new Error(habitError.message);
+  if(completionError)throw new Error(completionError.message);
+  const completed=new Set((completions||[]).map((c:any)=>c.habit_id));
+  return(habits||[]).map((h:any)=>mapHabit(h,completed.has(h.id)));
+}
+export const getHabits=listUserHabits;
+export const completeHabit=(habitId:string,userId:string,source='WEB')=>completeHabitToday(userId,habitId,source);

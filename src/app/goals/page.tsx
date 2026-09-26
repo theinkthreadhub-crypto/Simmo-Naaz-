@@ -1,268 +1,76 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Target, Plus, CheckCircle2, Circle, Trophy, Calendar, Sparkles, X, ChevronRight } from 'lucide-react';
+import { Target, Plus, Calendar, CheckCircle2, Circle, X, AlertCircle } from 'lucide-react';
 import { useMentraStore } from '@/lib/store/mentraStore';
-import { Goal } from '@/types/mentra';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { QuestCategory } from '@/types/mentra';
 
 export default function GoalsPage() {
-  const { goals } = useMentraStore();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Form State
+  const { user } = useAuth();
+  const { goals, syncUserDatabase } = useMentraStore();
+  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<'BUSINESS' | 'FINANCE' | 'LEARNING' | 'FITNESS' | 'COMMUNICATION'>('BUSINESS');
-  const [targetDate, setTargetDate] = useState('2026-12-31');
+  const [category, setCategory] = useState<QuestCategory>('BUSINESS');
+  const [targetDate, setTargetDate] = useState('');
+  const [milestones, setMilestones] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [workingMilestone, setWorkingMilestone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-
-    setIsSubmitting(true);
+  const create = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user?.id || !title.trim()) return;
+    setSaving(true); setError(null);
     try {
-      const res = await fetch('/api/goals/create', {
+      const milestoneRows = milestones.split('\n').map(v => v.trim()).filter(Boolean).map(title => ({ title }));
+      const response = await fetch('/api/goals/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
           category,
-          target_date: targetDate
+          target_date: targetDate || null,
+          milestones: milestoneRows
         })
       });
-
-      const data = await res.json();
-      if (data.success && data.goal) {
-        useMentraStore.setState(prev => ({
-          goals: [data.goal, ...prev.goals]
-        }));
-      } else {
-        // Fallback
-        const newGoal: Goal = {
-          id: `g_${Date.now()}`,
-          title,
-          description,
-          category,
-          targetDate,
-          progressPercent: 0,
-          status: 'IN_PROGRESS',
-          milestones: [
-            { id: `m_${Date.now()}_1`, title: 'Foundation Launch', targetValue: 100, currentValue: 0, unit: '%', completed: false, rewardXp: 75 },
-            { id: `m_${Date.now()}_2`, title: 'Target Milestone Complete', targetValue: 100, currentValue: 0, unit: '%', completed: false, rewardXp: 150 }
-          ]
-        };
-        useMentraStore.setState(prev => ({
-          goals: [newGoal, ...prev.goals]
-        }));
-      }
-
-      setTitle('');
-      setDescription('');
-      setIsModalOpen(false);
-    } catch (err) {
-      console.error('Failed to create goal:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Goal was not created.');
+      await syncUserDatabase(user.id);
+      setTitle(''); setDescription(''); setTargetDate(''); setMilestones(''); setOpen(false);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Goal was not created.'); }
+    finally { setSaving(false); }
   };
 
-  const toggleMilestone = (goalId: string, milestoneId: string) => {
-    useMentraStore.setState(prev => {
-      const updatedGoals = prev.goals.map(g => {
-        if (g.id !== goalId) return g;
-        const updatedMilestones = g.milestones.map(m => 
-          m.id === milestoneId ? { ...m, completed: !m.completed } : m
-        );
-        const completedCount = updatedMilestones.filter(m => m.completed).length;
-        const progressPercent = Math.round((completedCount / (updatedMilestones.length || 1)) * 100);
-        return {
-          ...g,
-          milestones: updatedMilestones,
-          progressPercent
-        };
+  const toggleMilestone = async (milestoneId: string, completed: boolean) => {
+    if (!user?.id) return;
+    setWorkingMilestone(milestoneId); setError(null);
+    try {
+      const response = await fetch('/api/goals/milestone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milestoneId, completed: !completed })
       });
-      return { goals: updatedGoals };
-    });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Milestone was not updated.');
+      await syncUserDatabase(user.id);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Milestone was not updated.'); }
+    finally { setWorkingMilestone(null); }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-300">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase tracking-widest">
-            <Target className="w-4 h-4 text-mentra-orange" />
-            <span>MACRO HORIZON & MILESTONES</span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white mt-1">
-            Sovereign Goals Engine
-          </h1>
-        </div>
-
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-95 transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>ESTABLISH MACRO GOAL</span>
-        </button>
-      </div>
-
-      {/* Goals Grid */}
-      <div className="space-y-6">
-        {goals.map(goal => (
-          <div 
-            key={goal.id} 
-            className="p-6 sm:p-8 rounded-3xl glass-panel-orange bg-black/70 border-white/15 relative overflow-hidden space-y-6"
-          >
-            {/* Goal Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-mentra-amber uppercase px-2.5 py-0.5 rounded-full bg-mentra-orange/15 border border-mentra-orange/30">
-                    {goal.category}
-                  </span>
-                  <span className="text-[10px] font-mono text-white/40 flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-white/30" />
-                    <span>TARGET: {goal.target_date || goal.targetDate || '2026-12-31'}</span>
-                  </span>
-                </div>
-                <h3 className="text-xl sm:text-2xl font-bold font-display text-white mt-1">
-                  {goal.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-white/70 font-sans max-w-2xl leading-relaxed">
-                  {goal.description}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4 self-start sm:self-auto">
-                <div className="text-right font-mono">
-                  <div className="text-2xl font-extrabold text-mentra-amber">{goal.progressPercent}%</div>
-                  <div className="text-[10px] text-white/40">COMPLETION</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Overall Progress Bar */}
-            <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-mentra-orange to-mentra-amber rounded-full transition-all duration-500" 
-                style={{ width: `${goal.progressPercent}%` }}
-              />
-            </div>
-
-            {/* Milestones / Sub-missions */}
-            <div className="space-y-2.5 pt-2">
-              <div className="text-[11px] font-mono text-white/40 uppercase">TACTICAL MILESTONES</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {goal.milestones?.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => toggleMilestone(goal.id, m.id)}
-                    className="p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-between text-left transition-all group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
-                        m.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-white/30'
-                      }`}>
-                        {m.completed && <CheckCircle2 className="w-3 h-3" />}
-                      </div>
-                      <span className={`text-xs font-mono ${m.completed ? 'line-through text-white/40' : 'text-white/90'}`}>
-                        {m.title}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-mono text-mentra-amber">+{m.rewardXp} XP</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* CREATE GOAL MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-white/15 shadow-[0_0_50px_rgba(91,108,255,0.3)] space-y-6">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase">
-                <Target className="w-4 h-4 text-mentra-orange" />
-                <span>ESTABLISH STRATEGIC MACRO GOAL</span>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-full text-white/50 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-mono text-white/50 mb-1">GOAL TITLE</label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Build business to ₹1,00,000 monthly revenue"
-                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-mono text-white/50 mb-1">STRATEGIC CONTEXT</label>
-                <textarea
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Target unit economics, key deliverables, and constraints..."
-                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs sm:text-sm text-white placeholder-white/30 focus:outline-none resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">CATEGORY</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as any)}
-                    className="w-full bg-neutral-900 border border-white/15 focus:border-mentra-orange rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                  >
-                    <option value="BUSINESS">Business</option>
-                    <option value="FINANCE">Finance</option>
-                    <option value="LEARNING">Learning</option>
-                    <option value="COMMUNICATION">Communication</option>
-                    <option value="FITNESS">Fitness</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">DEADLINE</label>
-                  <input
-                    type="date"
-                    value={targetDate}
-                    onChange={(e) => setTargetDate(e.target.value)}
-                    className="w-full bg-neutral-900 border border-white/15 focus:border-mentra-orange rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting || !title.trim()}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-98 transition-all disabled:opacity-40"
-              >
-                {isSubmitting ? 'PERSISTING GOAL...' : 'ESTABLISH GOAL & MILESTONES'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4"><div><div className="text-xs font-mono text-mentra-amber tracking-widest">PERSISTED OBJECTIVES</div><h1 className="text-2xl sm:text-4xl font-bold text-white mt-1">Goals</h1></div><button onClick={()=>setOpen(true)} className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-mentra-orange text-white text-xs font-semibold"><Plus className="w-4 h-4" />CREATE GOAL</button></div>
+      {error && <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-200 text-sm flex gap-2"><AlertCircle className="w-4 h-4" />{error}</div>}
+      {goals.length === 0 ? <div className="p-12 text-center rounded-3xl border border-white/10 bg-black/40"><Target className="w-10 h-10 mx-auto text-white/20" /><p className="mt-3 text-sm text-white/45">No goals stored yet.</p></div> : goals.map(goal => <div key={goal.id} className="p-5 sm:p-7 rounded-3xl border border-white/10 bg-black/55 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3"><div><div className="text-[10px] text-mentra-amber">{goal.category}</div><h2 className="text-xl font-bold text-white mt-1">{goal.title}</h2><p className="text-sm text-white/55 mt-1">{goal.description}</p></div><div className="text-right"><div className="text-2xl font-mono text-mentra-amber font-bold">{goal.progressPercent}%</div><div className="text-[10px] text-white/35">{goal.status}</div></div></div>
+        {(goal.target_date || goal.targetDate) && <div className="text-xs text-white/45 flex gap-1.5"><Calendar className="w-3.5 h-3.5" />Target: {goal.target_date || goal.targetDate}</div>}
+        <div className="h-2 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-mentra-orange" style={{width:`${goal.progressPercent}%`}} /></div>
+        <div className="grid md:grid-cols-2 gap-2">{goal.milestones.length === 0 ? <div className="text-xs text-white/35">No milestones defined.</div> : goal.milestones.map(m => <button key={m.id} disabled={workingMilestone===m.id} onClick={()=>toggleMilestone(m.id,m.completed)} className="p-3 rounded-xl bg-white/5 border border-white/5 text-left flex items-center gap-2 disabled:opacity-50">{m.completed ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Circle className="w-4 h-4 text-white/30" />}<span className={`text-xs ${m.completed ? 'text-white/45 line-through':'text-white/80'}`}>{m.title}</span></button>)}</div>
+      </div>)}
+      {open && <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"><form onSubmit={create} className="w-full max-w-lg rounded-3xl bg-neutral-950 border border-white/15 p-6 space-y-4"><div className="flex justify-between"><h2 className="font-bold text-white">Create goal</h2><button type="button" onClick={()=>setOpen(false)}><X className="w-5 h-5 text-white/50" /></button></div><input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Goal title" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"/><textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Description" rows={3} className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white"/><div className="grid grid-cols-2 gap-3"><select value={category} onChange={e=>setCategory(e.target.value as QuestCategory)} className="bg-neutral-900 border border-white/10 rounded-xl p-3 text-white text-xs">{['BUSINESS','FINANCE','FITNESS','LEARNING','PERSONAL_GROWTH','DISCIPLINE','COMMUNICATION'].map(x=><option key={x}>{x}</option>)}</select><input type="date" value={targetDate} onChange={e=>setTargetDate(e.target.value)} className="bg-neutral-900 border border-white/10 rounded-xl p-3 text-white"/></div><textarea value={milestones} onChange={e=>setMilestones(e.target.value)} rows={4} placeholder="Milestones — one per line. Leave blank for no auto-created fake milestones." className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white text-xs"/><button disabled={saving} className="w-full py-3 rounded-xl bg-mentra-orange text-white font-semibold disabled:opacity-50">{saving?'Saving…':'Create goal'}</button></form></div>}
     </div>
   );
 }

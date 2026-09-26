@@ -43,146 +43,122 @@ export interface CreativeAsset {
   createdAt: string;
 }
 
-const memContentItems = new Map<string, ContentItem>();
-const memCreativeAssets = new Map<string, CreativeAsset>();
+function mapContent(d: any): ContentItem {
+  return {
+    id: d.id,
+    businessId: d.business_id,
+    campaignId: d.campaign_id || undefined,
+    userId: d.user_id,
+    platform: d.platform,
+    contentType: d.content_type,
+    title: d.title,
+    hook: d.hook || undefined,
+    caption: d.caption || undefined,
+    script: d.script || undefined,
+    cta: d.cta || undefined,
+    hashtags: d.hashtags || [],
+    creativeBrief: d.creative_brief || undefined,
+    status: d.status,
+    scheduledAt: d.scheduled_at || undefined,
+    publishedAt: d.published_at || undefined,
+    externalPostId: d.external_post_id || undefined,
+    createdAt: d.created_at
+  };
+}
+
+function mapAsset(d: any): CreativeAsset {
+  return {
+    id: d.id,
+    businessId: d.business_id,
+    campaignId: d.campaign_id || undefined,
+    userId: d.user_id,
+    assetType: d.asset_type,
+    title: d.title,
+    status: d.status,
+    storageUrl: d.storage_url || undefined,
+    externalUrl: d.external_url || undefined,
+    dimensions: d.dimensions || undefined,
+    durationSeconds: d.duration_seconds || undefined,
+    promptUsed: d.prompt_used || undefined,
+    createdAt: d.created_at
+  };
+}
 
 export async function createContentItem(
   userId: string,
   data: {
     businessId: string;
     campaignId?: string;
-    platform?: 'INSTAGRAM' | 'FACEBOOK' | 'WHATSAPP' | 'EMAIL' | 'WEBSITE' | 'YOUTUBE';
-    contentType?: 'REEL' | 'CAROUSEL' | 'POST' | 'STORY' | 'AD_CREATIVE' | 'EMAIL' | 'WHATSAPP_DRAFT';
+    platform?: ContentItem['platform'];
+    contentType?: ContentItem['contentType'];
     title: string;
     hook?: string;
     caption?: string;
     script?: string;
     cta?: string;
     hashtags?: string[];
-    creativeBrief?: any;
+    creativeBrief?: ContentItem['creativeBrief'];
     status?: ContentItem['status'];
     scheduledAt?: string;
   }
 ): Promise<ContentItem> {
-  const id = `cnt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-  const item: ContentItem = {
-    id,
-    businessId: data.businessId,
-    campaignId: data.campaignId,
-    userId,
-    platform: data.platform || 'INSTAGRAM',
-    contentType: data.contentType || 'REEL',
-    title: data.title,
-    hook: data.hook || '',
-    caption: data.caption || '',
-    script: data.script || '',
-    cta: data.cta || 'Shop the Drop on inkthreadhub.com',
-    hashtags: data.hashtags || ['#streetwearindia', '#oversizedtee', '#inkthreadhub'],
-    creativeBrief: data.creativeBrief,
-    status: data.status || 'DRAFT',
-    scheduledAt: data.scheduledAt,
-    createdAt: new Date().toISOString()
-  };
+  const supabase = createClient();
+  const { data: row, error } = await supabase
+    .from('content_items')
+    .insert({
+      business_id: data.businessId,
+      campaign_id: data.campaignId || null,
+      user_id: userId,
+      platform: data.platform || 'INSTAGRAM',
+      content_type: data.contentType || 'POST',
+      title: data.title,
+      hook: data.hook || null,
+      caption: data.caption || null,
+      script: data.script || null,
+      cta: data.cta || null,
+      hashtags: data.hashtags || [],
+      creative_brief: data.creativeBrief || null,
+      status: data.status || 'DRAFT',
+      scheduled_at: data.scheduledAt || null
+    })
+    .select()
+    .single();
 
-  memContentItems.set(id, item);
-
-  try {
-    const supabase = createClient();
-    Promise.resolve(
-      supabase.from('content_items').insert({
-        id,
-        business_id: item.businessId,
-        campaign_id: item.campaignId || null,
-        user_id: userId,
-        platform: item.platform,
-        content_type: item.contentType,
-        title: item.title,
-        hook: item.hook,
-        caption: item.caption,
-        script: item.script,
-        cta: item.cta,
-        hashtags: item.hashtags,
-        creative_brief: item.creativeBrief || null,
-        status: item.status,
-        scheduled_at: item.scheduledAt || null,
-        created_at: item.createdAt
-      })
-    ).catch(() => {});
-  } catch {
-    // Fallback
-  }
-
-  return item;
+  if (error || !row) throw new Error(error?.message || 'Failed to create content item.');
+  return mapContent(row);
 }
 
 export async function updateContentStatus(
+  userId: string,
   contentId: string,
   status: ContentItem['status']
 ): Promise<boolean> {
-  const item = memContentItems.get(contentId);
-  if (item) {
-    item.status = status;
-  }
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('content_items')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', contentId)
+    .eq('user_id', userId);
 
-  try {
-    const supabase = createClient();
-    Promise.resolve(
-      supabase.from('content_items').update({ status, updated_at: new Date().toISOString() }).eq('id', contentId)
-    ).catch(() => {});
-  } catch {
-    // Fallback
-  }
-
+  if (error) throw new Error(error.message);
   return true;
 }
 
-export async function getBusinessContent(businessId: string, campaignId?: string): Promise<ContentItem[]> {
-  try {
-    const supabase = createClient();
-    let query = supabase
-      .from('content_items')
-      .select('*')
-      .eq('business_id', businessId);
+export async function getBusinessContent(
+  businessId: string,
+  campaignId?: string
+): Promise<ContentItem[]> {
+  const supabase = createClient();
+  let query = supabase
+    .from('content_items')
+    .select('*')
+    .eq('business_id', businessId);
 
-    if (campaignId) {
-      query = query.eq('campaign_id', campaignId);
-    }
+  if (campaignId) query = query.eq('campaign_id', campaignId);
 
-    const { data } = await query.order('created_at', { ascending: false });
-
-    if (data && data.length > 0) {
-      return data.map((d: any) => ({
-        id: d.id,
-        businessId: d.business_id,
-        campaignId: d.campaign_id,
-        userId: d.user_id,
-        platform: d.platform,
-        contentType: d.content_type,
-        title: d.title,
-        hook: d.hook,
-        caption: d.caption,
-        script: d.script,
-        cta: d.cta,
-        hashtags: d.hashtags || [],
-        creativeBrief: d.creative_brief,
-        status: d.status,
-        scheduledAt: d.scheduled_at,
-        publishedAt: d.published_at,
-        externalPostId: d.external_post_id,
-        createdAt: d.created_at
-      }));
-    }
-  } catch {
-    // Fallback
-  }
-
-  const list: ContentItem[] = [];
-  memContentItems.forEach(c => {
-    if (c.businessId === businessId && (!campaignId || c.campaignId === campaignId)) {
-      list.push(c);
-    }
-  });
-  return list;
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data || []).map(mapContent);
 }
 
 export async function createCreativeAsset(
@@ -200,91 +176,42 @@ export async function createCreativeAsset(
     promptUsed?: string;
   }
 ): Promise<CreativeAsset> {
-  const id = `ast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-  const newAsset: CreativeAsset = {
-    id,
-    businessId: asset.businessId,
-    campaignId: asset.campaignId,
-    userId,
-    assetType: asset.assetType,
-    title: asset.title,
-    status: asset.status || 'READY',
-    storageUrl: asset.storageUrl,
-    externalUrl: asset.externalUrl,
-    dimensions: asset.dimensions,
-    durationSeconds: asset.durationSeconds,
-    promptUsed: asset.promptUsed,
-    createdAt: new Date().toISOString()
-  };
+  const supabase = createClient();
+  const { data: row, error } = await supabase
+    .from('creative_assets')
+    .insert({
+      business_id: asset.businessId,
+      campaign_id: asset.campaignId || null,
+      user_id: userId,
+      asset_type: asset.assetType,
+      title: asset.title,
+      status: asset.status || 'READY',
+      storage_url: asset.storageUrl || null,
+      external_url: asset.externalUrl || null,
+      dimensions: asset.dimensions || null,
+      duration_seconds: asset.durationSeconds || null,
+      prompt_used: asset.promptUsed || null
+    })
+    .select()
+    .single();
 
-  memCreativeAssets.set(id, newAsset);
-
-  try {
-    const supabase = createClient();
-    Promise.resolve(
-      supabase.from('creative_assets').insert({
-        id,
-        business_id: newAsset.businessId,
-        campaign_id: newAsset.campaignId || null,
-        user_id: userId,
-        asset_type: newAsset.assetType,
-        title: newAsset.title,
-        status: newAsset.status,
-        storage_url: newAsset.storageUrl || null,
-        external_url: newAsset.externalUrl || null,
-        dimensions: newAsset.dimensions || null,
-        duration_seconds: newAsset.durationSeconds || null,
-        prompt_used: newAsset.promptUsed || null,
-        created_at: newAsset.createdAt
-      })
-    ).catch(() => {});
-  } catch {
-    // Fallback
-  }
-
-  return newAsset;
+  if (error || !row) throw new Error(error?.message || 'Failed to create creative asset.');
+  return mapAsset(row);
 }
 
-export async function getBusinessAssets(businessId: string, campaignId?: string): Promise<CreativeAsset[]> {
-  try {
-    const supabase = createClient();
-    let query = supabase
-      .from('creative_assets')
-      .select('*')
-      .eq('business_id', businessId);
+export async function getBusinessAssets(
+  businessId: string,
+  campaignId?: string
+): Promise<CreativeAsset[]> {
+  const supabase = createClient();
+  let query = supabase
+    .from('creative_assets')
+    .select('*')
+    .eq('business_id', businessId);
 
-    if (campaignId) {
-      query = query.eq('campaign_id', campaignId);
-    }
+  if (campaignId) query = query.eq('campaign_id', campaignId);
 
-    const { data } = await query.order('created_at', { ascending: false });
-
-    if (data && data.length > 0) {
-      return data.map((d: any) => ({
-        id: d.id,
-        businessId: d.business_id,
-        campaignId: d.campaign_id,
-        userId: d.user_id,
-        assetType: d.asset_type,
-        title: d.title,
-        status: d.status,
-        storageUrl: d.storage_url,
-        externalUrl: d.external_url,
-        dimensions: d.dimensions,
-        durationSeconds: d.duration_seconds,
-        promptUsed: d.prompt_used,
-        createdAt: d.created_at
-      }));
-    }
-  } catch {
-    // Fallback
-  }
-
-  const list: CreativeAsset[] = [];
-  memCreativeAssets.forEach(a => {
-    if (a.businessId === businessId && (!campaignId || a.campaignId === campaignId)) {
-      list.push(a);
-    }
-  });
-  return list;
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data || []).map(mapAsset);
 }

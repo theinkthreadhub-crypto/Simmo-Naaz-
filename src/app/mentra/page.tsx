@@ -1,419 +1,113 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React,{useEffect,useRef,useState} from 'react';
+import { Bot,Send,Plus,Activity,Clock,ChevronRight,PanelRightClose,PanelRightOpen,AlertCircle } from 'lucide-react';
 import Link from 'next/link';
-import { 
-  Bot, 
-  Send, 
-  Sparkles, 
-  Plus, 
-  Zap, 
-  ShieldCheck, 
-  Clock, 
-  Activity, 
-  ArrowRight, 
-  CheckCircle2, 
-  DollarSign, 
-  Sword, 
-  Brain, 
-  Mic, 
-  MessageSquare, 
-  ChevronRight, 
-  RotateCcw,
-  PanelRightClose,
-  PanelRightOpen,
-  X
-} from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
-import { ActionCard, MentraConversation } from '@/lib/ai/types';
+import { ActionCard,MentraConversation } from '@/lib/ai/types';
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  cards?: ActionCard[];
-  toolStatus?: string;
-  timestamp: string;
-}
+interface ChatMessage{id:string;role:'user'|'assistant';content:string;cards?:ActionCard[];timestamp:string}
+type AiStatus='CONNECTED'|'CONFIG_REQUIRED'|'DEGRADED'|'DISABLED'|'CHECKING';
 
-export default function MentraChatPage() {
-  const { user, profile, progress } = useAuth();
-  const { player, quests, skills, finance, agents } = useMentraStore();
+export default function MentraChatPage(){
+  const {user,profile,progress}=useAuth();
+  const {player,quests,skills,finance,syncUserDatabase}=useMentraStore();
+  const [messages,setMessages]=useState<ChatMessage[]>([]);
+  const [input,setInput]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [activeId,setActiveId]=useState<string|null>(null);
+  const [conversations,setConversations]=useState<MentraConversation[]>([]);
+  const [showContext,setShowContext]=useState(true);
+  const [aiStatus,setAiStatus]=useState<AiStatus>('CHECKING');
+  const [statusText,setStatusText]=useState('Checking real AI provider…');
+  const endRef=useRef<HTMLDivElement|null>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentToolStatus, setCurrentToolStatus] = useState<string | null>(null);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<MentraConversation[]>([]);
-  const [showContextPanel, setShowContextPanel] = useState(true);
+  const level=progress?.level??player.level;
+  const xp=progress?.current_xp??player.currentXp;
+  const activeQuests=quests.filter(q=>q.status==='ACTIVE');
+  const name=profile?.display_name||user?.user_metadata?.display_name||'Operator';
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const loadHealth=async()=>{
+    try{
+      const response=await fetch('/api/system/health',{cache:'no-store'});
+      const data=await response.json();
+      const capability=data?.capabilities?.ai_core;
+      setAiStatus((capability?.status||'DEGRADED') as AiStatus);
+      setStatusText(capability?.description||'AI provider status unavailable.');
+    }catch{setAiStatus('DEGRADED');setStatusText('AI provider status unavailable.');}
+  };
 
-  const displayLevel = progress?.level ?? player.level;
-  const displayXp = progress?.current_xp ?? player.currentXp;
-  const activeQuests = quests.filter(q => q.status === 'ACTIVE');
-  const activeSkill = skills[0];
+  const loadConversations=async()=>{
+    try{
+      const response=await fetch('/api/mentra/conversations',{cache:'no-store'});
+      const data=await response.json();
+      if(response.ok)setConversations(data.conversations||[]);
+    }catch{}
+  };
 
-  useEffect(() => {
-    // Initial welcome message
-    setMessages([
-      {
-        id: 'msg_welcome',
-        role: 'assistant',
-        content: `[MENTRA CORE ONLINE]: Operator ${profile?.display_name || 'Naaz'}, all systems nominal. Level 0${displayLevel} Vanguard Architect active with ${activeQuests.length} scheduled quests. Standing by for voice or command dispatch.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-    ]);
+  useEffect(()=>{loadHealth();loadConversations();setMessages([{id:'welcome',role:'assistant',content:`MENTRA session ready for ${name}. I will only report actions and data that are actually available or verified.`,timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}]);},[name]);
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:'smooth'});},[messages,loading]);
 
-    // Load past conversations
-    async function loadConversations() {
-      try {
-        const res = await fetch('/api/mentra/conversations');
-        const data = await res.json();
-        if (data.conversations) {
-          setConversations(data.conversations);
-        }
-      } catch (err) {
-        console.warn('Could not load conversations:', err);
-      }
-    }
-    loadConversations();
-  }, [profile?.display_name, displayLevel, activeQuests.length]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentToolStatus]);
-
-  const handleSend = async (customText?: string) => {
-    const textToSend = customText || input;
-    if (!textToSend.trim() || isLoading) return;
-
-    const userMsg: ChatMessage = {
-      id: `msg_u_${Date.now()}`,
-      role: 'user',
-      content: textToSend.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setIsLoading(true);
-    setCurrentToolStatus('PROCESSING_TELEMETRY');
-
-    try {
-      const res = await fetch('/api/mentra/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: textToSend.trim(),
-          conversationId: activeConversationId || undefined,
-          pageContext: 'mentra_chat'
-        })
-      });
-
-      const data = await res.json();
-
-      if (data.conversationId && !activeConversationId) {
-        setActiveConversationId(data.conversationId);
-      }
-
-      const assistantMsg: ChatMessage = {
-        id: `msg_a_${Date.now()}`,
-        role: 'assistant',
-        content: data.message || '[Command Executed]',
-        cards: data.cards || [],
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-
-      setMessages(prev => [...prev, assistantMsg]);
-
-      // If user added finance/quest/skill, sync local store
-      if (data.toolCallsExecuted?.includes('addFinanceTransaction') || data.toolCallsExecuted?.includes('createQuest')) {
-        if (user?.id) useMentraStore.getState().syncUserDatabase(user.id);
-      }
-
-    } catch (err: any) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: `msg_err_${Date.now()}`,
-          role: 'assistant',
-          content: `[MENTRA CORE]: System error executing command: ${err.message || 'Connection lost'}. Data integrity preserved.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    } finally {
-      setIsLoading(false);
-      setCurrentToolStatus(null);
+  const openConversation=async(id:string)=>{
+    try{
+      const response=await fetch(`/api/mentra/conversations?conversationId=${encodeURIComponent(id)}`,{cache:'no-store'});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'Conversation could not be loaded.');
+      setActiveId(id);
+      setMessages((data.messages||[]).map((m:any)=>({
+        id:m.id,
+        role:m.role==='ASSISTANT'?'assistant':'user',
+        content:m.content,
+        cards:m.cards||[],
+        timestamp:new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+      })));
+    }catch(err){
+      setMessages(prev=>[...prev,{id:`err_${Date.now()}`,role:'assistant',content:err instanceof Error?err.message:'Conversation could not be loaded.',timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}]);
     }
   };
 
-  const startNewSession = () => {
-    setActiveConversationId(null);
-    setMessages([
-      {
-        id: `msg_new_${Date.now()}`,
-        role: 'assistant',
-        content: `[MENTRA CORE]: New Intelligence Session initialized. How can I advance your operations today?`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-    ]);
+  const send=async(custom?:string)=>{
+    const text=(custom??input).trim();if(!text||loading)return;
+    setMessages(prev=>[...prev,{id:`u_${Date.now()}`,role:'user',content:text,timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}]);
+    setInput('');setLoading(true);
+    try{
+      const response=await fetch('/api/mentra/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,conversationId:activeId||undefined,pageContext:'mentra_chat'})});
+      const data=await response.json();
+      if(!response.ok||data.success===false)throw new Error(data.message||data.error||'MENTRA request failed.');
+      if(data.conversationId&&!activeId)setActiveId(data.conversationId);
+      setMessages(prev=>[...prev,{id:`a_${Date.now()}`,role:'assistant',content:data.message||'No response returned.',cards:data.cards||[],timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}]);
+      if(user?.id&&Array.isArray(data.toolCallsExecuted)&&data.toolCallsExecuted.length>0)await syncUserDatabase(user.id);
+      await loadConversations();
+      await loadHealth();
+    }catch(err){
+      setMessages(prev=>[...prev,{id:`err_${Date.now()}`,role:'assistant',content:`Request failed: ${err instanceof Error?err.message:'Unknown error'}`,timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}]);
+    }finally{setLoading(false);}
   };
 
-  const sampleCommands = [
-    '₹450 Meta Ads expense add karo',
-    'Aaj mujhe kya karna chahiye?',
-    'Public speaking practice start karo',
-    'Kal product upload karne ka quest banao',
-    'Maine ads ke bare me last kya decide kiya tha?'
-  ];
+  const newSession=()=>{setActiveId(null);setMessages([{id:`new_${Date.now()}`,role:'assistant',content:'New verified intelligence session started. What should I do?',timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}]);};
 
-  return (
-    <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 h-[88vh] flex flex-col animate-in fade-in duration-300">
-      
-      {/* Top Header */}
-      <div className="flex items-center justify-between py-3 border-b border-white/10 gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber flex items-center justify-center text-white shadow-[0_0_15px_rgba(91,108,255,0.4)]">
-            <Bot className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold font-display text-white">MENTRA AI CORE</h1>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
-                ONLINE • v4.0
-              </span>
-            </div>
-            <p className="text-[11px] font-mono text-white/40">
-              Sovereign Operating System &amp; Personal Coach
-            </p>
-          </div>
-        </div>
+  const connected=aiStatus==='CONNECTED';
+  const samples=['Aaj mujhe kya karna chahiye?','Kal product upload karne ka quest banao','Mera finance summary batao','Maine ads ke bare me kya save kiya hai?'];
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={startNewSession}
-            className="px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-mono flex items-center gap-1.5 transition-all"
-          >
-            <Plus className="w-3.5 h-3.5 text-mentra-amber" />
-            <span className="hidden sm:inline">NEW SESSION</span>
-          </button>
-
-          <button
-            onClick={() => setShowContextPanel(!showContextPanel)}
-            className="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-all hidden md:flex"
-            title="Toggle Telemetry Panel"
-          >
-            {showContextPanel ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Main Workspace Body */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 pt-3 overflow-hidden">
-        
-        {/* Left Drawer: Sessions (3 cols on desktop) */}
-        <div className="hidden lg:flex lg:col-span-3 flex-col glass-panel bg-black/60 rounded-3xl border-white/10 p-4 space-y-3 overflow-y-auto">
-          <div className="text-[11px] font-mono text-white/40 uppercase tracking-wider flex items-center gap-2">
-            <Clock className="w-3.5 h-3.5 text-mentra-amber" />
-            <span>INTELLIGENCE CHRONICLE</span>
-          </div>
-
-          <div className="space-y-1.5 flex-1">
-            {conversations.length === 0 ? (
-              <div className="p-3 text-xs font-mono text-white/40 text-center">
-                No archived sessions yet.
-              </div>
-            ) : (
-              conversations.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setActiveConversationId(c.id)}
-                  className={`w-full text-left p-2.5 rounded-xl text-xs font-sans transition-all truncate block ${
-                    activeConversationId === c.id
-                      ? 'bg-mentra-orange/20 border border-mentra-orange/40 text-white font-semibold'
-                      : 'bg-white/5 hover:bg-white/10 border border-transparent text-white/70'
-                  }`}
-                >
-                  {c.title}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Center: Active Chat Stream (6 or 9 cols) */}
-        <div className={`flex flex-col h-full glass-panel bg-black/70 rounded-3xl border-white/10 p-4 relative overflow-hidden ${
-          showContextPanel ? 'lg:col-span-6' : 'lg:col-span-9'
-        }`}>
-          
-          {/* Message Stream */}
-          <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
-            {messages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}
-              >
-                {/* Message Bubble / System Panel */}
-                <div className={`p-4 rounded-2xl max-w-[90%] sm:max-w-[82%] text-xs sm:text-sm font-sans leading-relaxed shadow-lg ${
-                  msg.role === 'user'
-                    ? 'bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-medium rounded-tr-none'
-                    : 'bg-white/5 border border-white/10 text-white/90 font-mono rounded-tl-none space-y-3'
-                }`}>
-                  <div className="flex items-center justify-between gap-4 text-[10px] text-white/40 pb-1 border-b border-white/5">
-                    <span>{msg.role === 'user' ? 'OPERATOR' : 'MENTRA CORE'}</span>
-                    <span>{msg.timestamp}</span>
-                  </div>
-
-                  <p className="whitespace-pre-wrap font-sans text-xs sm:text-sm">
-                    {msg.content}
-                  </p>
-
-                  {/* Render Action Cards */}
-                  {msg.cards && msg.cards.length > 0 && (
-                    <div className="space-y-2 pt-2 border-t border-white/10">
-                      {msg.cards.map((card, cIdx) => (
-                        <div 
-                          key={cIdx} 
-                          className="p-3 rounded-xl bg-black/80 border border-mentra-orange/30 flex items-center justify-between gap-3 text-xs"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-2 rounded-lg bg-mentra-orange/20 text-mentra-amber">
-                              {card.type.includes('EXPENSE') ? <DollarSign className="w-4 h-4" /> : card.type.includes('QUEST') ? <Sword className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
-                            </div>
-                            <div>
-                              <div className="font-bold text-white text-xs">{card.title}</div>
-                              {card.subtitle && <div className="text-[11px] text-white/60 font-mono">{card.subtitle}</div>}
-                            </div>
-                          </div>
-
-                          {card.actionUrl && (
-                            <Link 
-                              href={card.actionUrl}
-                              className="px-3 py-1 rounded-full bg-mentra-orange text-white text-[10px] font-mono font-bold flex items-center gap-1 hover:opacity-90 transition-all flex-shrink-0"
-                            >
-                              <span>{card.actionLabel || 'VIEW'}</span>
-                              <ChevronRight className="w-3 h-3" />
-                            </Link>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* Current Tool Execution Status Line */}
-            {currentToolStatus && (
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-mentra-orange/10 border border-mentra-orange/30 text-mentra-amber text-xs font-mono animate-pulse max-w-sm">
-                <Sparkles className="w-3.5 h-3.5 text-mentra-orange" />
-                <span>[MENTRA STATUS]: {currentToolStatus}...</span>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Prompt Suggestion Quick Chips */}
-          <div className="pt-2 pb-1 overflow-x-auto scrollbar-none flex gap-2">
-            {sampleCommands.map((cmd, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSend(cmd)}
-                className="px-3 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-[11px] font-mono whitespace-nowrap transition-colors flex-shrink-0"
-              >
-                {cmd}
-              </button>
-            ))}
-          </div>
-
-          {/* Command Input Bar */}
-          <form 
-            onSubmit={(e) => { e.preventDefault(); handleSend(); }} 
-            className="pt-2 flex items-center gap-2 relative"
-          >
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask MENTRA anything... (/quest, /finance, /skills, /journal)"
-              className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-2xl pl-4 pr-12 py-3.5 text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none transition-all shadow-inner"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="absolute right-2 p-2.5 rounded-xl bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_15px_rgba(91,108,255,0.4)] hover:opacity-90 disabled:opacity-30 transition-all"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-
-        </div>
-
-        {/* Right: Live Telemetry Context Panel (3 cols) */}
-        {showContextPanel && (
-          <div className="hidden lg:flex lg:col-span-3 flex-col glass-panel bg-black/60 rounded-3xl border-white/10 p-4 space-y-4 overflow-y-auto">
-            <div className="text-[11px] font-mono text-white/40 uppercase tracking-wider flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-mentra-orange" />
-              <span>LIVE TELEMETRY CONTEXT</span>
-            </div>
-
-            {/* Level Card */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1">
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-white/50">OPERATOR LEVEL</span>
-                <span className="text-mentra-amber font-bold">LEVEL 0{displayLevel}</span>
-              </div>
-              <div className="text-[11px] font-mono text-white/70">
-                XP: {displayXp} / {displayLevel * 1000}
-              </div>
-            </div>
-
-            {/* Active Quests */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-white/50">ACTIVE QUESTS</span>
-                <span className="text-white font-bold">{activeQuests.length}</span>
-              </div>
-              {activeQuests.slice(0, 2).map(q => (
-                <div key={q.id} className="text-[11px] text-white/80 font-sans truncate">
-                  • {q.title}
-                </div>
-              ))}
-            </div>
-
-            {/* Active Skill */}
-            {activeSkill && (
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-white/50">SKILL TRACK</span>
-                  <span className="text-mentra-amber font-bold">LVL {activeSkill.level}</span>
-                </div>
-                <div className="text-xs text-white/90 font-display truncate">
-                  {activeSkill.name}
-                </div>
-              </div>
-            )}
-
-            {/* Capital Velocity */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1">
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-white/50">CAPITAL VELOCITY</span>
-                <span className="text-emerald-400 font-bold">₹{finance.monthlyIncome}</span>
-              </div>
-              <div className="text-[11px] font-mono text-white/70">
-                Expenses: ₹{finance.monthlyExpenses}
-              </div>
-            </div>
-
-          </div>
-        )}
-
-      </div>
-
+  return <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 h-[88vh] flex flex-col">
+    <div className="flex items-center justify-between py-3 border-b border-white/10 gap-3">
+      <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-mentra-orange flex items-center justify-center"><Bot className="w-5 h-5 text-white"/></div><div><div className="flex items-center gap-2"><h1 className="text-base sm:text-lg font-bold text-white">MENTRA AI CORE</h1><span className={`text-[10px] px-2 py-0.5 rounded-full border ${connected?'bg-emerald-500/10 text-emerald-300 border-emerald-500/30':'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>{aiStatus}</span></div><p className="text-[10px] text-white/40 max-w-[65vw] truncate">{statusText}</p></div></div>
+      <div className="flex gap-2"><button onClick={newSession} className="p-2 sm:px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 flex gap-1"><Plus className="w-4 h-4"/><span className="hidden sm:inline text-xs">New</span></button><button onClick={()=>setShowContext(v=>!v)} className="hidden lg:block p-2 rounded-xl bg-white/5 border border-white/10">{showContext?<PanelRightClose className="w-4 h-4 text-white/60"/>:<PanelRightOpen className="w-4 h-4 text-white/60"/>}</button></div>
     </div>
-  );
+
+    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 pt-3 overflow-hidden">
+      <aside className="hidden lg:flex lg:col-span-3 flex-col rounded-3xl border border-white/10 bg-black/50 p-4 overflow-y-auto"><div className="text-[10px] text-white/35 flex gap-2"><Clock className="w-3 h-3"/>SESSIONS</div><div className="mt-3 space-y-1">{conversations.length===0?<div className="text-xs text-white/30 p-3">No saved sessions yet.</div>:conversations.map(c=><button key={c.id} onClick={()=>openConversation(c.id)} className={`w-full text-left p-2.5 rounded-xl text-xs truncate ${activeId===c.id?'bg-mentra-orange/20 text-white':'bg-white/5 text-white/55'}`}>{c.title}</button>)}</div></aside>
+
+      <main className={`lg:col-span-${showContext?'6':'9'} flex flex-col rounded-3xl border border-white/10 bg-black/60 p-3 sm:p-4 overflow-hidden`}>
+        {!connected&&<div className="mb-3 p-3 rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-200 text-xs flex gap-2"><AlertCircle className="w-4 h-4 flex-shrink-0"/>Real model status is {aiStatus}. MENTRA will not simulate an AI answer if a live provider is unavailable.</div>}
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1">{messages.map(msg=><div key={msg.id} className={`flex ${msg.role==='user'?'justify-end':'justify-start'}`}><div className={`max-w-[90%] sm:max-w-[82%] p-4 rounded-2xl text-sm ${msg.role==='user'?'bg-mentra-orange text-white':'bg-white/5 border border-white/10 text-white/85'}`}><div className="text-[9px] opacity-40 mb-2 flex justify-between gap-4"><span>{msg.role==='user'?'OPERATOR':'MENTRA'}</span><span>{msg.timestamp}</span></div><p className="whitespace-pre-wrap">{msg.content}</p>{msg.cards&&msg.cards.length>0&&<div className="mt-3 pt-3 border-t border-white/10 space-y-2">{msg.cards.map(card=><div key={card.id} className="p-3 rounded-xl bg-black/50 border border-white/10"><div className="font-semibold text-xs">{card.title}</div>{card.subtitle&&<div className="text-[11px] text-white/50 mt-1">{card.subtitle}</div>}{card.actionUrl&&<Link href={card.actionUrl} className="mt-2 inline-flex items-center text-[10px] text-cyan-300">{card.actionLabel||'Open'}<ChevronRight className="w-3 h-3"/></Link>}</div>)}</div>}</div></div>)}{loading&&<div className="text-xs text-mentra-amber flex gap-2 items-center"><Activity className="w-3 h-3 animate-pulse"/>Running real model/tool loop…</div>}<div ref={endRef}/></div>
+        <div className="pt-2 overflow-x-auto flex gap-2">{samples.map(s=><button key={s} onClick={()=>send(s)} disabled={loading} className="px-3 py-1.5 rounded-full bg-white/5 text-[10px] text-white/55 whitespace-nowrap">{s}</button>)}</div>
+        <form onSubmit={e=>{e.preventDefault();send();}} className="pt-2 relative"><input value={input} onChange={e=>setInput(e.target.value)} placeholder="Ask MENTRA…" className="w-full bg-white/5 border border-white/10 rounded-2xl pl-4 pr-12 py-3.5 text-white text-sm"/><button disabled={loading||!input.trim()} className="absolute right-2 top-4 p-2 rounded-xl bg-mentra-orange text-white disabled:opacity-30"><Send className="w-4 h-4"/></button></form>
+      </main>
+
+      {showContext&&<aside className="hidden lg:flex lg:col-span-3 flex-col rounded-3xl border border-white/10 bg-black/50 p-4 space-y-3 overflow-y-auto"><div className="text-[10px] text-white/35">VERIFIED CONTEXT</div><Context label="Level" value={String(level)}/><Context label="XP" value={String(xp)}/><Context label="Active quests" value={String(activeQuests.length)}/><Context label="Skills" value={String(skills.length)}/><Context label="Income" value={`₹${finance.monthlyIncome.toLocaleString()}`}/><Context label="Expenses" value={`₹${finance.monthlyExpenses.toLocaleString()}`}/></aside>}
+    </div>
+  </div>;
 }
+function Context({label,value}:{label:string;value:string}){return <div className="p-3 rounded-xl bg-white/5 border border-white/5"><div className="text-[9px] uppercase text-white/35">{label}</div><div className="mt-1 text-sm font-mono text-white">{value}</div></div>}

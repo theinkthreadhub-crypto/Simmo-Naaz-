@@ -1,89 +1,28 @@
 'use client';
 
 import React from 'react';
-import { FileText, TrendingUp, Sparkles, CheckCircle2, Shield, ArrowUpRight, Trophy } from 'lucide-react';
+import { FileText, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
 
-export default function ReportsPage() {
-  const { user, profile, progress } = useAuth();
-  const { player, finance, quests, skills } = useMentraStore();
+export default function ReportsPage(){
+  const {profile,progress,user}=useAuth();
+  const {player,finance,quests,skills,journalEntries,memories}=useMentraStore();
+  const level=progress?.level??player.level;
+  const name=profile?.display_name||user?.user_metadata?.display_name||'Operator';
+  const completed=quests.filter(q=>q.status==='COMPLETED').length;
+  const active=quests.filter(q=>q.status==='ACTIVE').length;
+  const hasData=quests.length+skills.length+finance.transactions.length+journalEntries.length+memories.length>0;
 
-  const displayLevel = progress?.level ?? player.level;
-  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator Naaz';
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-300">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase tracking-widest">
-            <FileText className="w-4 h-4 text-mentra-orange" />
-            <span>EXECUTIVE DOSSIER & PROGRESSION</span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white mt-1">
-            Weekly Intelligence Report
-          </h1>
-        </div>
-
-        <div className="text-xs font-mono text-white/50">
-          STATUS: <strong className="text-emerald-400 font-bold">READY FOR REVIEW</strong>
-        </div>
+  return <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-7">
+    <div className="border-b border-white/10 pb-4"><div className="text-xs font-mono text-mentra-amber tracking-widest">VERIFIED DATA REPORT</div><h1 className="text-2xl sm:text-4xl font-bold text-white mt-1">Current Intelligence Snapshot</h1></div>
+    <div className="p-5 sm:p-7 rounded-3xl border border-white/10 bg-black/55 space-y-5"><div className="flex items-center justify-between"><div><h2 className="font-bold text-white">{name}</h2><div className="text-xs text-white/40">Level {level} • Current persisted state</div></div><FileText className="w-6 h-6 text-mentra-amber"/></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Metric label="Active quests" value={String(active)}/><Metric label="Completed quests" value={String(completed)}/><Metric label="Net cash flow" value={`₹${finance.monthlySavings.toLocaleString()}`}/><Metric label="Tracked skills" value={String(skills.length)}/>
       </div>
-
-      {/* Executive Summary Card */}
-      <div className="p-6 sm:p-8 rounded-3xl glass-panel-orange bg-black/70 border-white/15 space-y-6">
-        <div className="flex items-center justify-between pb-4 border-b border-white/10">
-          <div>
-            <h2 className="text-xl font-bold font-display text-white">
-              WEEKLY OPERATOR DOSSIER // {displayName.toUpperCase()}
-            </h2>
-            <span className="text-xs font-mono text-white/40">PERIOD: CURRENT ACTIVE CYCLE</span>
-          </div>
-          <div className="px-3.5 py-1 rounded-full bg-mentra-orange/15 border border-mentra-orange/30 text-mentra-amber font-mono text-xs font-bold">
-            LEVEL 0{displayLevel} TACTICIAN
-          </div>
-        </div>
-
-        {/* 4 Core Pillars Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-mono text-white/40 uppercase">QUEST VELOCITY</div>
-            <div className="text-2xl font-mono font-bold text-white mt-1">4 / 5 Done</div>
-            <p className="text-xs text-emerald-400 font-mono mt-1">+240 XP Accumulated</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-mono text-white/40 uppercase">NET CASH FLOW</div>
-            <div className="text-2xl font-mono font-bold text-emerald-400 mt-1">₹{finance.monthlySavings.toLocaleString()}</div>
-            <p className="text-xs text-white/50 font-mono mt-1">Solvent Runway: 7.4 mo</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-mono text-white/40 uppercase">SKILLS ELEVATED</div>
-            <div className="text-2xl font-mono font-bold text-mentra-amber mt-1">2 Nodes</div>
-            <p className="text-xs text-mentra-orange font-mono mt-1">AI Agents & Cash Flow</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-mono text-white/40 uppercase">SOVEREIGN STREAK</div>
-            <div className="text-2xl font-mono font-bold text-white mt-1">12 Days 🔥</div>
-            <p className="text-xs text-emerald-400 font-mono mt-1">Zero Breakdowns</p>
-          </div>
-        </div>
-
-        {/* AI Synthesis Narrative */}
-        <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2">
-          <span className="text-xs font-mono text-mentra-amber font-semibold uppercase">
-            [MENTRA SYNTHESIS SUMMARY]
-          </span>
-          <p className="text-xs sm:text-sm text-white/80 leading-relaxed font-sans">
-            Strong operational momentum this cycle. The Meta Ads unit economics audit stabilized target ROAS at 4.2x while direct fabric negotiations lowered inventory unit cost by 12%. Deep work cadence averaged 4.2 hours daily. Recommend scaling ad budget by 15% next sprint.
-          </p>
-        </div>
-      </div>
-
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3"><Metric label="Finance records" value={String(finance.transactions.length)}/><Metric label="Journal entries" value={String(journalEntries.length)}/><Metric label="Memories" value={String(memories.length)}/><Metric label="Streak" value={`${progress?.current_streak??player.streakDays} days`}/></div>
+      <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-sm text-white/65">{hasData?<div className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5"/>All figures above come from the connected MENTRA data store. No fabricated AI narrative is shown.</div>:'No verified activity exists yet. Use MENTRA and its modules to create real data before a report is generated.'}</div>
     </div>
-  );
+  </div>;
 }
+function Metric({label,value}:{label:string;value:string}){return <div className="p-4 rounded-2xl bg-white/5 border border-white/5"><div className="text-[10px] uppercase text-white/35">{label}</div><div className="mt-1 text-xl font-mono font-bold text-white">{value}</div></div>}

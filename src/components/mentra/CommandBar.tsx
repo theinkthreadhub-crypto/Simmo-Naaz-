@@ -40,7 +40,10 @@ export default function CommandBar() {
       });
 
       const data = await res.json();
-      setResponseMessage(data.message || 'Command executed successfully.');
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || data.error || 'MENTRA command failed.');
+      }
+      setResponseMessage(data.message || 'Command completed.');
       if (data.cards && data.cards.length > 0) {
         setResponseCards(data.cards);
       }

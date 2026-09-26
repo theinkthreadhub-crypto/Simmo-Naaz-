@@ -21,7 +21,7 @@ export default function FocusModePage() {
   const [activeTask, setActiveTask] = useState('Deep Sovereign Focus Session');
   const [reflection, setReflection] = useState('');
   const [isCompleted, setIsCompleted] = useState(false);
-  const [xpEarned, setXpEarned] = useState<number | null>(null);
+  const [xpEarned, setXpEarned] = useState<number | null>(null);\n  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let interval: any = null;
@@ -37,14 +37,20 @@ export default function FocusModePage() {
   }, [isRunning, secondsRemaining]);
 
   const handleStart = async () => {
-    setIsRunning(true);
+    setError(null);
     try {
-      await fetch('/api/focus/session', {
+      const response = await fetch('/api/focus/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'START', plannedDurationMin: plannedDuration })
       });
-    } catch {}
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Focus session could not start.');
+      setIsRunning(true);
+    } catch (err) {
+      setIsRunning(false);
+      setError(err instanceof Error ? err.message : 'Focus session could not start.');
+    }
   };
 
   const handlePause = () => {
@@ -61,7 +67,7 @@ export default function FocusModePage() {
 
   const handleFinishSession = async () => {
     setIsRunning(false);
-    setIsCompleted(true);
+    setError(null);
     const actualMin = Math.round((plannedDuration * 60 - secondsRemaining) / 60);
 
     try {
@@ -75,11 +81,13 @@ export default function FocusModePage() {
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setXpEarned(data.xpEarned || Math.round(actualMin * 1.5));
-      }
-    } catch {
-      setXpEarned(Math.round(plannedDuration * 1.5));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Focus session could not be completed.');
+      setXpEarned(Number(data.xpEarned || 0));
+      setIsCompleted(true);
+    } catch (err) {
+      setXpEarned(null);
+      setIsCompleted(false);
+      setError(err instanceof Error ? err.message : 'Focus session could not be completed.');
     }
   };
 
@@ -95,7 +103,7 @@ export default function FocusModePage() {
     <div className="min-h-screen bg-black text-slate-100 pb-28">
       <PillNavbar />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-28 flex flex-col items-center justify-center text-center">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-28 flex flex-col items-center justify-center text-center">\n        {error && <div className="w-full max-w-md mb-4 p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-200 text-xs">{error}</div>}
         {/* Preset Selector */}
         {!isRunning && !isCompleted && (
           <div className="flex items-center gap-2 mb-8 bg-slate-900/60 p-1.5 rounded-2xl border border-slate-800">

@@ -1,67 +1,61 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getActiveBusiness, createBusiness, updateBrandProfile, getBrandProfile, getUserBusinesses } from '@/lib/db/business';
+import {
+  getActiveBusiness,
+  createBusiness,
+  updateBrandProfile,
+  getBrandProfile,
+  getUserBusinesses
+} from '@/lib/db/business';
 import { createClient } from '@/lib/supabase/server';
 
 export async function GET() {
-  let userId = 'user_demo_default';
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) userId = user.id;
-  } catch {
-    // Fallback
-  }
+    if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
-  let business = await getActiveBusiness(userId);
-  if (!business) {
-    // Initialize default active business for creator
-    business = await createBusiness(userId, {
-      name: 'InkThread Hub',
-      description: 'D2C Streetwear & Heavyweight Apparel Brand',
-      industry: 'Fashion & Apparel',
-      businessType: 'E_COMMERCE',
-      primaryGoal: '₹1L Monthly Direct Sales'
+    const business = await getActiveBusiness(user.id);
+    const allBusinesses = await getUserBusinesses(user.id);
+    const profile = business ? await getBrandProfile(business.id) : null;
+
+    return NextResponse.json({
+      activeBusiness: business,
+      brandProfile: profile,
+      allBusinesses
     });
-    await updateBrandProfile(userId, business.id, {
-      tagline: 'Wear Your Vibe — Heavyweight 280 GSM Streetwear',
-      positioning: 'Accessible luxury streetwear designed and crafted in India'
-    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
   }
-
-  const profile = await getBrandProfile(business.id);
-  const allBusinesses = await getUserBusinesses(userId);
-
-  return NextResponse.json({
-    activeBusiness: business,
-    brandProfile: profile,
-    allBusinesses
-  });
 }
 
 export async function POST(request: NextRequest) {
-  let userId = 'user_demo_default';
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) userId = user.id;
-  } catch {
-    // Fallback
-  }
+    if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
-  try {
     const body = await request.json();
-    if (!body.name) {
+    if (!body.name?.trim()) {
       return NextResponse.json({ error: 'Business name is required.' }, { status: 400 });
     }
 
-    const business = await createBusiness(userId, body);
-    if (body.brandProfile) {
-      await updateBrandProfile(userId, business.id, body.brandProfile);
-    }
+    const business = await createBusiness(user.id, {
+      ...body,
+      name: body.name.trim()
+    });
 
-    return NextResponse.json({ success: true, business });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const brandProfile = body.brandProfile
+      ? await updateBrandProfile(user.id, business.id, body.brandProfile)
+      : null;
+
+    return NextResponse.json({ success: true, business, brandProfile });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
   }
 }

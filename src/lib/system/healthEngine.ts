@@ -49,15 +49,16 @@ export async function getSystemHealthSnapshot(userId?: string) {
     key: 'ai',
     name: 'AI Runtime',
     level:
-      aiCapability?.status === 'CONFIG_REQUIRED' && !process.env.AI_LOCAL_BASE_URL
-        ? 'DEGRADED'
-        : 'HEALTHY',
+      aiCapability?.status === 'CONNECTED'
+        ? 'HEALTHY'
+        : aiCapability?.status === 'DEGRADED'
+          ? 'DEGRADED'
+          : 'CRITICAL',
     message:
-      aiCapability?.status === 'CONFIG_REQUIRED' && !process.env.AI_LOCAL_BASE_URL
-        ? 'Cloud/local AI is not configured; deterministic fallback remains available.'
-        : process.env.AI_LOCAL_BASE_URL
-          ? 'AI routing has local/private inference available.'
-          : 'AI runtime provider configuration is available.'
+      aiCapability?.description ||
+      (aiCapability?.status === 'CONNECTED'
+        ? 'A real AI provider is configured.'
+        : 'A real AI provider is not connected.')
   });
 
   if (!userId) {

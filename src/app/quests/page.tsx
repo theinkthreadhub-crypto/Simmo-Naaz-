@@ -1,44 +1,32 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sword, Plus, Filter, Sparkles, CheckCircle2, Shield, Zap, X, Trophy, MessageSquare } from 'lucide-react';
+import { Plus, Sword, X, AlertCircle } from 'lucide-react';
 import QuestCard from '@/components/quests/QuestCard';
 import { useMentraStore } from '@/lib/store/mentraStore';
-import { Quest, QuestCategory, QuestDifficulty, QuestType, QUEST_REWARD_RULES } from '@/types/mentra';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { QuestCategory, QuestDifficulty, QuestType } from '@/types/mentra';
 
 export default function QuestsPage() {
-  const { quests } = useMentraStore();
-  const [filter, setFilter] = useState<'ALL' | 'DAILY' | 'MAIN' | 'BOSS' | 'COMPLETED'>('ALL');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Form State
+  const { user } = useAuth();
+  const { quests, syncUserDatabase } = useMentraStore();
+  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<QuestCategory>('BUSINESS');
   const [type, setType] = useState<QuestType>('DAILY');
   const [difficulty, setDifficulty] = useState<QuestDifficulty>('MEDIUM');
-  const [requiredAction, setRequiredAction] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Reflection modal state
-  const [reflectionModalQuest, setReflectionModalQuest] = useState<{ id: string; title: string } | null>(null);
-  const [whatWentWell, setWhatWentWell] = useState('');
-  const [whatDidYouLearn, setWhatDidYouLearn] = useState('');
-  const [isSavingReflection, setIsSavingReflection] = useState(false);
-
-  const filteredQuests = quests.filter(q => {
-    if (filter === 'ALL') return true;
-    if (filter === 'COMPLETED') return q.status === 'COMPLETED';
-    return q.type === filter && q.status !== 'COMPLETED';
-  });
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-
-    setIsSubmitting(true);
+  const createQuest = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user?.id || !title.trim()) return;
+    setSaving(true);
+    setError(null);
     try {
-      const res = await fetch('/api/quests/create', {
+      const response = await fetch('/api/quests/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -47,315 +35,51 @@ export default function QuestsPage() {
           category,
           type,
           difficulty,
-          requiredAction: requiredAction.trim() || 'Execute protocol'
+          due_date: dueDate || null
         })
       });
-
-      const data = await res.json();
-      if (data.success && data.quest) {
-        useMentraStore.setState(prev => ({
-          quests: [data.quest, ...prev.quests]
-        }));
-      } else {
-        // Fallback
-        const rewards = QUEST_REWARD_RULES[difficulty];
-        const newQuest: Quest = {
-          id: `q_${Date.now()}`,
-          title,
-          description,
-          category,
-          type,
-          difficulty,
-          rewardXp: rewards.xp,
-          rewardCoins: rewards.coins,
-          status: 'ACTIVE',
-          progressPercent: 0,
-          requiredAction: requiredAction || 'Execute protocol'
-        };
-        useMentraStore.setState(prev => ({
-          quests: [newQuest, ...prev.quests]
-        }));
-      }
-
-      setTitle('');
-      setDescription('');
-      setRequiredAction('');
-      setIsModalOpen(false);
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Quest was not created.');
+      await syncUserDatabase(user.id);
+      setTitle(''); setDescription(''); setDueDate(''); setOpen(false);
     } catch (err) {
-      console.error('Failed to create quest:', err);
+      setError(err instanceof Error ? err.message : 'Quest was not created.');
     } finally {
-      setIsSubmitting(false);
+      setSaving(false);
     }
   };
 
-  const handleSaveReflection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!whatWentWell.trim() || !whatDidYouLearn.trim() || !reflectionModalQuest) return;
-
-    setIsSavingReflection(true);
-    try {
-      await fetch('/api/reflections/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceType: 'QUEST',
-          sourceId: reflectionModalQuest.id,
-          whatWentWell,
-          whatDidYouLearn,
-          convertToMemory: true
-        })
-      });
-
-      setReflectionModalQuest(null);
-      setWhatWentWell('');
-      setWhatDidYouLearn('');
-    } catch (err) {
-      console.error('Failed to save reflection:', err);
-    } finally {
-      setIsSavingReflection(false);
-    }
-  };
-
-  const activeCount = quests.filter(q => q.status === 'ACTIVE').length;
-  const completedCount = quests.filter(q => q.status === 'COMPLETED').length;
+  const active = quests.filter(q => q.status === 'ACTIVE');
+  const completed = quests.filter(q => q.status === 'COMPLETED');
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-300">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase tracking-widest">
-            <Sword className="w-4 h-4 text-mentra-orange" />
-            <span>LIFE RPG CAMPAIGN MATRIX</span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white mt-1">
-            Missions & Quest Engine
-          </h1>
-        </div>
-
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white text-xs font-semibold tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-95 transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>INITIALIZE MISSION</span>
-        </button>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+        <div><div className="text-xs font-mono text-mentra-amber tracking-widest">DATABASE MISSIONS</div><h1 className="text-2xl sm:text-4xl font-bold text-white mt-1">Quests</h1></div>
+        <button onClick={() => setOpen(true)} className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-mentra-orange text-white text-xs font-semibold"><Plus className="w-4 h-4" />CREATE QUEST</button>
       </div>
 
-      {/* Stats Ribbon & Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Filter Tabs */}
-        <div className="flex items-center gap-1.5 p-1 glass-pill bg-black/60 border-white/10 overflow-x-auto scrollbar-none">
-          {(['ALL', 'DAILY', 'MAIN', 'BOSS', 'COMPLETED'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setFilter(tab)}
-              className={`px-4 py-1.5 rounded-full text-xs font-mono font-medium transition-all flex-shrink-0 ${
-                filter === tab
-                  ? 'bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_12px_rgba(91,108,255,0.4)]'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+      {error && <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-200 text-sm flex gap-2"><AlertCircle className="w-4 h-4" />{error}</div>}
+
+      <section className="space-y-3"><h2 className="text-xs font-mono uppercase tracking-widest text-white/45">Active ({active.length})</h2>{active.length === 0 ? <Empty text="No active quests stored." /> : active.map(q => <QuestCard key={q.id} quest={q} onComplete={() => user?.id ? syncUserDatabase(user.id) : undefined} />)}</section>
+      {completed.length > 0 && <section className="space-y-3"><h2 className="text-xs font-mono uppercase tracking-widest text-white/45">Completed ({completed.length})</h2>{completed.slice(0,10).map(q => <QuestCard key={q.id} quest={q} />)}</section>}
+
+      {open && <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"><form onSubmit={createQuest} className="w-full max-w-lg rounded-3xl bg-neutral-950 border border-white/15 p-6 space-y-4">
+        <div className="flex items-center justify-between"><h2 className="text-lg font-bold text-white">Create real quest</h2><button type="button" onClick={() => setOpen(false)}><X className="w-5 h-5 text-white/50" /></button></div>
+        <input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Quest title" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+        <textarea value={description} onChange={e=>setDescription(e.target.value)} rows={3} placeholder="Description" className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white" />
+        <div className="grid grid-cols-3 gap-2">
+          <select value={category} onChange={e=>setCategory(e.target.value as QuestCategory)} className="bg-neutral-900 border border-white/10 rounded-xl p-2 text-white text-xs">{['BUSINESS','FINANCE','FITNESS','LEARNING','PERSONAL_GROWTH','DISCIPLINE','COMMUNICATION'].map(x=><option key={x}>{x}</option>)}</select>
+          <select value={type} onChange={e=>setType(e.target.value as QuestType)} className="bg-neutral-900 border border-white/10 rounded-xl p-2 text-white text-xs">{['DAILY','MAIN','SIDE','WEEKLY','BOSS','RECOVERY','LEARNING','PRACTICE'].map(x=><option key={x}>{x}</option>)}</select>
+          <select value={difficulty} onChange={e=>setDifficulty(e.target.value as QuestDifficulty)} className="bg-neutral-900 border border-white/10 rounded-xl p-2 text-white text-xs">{['EASY','MEDIUM','HARD','EPIC','ELITE','BOSS'].map(x=><option key={x}>{x}</option>)}</select>
         </div>
-
-        {/* Quick Stats */}
-        <div className="flex items-center gap-4 text-xs font-mono text-white/60">
-          <div>ACTIVE: <strong className="text-mentra-orange">{activeCount}</strong></div>
-          <div>COMPLETED: <strong className="text-emerald-400">{completedCount}</strong></div>
-        </div>
-      </div>
-
-      {/* Quests Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        {filteredQuests.map(quest => (
-          <QuestCard 
-            key={quest.id} 
-            quest={quest} 
-            onPostReflection={(id, t) => setReflectionModalQuest({ id, title: t })}
-          />
-        ))}
-      </div>
-
-      {/* CREATE QUEST MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-white/15 shadow-[0_0_50px_rgba(91,108,255,0.3)] space-y-6 max-h-[90vh] overflow-y-auto">
-            
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase">
-                <Sword className="w-4 h-4 text-mentra-orange" />
-                <span>INITIALIZE MISSION PROTOCOL</span>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-full text-white/50 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-mono text-white/50 mb-1">
-                  MISSION TITLE
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Deploy ad creative scale test, Deliver 5-min speech"
-                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-mono text-white/50 mb-1">
-                  TACTICAL DESCRIPTION
-                </label>
-                <textarea
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Specific actions required to consider this mission fulfilled..."
-                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs sm:text-sm text-white placeholder-white/30 focus:outline-none resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">CATEGORY</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as QuestCategory)}
-                    className="w-full bg-neutral-900 border border-white/15 focus:border-mentra-orange rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                  >
-                    <option value="BUSINESS">Business</option>
-                    <option value="FINANCE">Finance</option>
-                    <option value="LEARNING">Learning</option>
-                    <option value="COMMUNICATION">Communication</option>
-                    <option value="FITNESS">Fitness</option>
-                    <option value="PERSONAL_GROWTH">Personal Growth</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">TYPE</label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value as QuestType)}
-                    className="w-full bg-neutral-900 border border-white/15 focus:border-mentra-orange rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                  >
-                    <option value="DAILY">Daily Quest</option>
-                    <option value="MAIN">Main Campaign</option>
-                    <option value="SIDE">Side Quest</option>
-                    <option value="BOSS">Boss Mission</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">DIFFICULTY</label>
-                  <select
-                    value={difficulty}
-                    onChange={(e) => setDifficulty(e.target.value as QuestDifficulty)}
-                    className="w-full bg-neutral-900 border border-white/15 focus:border-mentra-orange rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                  >
-                    <option value="EASY">Easy (+40 XP)</option>
-                    <option value="MEDIUM">Medium (+80 XP)</option>
-                    <option value="HARD">Hard (+150 XP)</option>
-                    <option value="EPIC">Epic (+300 XP)</option>
-                    <option value="BOSS">Boss (+500 XP)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">ACTION PROMPT</label>
-                  <input
-                    type="text"
-                    value={requiredAction}
-                    onChange={(e) => setRequiredAction(e.target.value)}
-                    placeholder="e.g. Verify ROAS threshold"
-                    className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting || !title.trim()}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-98 transition-all disabled:opacity-40"
-              >
-                {isSubmitting ? 'PERSISTING MISSION...' : 'AUTHORIZE & LAUNCH MISSION'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* POST-MISSION REFLECTION MODAL */}
-      {reflectionModalQuest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="relative w-full max-w-lg p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-mentra-orange/30 shadow-[0_0_50px_rgba(91,108,255,0.3)] space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase font-bold">
-                <MessageSquare className="w-4 h-4 text-mentra-orange" />
-                <span>POST-ACTION REFLECTION (+35 BONUS XP)</span>
-              </div>
-              <button 
-                onClick={() => setReflectionModalQuest(null)}
-                className="p-1 rounded-full text-white/50 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="text-sm font-semibold text-white">
-              Mission: &quot;{reflectionModalQuest.title}&quot;
-            </div>
-
-            <form onSubmit={handleSaveReflection} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-mono text-white/50 mb-1">WHAT WENT WELL?</label>
-                <textarea
-                  rows={2}
-                  required
-                  value={whatWentWell}
-                  onChange={(e) => setWhatWentWell(e.target.value)}
-                  placeholder="e.g. Executed without hesitation, kept steady vocal tone..."
-                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs text-white focus:outline-none resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-mono text-white/50 mb-1">WHAT DID YOU LEARN FOR THE SECOND BRAIN?</label>
-                <textarea
-                  rows={2}
-                  required
-                  value={whatDidYouLearn}
-                  onChange={(e) => setWhatDidYouLearn(e.target.value)}
-                  placeholder="e.g. Structuring with PREP beforehand saves time and eliminates nervousness."
-                  className="w-full bg-white/5 border border-white/15 focus:border-mentra-orange rounded-xl p-3 text-xs text-white focus:outline-none resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSavingReflection}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-mono text-xs font-bold hover:opacity-90 transition-all"
-              >
-                {isSavingReflection ? 'SAVING TO MEMORY VAULT...' : 'SAVE REFLECTION & CLAIM +35 XP'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
+        <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} className="w-full bg-neutral-900 border border-white/10 rounded-xl px-4 py-3 text-white" />
+        <button disabled={saving} className="w-full py-3 rounded-xl bg-mentra-orange text-white font-semibold disabled:opacity-50">{saving ? 'Saving…' : 'Create quest'}</button>
+      </form></div>}
     </div>
   );
+}
+
+function Empty({ text }: { text: string }) {
+  return <div className="p-10 rounded-3xl border border-white/10 bg-black/40 text-center"><Sword className="w-9 h-9 mx-auto text-white/20" /><p className="mt-3 text-sm text-white/45">{text}</p></div>;
 }

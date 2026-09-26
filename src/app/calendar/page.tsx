@@ -1,123 +1,36 @@
 'use client';
 
-import React from 'react';
-import { Calendar, Clock, ShieldCheck, Sparkles, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Calendar, Clock, RefreshCw, AlertCircle, ExternalLink } from 'lucide-react';
 
-export default function CalendarPage() {
-  const focusBlocks = [
-    {
-      time: '09:00 - 10:30',
-      title: 'Ultradian Deep Work: AI Pipeline & Agent Architecture',
-      status: 'COMPLETED',
-      type: 'DEEP_FOCUS',
-      duration: '90 mins'
-    },
-    {
-      time: '11:00 - 12:00',
-      title: 'Business Unit Economics & Supplier Reconciliations',
-      status: 'COMPLETED',
-      type: 'OPERATIONS',
-      duration: '60 mins'
-    },
-    {
-      time: '14:30 - 16:00',
-      title: 'Protected Deep Work: High-Ticket Acquisition Funnel',
-      status: 'ACTIVE',
-      type: 'DEEP_FOCUS',
-      duration: '90 mins'
-    },
-    {
-      time: '17:00 - 17:45',
-      title: 'High-Intensity Calisthenics & Neural Reset Protocol',
-      status: 'UPCOMING',
-      type: 'RECOVERY',
-      duration: '45 mins'
-    },
-    {
-      time: '21:00 - 21:30',
-      title: 'Daily Journaling & Tomorrow Strategy Ingestion',
-      status: 'UPCOMING',
-      type: 'REFLECTION',
-      duration: '30 mins'
-    }
-  ];
+interface CalendarEvent {
+  id:string; summary:string; description?:string; start:string; end:string; location?:string; meetLink?:string; attendeesCount?:number;
+}
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-300">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-mentra-amber font-mono text-xs uppercase tracking-widest">
-            <Calendar className="w-4 h-4 text-mentra-orange" />
-            <span>TIME HORIZON & ATTENTION DEFENSE</span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-display font-extrabold text-white mt-1">
-            Protected Focus Schedule
-          </h1>
-        </div>
+export default function CalendarPage(){
+  const [events,setEvents]=useState<CalendarEvent[]>([]);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState<string|null>(null);
+  const [connectionRequired,setConnectionRequired]=useState(false);
 
-        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>90-MIN ULTRADIAN PROTOCOL ARMED</span>
-        </div>
-      </div>
+  const load=async()=>{
+    setLoading(true);setError(null);setConnectionRequired(false);
+    try{
+      const response=await fetch('/api/calendar/events',{cache:'no-store'});
+      const data=await response.json();
+      if(!response.ok){
+        if(response.status===409){setConnectionRequired(true);setEvents([]);return;}
+        throw new Error(data.error||'Calendar could not be loaded.');
+      }
+      setEvents(data.events||[]);
+    }catch(err){setError(err instanceof Error?err.message:'Calendar could not be loaded.');}
+    finally{setLoading(false);}
+  };
+  useEffect(()=>{load();},[]);
 
-      {/* Focus Blocks List */}
-      <div className="space-y-4">
-        {focusBlocks.map((block, idx) => (
-          <div
-            key={idx}
-            className={`p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-              block.status === 'ACTIVE'
-                ? 'glass-panel-orange bg-black/80 border-mentra-orange/40 shadow-[0_0_20px_rgba(91,108,255,0.15)]'
-                : block.status === 'COMPLETED'
-                ? 'bg-black/40 border-white/5 opacity-70'
-                : 'glass-panel bg-black/60 border-white/10'
-            }`}
-          >
-            <div className="flex items-start sm:items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 font-mono text-xs text-mentra-amber">
-                <Clock className="w-4 h-4 text-mentra-orange" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold text-white">{block.time}</span>
-                  <span className="text-[10px] font-mono text-white/40 uppercase">({block.duration})</span>
-                  <span className={`text-[9px] font-mono uppercase px-2 py-0.5 rounded-full border ${
-                    block.type === 'DEEP_FOCUS' ? 'bg-mentra-orange/15 text-mentra-amber border-mentra-orange/30' : 'bg-white/5 text-white/50 border-white/10'
-                  }`}>
-                    {block.type}
-                  </span>
-                </div>
-                <h3 className="text-sm sm:text-base font-semibold text-white mt-1">
-                  {block.title}
-                </h3>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3">
-              {block.status === 'ACTIVE' && (
-                <span className="px-3 py-1 rounded-full bg-mentra-orange text-white text-xs font-mono font-semibold animate-pulse shadow-[0_0_10px_#5b6cff]">
-                  IN FOCUS NOW
-                </span>
-              )}
-              {block.status === 'COMPLETED' && (
-                <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-mono">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>EXECUTED</span>
-                </div>
-              )}
-              {block.status === 'UPCOMING' && (
-                <span className="text-xs font-mono text-white/40">
-                  SCHEDULED
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-    </div>
-  );
+  return <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-7">
+    <div className="flex items-center justify-between border-b border-white/10 pb-4"><div><div className="text-xs font-mono text-mentra-amber tracking-widest">GOOGLE CALENDAR — LIVE DATA</div><h1 className="text-2xl sm:text-4xl font-bold text-white mt-1">Calendar</h1></div><button onClick={load} disabled={loading} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70"><RefreshCw className={`w-4 h-4 ${loading?'animate-spin':''}`}/></button></div>
+    {connectionRequired?<div className="p-8 rounded-3xl border border-amber-500/30 bg-amber-500/10 text-center"><AlertCircle className="w-9 h-9 mx-auto text-amber-300"/><h2 className="mt-3 font-semibold text-white">Google Calendar is not connected</h2><p className="mt-1 text-sm text-white/55">Connect Google Workspace before MENTRA can read your real calendar.</p><Link href="/connections" className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-mentra-orange text-white text-xs font-semibold">OPEN CONNECTIONS <ExternalLink className="w-3.5 h-3.5"/></Link></div>:error?<div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-200">{error}</div>:loading?<div className="p-10 text-center text-white/40">Loading real calendar events…</div>:events.length===0?<div className="p-12 text-center rounded-3xl border border-white/10 bg-black/40"><Calendar className="w-10 h-10 mx-auto text-white/20"/><p className="mt-3 text-sm text-white/45">No calendar events found in the current day window.</p></div>:<div className="space-y-3">{events.map(event=><div key={event.id} className="p-5 rounded-2xl border border-white/10 bg-black/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div className="flex gap-3"><Clock className="w-4 h-4 mt-1 text-mentra-amber"/><div><div className="text-sm font-semibold text-white">{event.summary}</div><div className="mt-1 text-xs text-white/45">{new Date(event.start).toLocaleString()} → {new Date(event.end).toLocaleTimeString()}</div>{event.location&&<div className="mt-1 text-xs text-white/35">{event.location}</div>}</div></div>{event.meetLink&&<a href={event.meetLink} target="_blank" rel="noreferrer" className="text-xs text-cyan-300">Join meeting</a>}</div>)}</div>}
+  </div>;
 }

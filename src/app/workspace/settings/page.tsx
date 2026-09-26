@@ -1,541 +1,99 @@
 'use client';
 
-import React, { useState } from 'react';
-import Link from 'next/link';
-import { 
-  Users, 
-  ShieldCheck, 
-  UserPlus, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  Brain, 
-  Lock, 
-  Building2, 
-  Plus, 
-  Activity, 
-  Settings,
-  ChevronRight,
-  Send
-} from 'lucide-react';
-import { WorkspaceRole } from '@/lib/workspace/rbac';
+import React,{useEffect,useState} from 'react';
+import { Building2,Users,CheckSquare,Activity,UserPlus,Plus,RefreshCw,AlertCircle } from 'lucide-react';
+import { WorkspaceRole,WorkspaceType } from '@/lib/workspace/rbac';
 
-interface MemberItem {
-  id: string;
-  name: string;
-  email: string;
-  role: WorkspaceRole;
-  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
-  joined: string;
-  avatar: string;
-}
+export default function WorkspaceSettingsPage(){
+  const [workspaces,setWorkspaces]=useState<any[]>([]);
+  const [activeId,setActiveId]=useState<string|null>(null);
+  const [members,setMembers]=useState<any[]>([]);
+  const [tasks,setTasks]=useState<any[]>([]);
+  const [activity,setActivity]=useState<any[]>([]);
+  const [tab,setTab]=useState<'members'|'tasks'|'activity'>('members');
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState<string|null>(null);
+  const [workspaceName,setWorkspaceName]=useState('');
+  const [workspaceType,setWorkspaceType]=useState<WorkspaceType>('BUSINESS');
+  const [inviteEmail,setInviteEmail]=useState('');
+  const [inviteRole,setInviteRole]=useState<WorkspaceRole>('EDITOR');
+  const [taskTitle,setTaskTitle]=useState('');
 
-interface TaskItem {
-  id: string;
-  title: string;
-  assignedTo: string;
-  role: string;
-  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'LAUNCH_CRITICAL';
-  status: 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'REVIEW' | 'COMPLETE';
-  dueDate: string;
-}
+  const loadWorkspaces=async()=>{
+    setLoading(true);setError(null);
+    try{
+      const response=await fetch('/api/workspaces',{cache:'no-store'});const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'Workspaces could not be loaded.');
+      const list=data.workspaces||[];setWorkspaces(list);
+      const next=activeId&&list.some((w:any)=>w.id===activeId)?activeId:list[0]?.id||null;
+      setActiveId(next);
+    }catch(err){setError(err instanceof Error?err.message:'Workspaces could not be loaded.');}
+    finally{setLoading(false);}
+  };
+  useEffect(()=>{loadWorkspaces();},[]);
 
-export default function WorkspaceSettingsPage() {
-  const [activeTab, setActiveTab] = useState<'members' | 'tasks' | 'policies' | 'memories' | 'audit'>('members');
-  const [activeWorkspace, setActiveWorkspace] = useState<'business' | 'personal'>('business');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<WorkspaceRole>('EDITOR');
-  const [inviteSuccess, setInviteSuccess] = useState(false);
+  const loadDetails=async(id:string)=>{
+    setError(null);
+    try{
+      const [m,t,a]=await Promise.all([
+        fetch(`/api/workspaces/${id}/members`,{cache:'no-store'}),
+        fetch(`/api/workspaces/${id}/tasks`,{cache:'no-store'}),
+        fetch(`/api/workspaces/${id}/activity`,{cache:'no-store'})
+      ]);
+      const [md,td,ad]=await Promise.all([m.json(),t.json(),a.json()]);
+      if(!m.ok)throw new Error(md.error||'Members could not be loaded.');
+      if(!t.ok)throw new Error(td.error||'Tasks could not be loaded.');
+      if(!a.ok)throw new Error(ad.error||'Activity could not be loaded.');
+      setMembers(md.members||[]);setTasks(td.tasks||[]);setActivity(ad.activity||[]);
+    }catch(err){setError(err instanceof Error?err.message:'Workspace details could not be loaded.');}
+  };
+  useEffect(()=>{if(activeId)loadDetails(activeId);else{setMembers([]);setTasks([]);setActivity([]);}},[activeId]);
 
-  const [members, setMembers] = useState<MemberItem[]>([
-    {
-      id: 'usr_1',
-      name: 'Naaz (You)',
-      email: 'operator@inkthreadhub.com',
-      role: 'OWNER',
-      status: 'ACTIVE',
-      joined: 'Sep 2026',
-      avatar: '👑',
-    },
-    {
-      id: 'usr_2',
-      name: 'Aarav Sharma',
-      email: 'aarav@inkthreadhub.com',
-      role: 'MANAGER',
-      status: 'ACTIVE',
-      joined: 'Sep 2026',
-      avatar: '👔',
-    },
-    {
-      id: 'usr_3',
-      name: 'Riya Patel',
-      email: 'riya.creator@inkthreadhub.com',
-      role: 'EDITOR',
-      status: 'ACTIVE',
-      joined: 'Sep 2026',
-      avatar: '🎨',
-    },
-    {
-      id: 'usr_4',
-      name: 'Devika Ray',
-      email: 'devika.audit@investors.com',
-      role: 'VIEWER',
-      status: 'ACTIVE',
-      joined: 'Sep 2026',
-      avatar: '👁️',
-    },
-  ]);
-
-  const tasks: TaskItem[] = [
-    {
-      id: 't1',
-      title: 'Shoot 3 Drop-Shoulder Oversized Tee Reels',
-      assignedTo: 'Riya Patel',
-      role: 'Editor / Creator',
-      priority: 'HIGH',
-      status: 'IN_PROGRESS',
-      dueDate: 'Friday, Oct 2',
-    },
-    {
-      id: 't2',
-      title: 'Review ₹5000 Meta Ad Creative Variations',
-      assignedTo: 'Aarav Sharma',
-      role: 'Manager',
-      priority: 'LAUNCH_CRITICAL',
-      status: 'REVIEW',
-      dueDate: 'Thursday, Oct 1',
-    },
-    {
-      id: 't3',
-      title: 'Catalog Price Audit & Margin Verification (₹599 Target)',
-      assignedTo: 'Naaz',
-      role: 'Owner',
-      priority: 'NORMAL',
-      status: 'COMPLETE',
-      dueDate: 'Wednesday, Sep 30',
-    },
-  ];
-
-  const handleSendInvite = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail) return;
-
-    const newMember: MemberItem = {
-      id: `usr_${Date.now()}`,
-      name: inviteEmail.split('@')[0],
-      email: inviteEmail,
-      role: inviteRole,
-      status: 'INVITED',
-      joined: 'Pending acceptance',
-      avatar: '✉️',
-    };
-
-    setMembers(prev => [...prev, newMember]);
-    setInviteEmail('');
-    setInviteSuccess(true);
-    setTimeout(() => setInviteSuccess(false), 4000);
+  const createWorkspace=async(e:React.FormEvent)=>{
+    e.preventDefault();if(!workspaceName.trim())return;
+    const response=await fetch('/api/workspaces',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:workspaceName.trim(),type:workspaceType})});
+    const data=await response.json();
+    if(!response.ok){setError(data.error||'Workspace was not created.');return;}
+    setWorkspaceName('');await loadWorkspaces();setActiveId(data.workspace.id);
   };
 
-  const handleRoleChange = (userId: string, newRole: WorkspaceRole) => {
-    setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m));
+  const invite=async(e:React.FormEvent)=>{
+    e.preventDefault();if(!activeId||!inviteEmail.trim())return;
+    const response=await fetch(`/api/workspaces/${activeId}/invitations`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:inviteEmail.trim(),role:inviteRole})});
+    const data=await response.json();
+    if(!response.ok){setError(data.error||'Invitation was not created.');return;}
+    setInviteEmail('');setError(null);await loadDetails(activeId);
   };
 
-  const handleRemoveMember = (userId: string) => {
-    setMembers(prev => prev.filter(m => m.id !== userId));
+  const createTask=async(e:React.FormEvent)=>{
+    e.preventDefault();if(!activeId||!taskTitle.trim())return;
+    const response=await fetch(`/api/workspaces/${activeId}/tasks`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:taskTitle.trim(),priority:'NORMAL'})});
+    const data=await response.json();
+    if(!response.ok){setError(data.error||'Task was not created.');return;}
+    setTaskTitle('');await loadDetails(activeId);
   };
 
-  return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 pb-24 pt-20 px-4 md:px-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* Top Header & Workspace Switcher Context */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 backdrop-blur-xl">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-wider uppercase font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                Phase 13 Active
-              </span>
-              <span className="flex items-center gap-1 text-xs text-zinc-400">
-                <Lock className="h-3 w-3 text-emerald-400" />
-                Zero-Leak Privacy Isolation
-              </span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold font-display tracking-tight text-white flex items-center gap-2">
-              <Building2 className="h-7 w-7 text-cyan-500" />
-              Team & Collaboration Workspace
-            </h1>
-            <p className="text-sm text-zinc-400 mt-1">
-              Multi-tenant permission engine, task delegation, and shared business operations.
-            </p>
-          </div>
+  const updateTask=async(taskId:string,status:string)=>{
+    if(!activeId)return;
+    const response=await fetch(`/api/workspaces/${activeId}/tasks`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId,status})});
+    const data=await response.json();
+    if(!response.ok){setError(data.error||'Task was not updated.');return;}
+    await loadDetails(activeId);
+  };
 
-          {/* Workspace Switcher */}
-          <div className="flex items-center gap-2 p-1.5 bg-black/60 rounded-2xl border border-zinc-800">
-            <button
-              onClick={() => setActiveWorkspace('business')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeWorkspace === 'business'
-                  ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-black shadow-lg shadow-cyan-500/20'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Building2 className="h-4 w-4" />
-              InkThread Hub (Business)
-            </button>
-            <button
-              onClick={() => setActiveWorkspace('personal')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeWorkspace === 'personal'
-                  ? 'bg-gradient-to-r from-zinc-700 to-zinc-800 text-white shadow-lg'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Lock className="h-4 w-4 text-emerald-400" />
-              Personal (Private)
-            </button>
-          </div>
-        </div>
+  const active=workspaces.find(w=>w.id===activeId);
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-zinc-800/80">
-          {[
-            { id: 'members', label: 'Team Members & RBAC', icon: Users },
-            { id: 'tasks', label: 'Delegated Tasks', icon: Clock },
-            { id: 'policies', label: 'Approval Chains', icon: ShieldCheck },
-            { id: 'memories', label: 'Business Memory Vault', icon: Brain },
-            { id: 'audit', label: 'Audit Trail', icon: Activity },
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                  isActive
-                    ? 'bg-zinc-800 text-cyan-400 border border-zinc-700 shadow-md'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* TAB 1: MEMBERS & RBAC */}
-        {activeTab === 'members' && (
-          <div className="space-y-6">
-            {/* Invite New Member */}
-            <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-cyan-400" />
-                Invite Team Member
-              </h2>
-              <p className="text-xs text-zinc-400">
-                Send a secure single-use invitation token. Personal journal, private memory, and individual finances remain strictly invisible.
-              </p>
-
-              <form onSubmit={handleSendInvite} className="flex flex-col md:flex-row gap-3 pt-2">
-                <input
-                  type="email"
-                  placeholder="colleague@inkthreadhub.com"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-black/60 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
-                  required
-                />
-                <select
-                  value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value as WorkspaceRole)}
-                  className="px-4 py-2.5 rounded-xl bg-black/60 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-cyan-500"
-                >
-                  <option value="ADMIN">Admin (Workspace & Agent Config)</option>
-                  <option value="MANAGER">Manager (Projects, Campaigns, Approvals)</option>
-                  <option value="EDITOR">Editor (Content, Creative Briefs, Tasks)</option>
-                  <option value="MEMBER">Member (Task Completion, Comments)</option>
-                  <option value="VIEWER">Viewer (Read-Only Access)</option>
-                </select>
-                <button
-                  type="submit"
-                  className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold text-xs transition-all shadow-md shadow-cyan-500/20"
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  Send Invitation
-                </button>
-              </form>
-
-              {inviteSuccess && (
-                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  Invitation token created and dispatched securely.
-                </div>
-              )}
-            </div>
-
-            {/* Members List Table */}
-            <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-4">
-              <h2 className="text-base font-bold text-white flex items-center justify-between">
-                <span>Active Workspace Members ({members.length})</span>
-                <span className="text-xs font-normal text-zinc-400">Scoped to InkThread Hub</span>
-              </h2>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-zinc-800/80 text-zinc-500 font-mono uppercase tracking-wider">
-                      <th className="pb-3 font-medium">Member</th>
-                      <th className="pb-3 font-medium">Assigned Role</th>
-                      <th className="pb-3 font-medium">Status</th>
-                      <th className="pb-3 font-medium">Joined</th>
-                      <th className="pb-3 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/40">
-                    {members.map(member => (
-                      <tr key={member.id} className="hover:bg-zinc-800/20 transition-colors">
-                        <td className="py-3.5 flex items-center gap-3">
-                          <span className="text-lg p-2 rounded-xl bg-black/40 border border-zinc-800">{member.avatar}</span>
-                          <div>
-                            <p className="font-semibold text-zinc-200">{member.name}</p>
-                            <p className="text-[11px] text-zinc-500 font-mono">{member.email}</p>
-                          </div>
-                        </td>
-                        <td className="py-3.5">
-                          {member.role === 'OWNER' ? (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                              👑 OWNER
-                            </span>
-                          ) : (
-                            <select
-                              value={member.role}
-                              onChange={e => handleRoleChange(member.id, e.target.value as WorkspaceRole)}
-                              className="px-2.5 py-1 rounded-lg bg-black/60 border border-zinc-800 text-[11px] text-zinc-300 focus:outline-none focus:border-cyan-500"
-                            >
-                              <option value="ADMIN">ADMIN</option>
-                              <option value="MANAGER">MANAGER</option>
-                              <option value="EDITOR">EDITOR</option>
-                              <option value="MEMBER">MEMBER</option>
-                              <option value="VIEWER">VIEWER</option>
-                            </select>
-                          )}
-                        </td>
-                        <td className="py-3.5">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-                            member.status === 'ACTIVE'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                          }`}>
-                            {member.status}
-                          </span>
-                        </td>
-                        <td className="py-3.5 text-zinc-400 font-mono">{member.joined}</td>
-                        <td className="py-3.5 text-right">
-                          {member.role !== 'OWNER' && (
-                            <button
-                              onClick={() => handleRemoveMember(member.id)}
-                              className="px-2.5 py-1 rounded-lg text-[11px] text-rose-400 hover:bg-rose-950/40 border border-rose-900/40 transition-colors"
-                            >
-                              Revoke Access
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: TASKS & DELEGATION */}
-        {activeTab === 'tasks' && (
-          <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-cyan-400" />
-                  Team Workload & Task Delegation
-                </h2>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Assign business campaigns and creative production tasks with transparent SLAs.
-                </p>
-              </div>
-              <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 text-black font-semibold text-xs hover:bg-cyan-400 transition-all">
-                <Plus className="h-3.5 w-3.5" />
-                Assign Task
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {tasks.map(task => (
-                <div key={task.id} className="p-5 rounded-2xl bg-black/40 border border-zinc-800/80 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                      task.priority === 'LAUNCH_CRITICAL'
-                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                        : task.priority === 'HIGH'
-                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                        : 'bg-zinc-800 text-zinc-400'
-                    }`}>
-                      {task.priority}
-                    </span>
-                    <span className="text-[11px] font-mono text-zinc-500">{task.dueDate}</span>
-                  </div>
-
-                  <h3 className="font-semibold text-sm text-zinc-200">{task.title}</h3>
-
-                  <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-xs">
-                    <div>
-                      <p className="text-zinc-500 text-[10px] uppercase font-mono">Assigned To</p>
-                      <p className="text-zinc-300 font-medium">{task.assignedTo}</p>
-                    </div>
-                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-semibold ${
-                      task.status === 'COMPLETE'
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        : task.status === 'REVIEW'
-                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                        : 'bg-zinc-800 text-zinc-300'
-                    }`}>
-                      {task.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: APPROVAL CHAINS */}
-        {activeTab === 'policies' && (
-          <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-6">
-            <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-cyan-400" />
-                Action Approval Policies & Governance Matrix
-              </h2>
-              <p className="text-xs text-zinc-400 mt-1">
-                Enforce version-safe approvals. Post edits immediately invalidate previous approvals to prevent unapproved external changes.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              {[
-                { action: 'Instagram / Social Post Publishing', minRole: 'MANAGER', review: 'Required before API dispatch', status: 'Active' },
-                { action: 'Paid Ad Budget Modification (> ₹1000)', minRole: 'OWNER', review: 'Strict Owner Signoff', status: 'Active' },
-                { action: 'E-commerce Catalog & Price Updates', minRole: 'MANAGER', review: 'Requires preview verification', status: 'Active' },
-                { action: 'AI Deep Market Research Execution', minRole: 'EDITOR', review: 'Self-serve permitted', status: 'Active' },
-              ].map((policy, idx) => (
-                <div key={idx} className="p-4 rounded-2xl bg-black/40 border border-zinc-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-zinc-200">{policy.action}</h3>
-                    <p className="text-xs text-zinc-500">{policy.review}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                      Min: {policy.minRole}
-                    </span>
-                    <span className="px-2.5 py-1 rounded-full text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      {policy.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: WORKSPACE MEMORY VAULT */}
-        {activeTab === 'memories' && (
-          <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-6">
-            <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Brain className="h-5 w-5 text-cyan-400" />
-                Shared Business Knowledge Vault
-              </h2>
-              <p className="text-xs text-zinc-400 mt-1">
-                Persistent business learnings, supplier lead times, and campaign takeaways. Strictly isolated from personal private journals.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                {
-                  category: 'SUPPLIER_CONTEXT',
-                  title: 'Surat Knits Lead Time',
-                  content: 'Supplier requires approved print vectors minimum 3 business days before production kickoff.',
-                  source: 'Supplier Call Log',
-                },
-                {
-                  category: 'CAMPAIGN_LEARNING',
-                  title: 'Micro-Text Streetwear Hooks',
-                  content: 'Short 2-line Hindi typography hooks generated 3.4x higher reel retention than long text overlays.',
-                  source: 'Drop 1 Analytics',
-                },
-                {
-                  category: 'BUSINESS_DECISION',
-                  title: '₹599 Launch Pricing Floor',
-                  content: 'Selling price locked at ₹599 to maintain 63% gross margin against ₹220 production cost.',
-                  source: 'Owner Signoff',
-                },
-                {
-                  category: 'POLICY',
-                  title: 'Brand Tone Standards',
-                  content: 'Always maintain raw Delhi/Mumbai underground streetwear vibe. Avoid generic corporate slogans.',
-                  source: 'Brand Guide v1',
-                },
-              ].map((mem, idx) => (
-                <div key={idx} className="p-5 rounded-2xl bg-black/40 border border-zinc-800/80 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                      {mem.category}
-                    </span>
-                    <span className="text-[10px] font-mono text-zinc-500">{mem.source}</span>
-                  </div>
-                  <h3 className="font-semibold text-sm text-zinc-200">{mem.title}</h3>
-                  <p className="text-xs text-zinc-400 leading-relaxed">{mem.content}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 5: AUDIT TRAIL */}
-        {activeTab === 'audit' && (
-          <div className="p-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/30 backdrop-blur-md space-y-4">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Activity className="h-5 w-5 text-cyan-400" />
-              Immutable Activity & Security Audit Trail
-            </h2>
-            <p className="text-xs text-zinc-400">
-              Complete record of all team mutations, role adjustments, and approved asset publishes.
-            </p>
-
-            <div className="space-y-2.5 pt-2">
-              {[
-                { time: '10 mins ago', actor: 'Naaz (Owner)', action: 'Approved Reel Creative Brief for Drop 1', tag: 'APPROVAL' },
-                { time: '1 hour ago', actor: 'Aarav Sharma (Manager)', action: 'Assigned 3 Reel Tasks to Riya Patel', tag: 'DELEGATION' },
-                { time: '3 hours ago', actor: 'Naaz (Owner)', action: 'Invited Devika Ray as Viewer', tag: 'MEMBERSHIP' },
-                { time: 'Yesterday', actor: 'Riya Patel (Editor)', action: 'Submitted Caption v2 for Review', tag: 'CONTENT' },
-              ].map((item, idx) => (
-                <div key={idx} className="p-3.5 rounded-xl bg-black/40 border border-zinc-800/60 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-zinc-500 text-[11px]">{item.time}</span>
-                    <span className="font-semibold text-zinc-200">{item.actor}</span>
-                    <span className="text-zinc-400">{item.action}</span>
-                  </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-cyan-400">
-                    {item.tag}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-      </div>
-    </div>
-  );
+  return <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-7">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4"><div><div className="text-xs font-mono text-mentra-amber tracking-widest">REAL COLLABORATION DATA</div><h1 className="text-2xl sm:text-4xl font-bold text-white mt-1">Workspaces</h1></div><button onClick={loadWorkspaces} disabled={loading} className="p-2.5 rounded-xl border border-white/10 bg-white/5"><RefreshCw className={`w-4 h-4 text-white/70 ${loading?'animate-spin':''}`}/></button></div>
+    {error&&<div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-200 text-sm flex gap-2"><AlertCircle className="w-4 h-4"/>{error}</div>}
+    {workspaces.length===0&&!loading?<form onSubmit={createWorkspace} className="p-6 rounded-3xl border border-white/10 bg-black/50 space-y-4"><div className="flex gap-2 text-white font-semibold"><Building2 className="w-5 h-5 text-mentra-amber"/>Create your first workspace</div><p className="text-sm text-white/45">No sample team members or tasks will be created automatically.</p><input required value={workspaceName} onChange={e=>setWorkspaceName(e.target.value)} placeholder="Workspace name" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"/><select value={workspaceType} onChange={e=>setWorkspaceType(e.target.value as WorkspaceType)} className="w-full bg-neutral-900 border border-white/10 rounded-xl p-3 text-white"><option>BUSINESS</option><option>PERSONAL</option><option>TEAM</option></select><button className="px-5 py-3 rounded-xl bg-mentra-orange text-white text-sm font-semibold flex gap-2"><Plus className="w-4 h-4"/>Create workspace</button></form>:workspaces.length>0&&<>
+      <div className="flex flex-wrap gap-2">{workspaces.map(w=><button key={w.id} onClick={()=>setActiveId(w.id)} className={`px-4 py-2 rounded-xl text-xs font-semibold ${w.id===activeId?'bg-mentra-orange text-white':'bg-white/5 text-white/55'}`}>{w.name}</button>)}</div>
+      <div className="p-5 rounded-3xl border border-white/10 bg-black/45"><div className="flex items-center gap-2"><Building2 className="w-5 h-5 text-mentra-amber"/><h2 className="font-bold text-white">{active?.name}</h2><span className="text-[10px] text-white/35">{active?.type} • {active?.status}</span></div></div>
+      <div className="flex gap-2">{(['members','tasks','activity'] as const).map(x=><button key={x} onClick={()=>setTab(x)} className={`px-4 py-2 rounded-xl text-xs font-semibold ${tab===x?'bg-white text-black':'bg-white/5 text-white/55'}`}>{x.toUpperCase()}</button>)}</div>
+      {tab==='members'&&<div className="space-y-4"><form onSubmit={invite} className="p-4 rounded-2xl border border-white/10 bg-black/45 flex flex-col sm:flex-row gap-2"><input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="Invite email" className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white"/><select value={inviteRole} onChange={e=>setInviteRole(e.target.value as WorkspaceRole)} className="bg-neutral-900 border border-white/10 rounded-xl px-3 text-white text-xs"><option>ADMIN</option><option>MANAGER</option><option>EDITOR</option><option>MEMBER</option><option>VIEWER</option></select><button className="px-4 py-2.5 rounded-xl bg-mentra-orange text-white text-xs font-semibold flex gap-2 items-center justify-center"><UserPlus className="w-4 h-4"/>Invite</button></form><div className="grid md:grid-cols-2 gap-3">{members.length===0?<Empty text="No members returned."/>:members.map(m=><div key={m.id} className="p-4 rounded-2xl border border-white/10 bg-black/40"><div className="flex items-center justify-between"><div className="text-sm text-white font-semibold">{m.user_id}</div><span className="text-[10px] text-mentra-amber">{m.role}</span></div><div className="mt-1 text-[10px] text-white/35">{m.status}</div></div>)}</div></div>}
+      {tab==='tasks'&&<div className="space-y-4"><form onSubmit={createTask} className="p-4 rounded-2xl border border-white/10 bg-black/45 flex gap-2"><input required value={taskTitle} onChange={e=>setTaskTitle(e.target.value)} placeholder="New task" className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white"/><button className="px-4 py-2.5 rounded-xl bg-mentra-orange text-white text-xs font-semibold">Create</button></form><div className="space-y-2">{tasks.length===0?<Empty text="No workspace tasks stored."/>:tasks.map(t=><div key={t.id} className="p-4 rounded-2xl border border-white/10 bg-black/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><div className="font-semibold text-white text-sm">{t.title}</div><div className="text-[10px] text-white/35 mt-1">{t.priority} • {t.status}</div></div><select value={t.status} onChange={e=>updateTask(t.id,e.target.value)} className="bg-neutral-900 border border-white/10 rounded-xl p-2 text-white text-xs"><option>TODO</option><option>IN_PROGRESS</option><option>BLOCKED</option><option>REVIEW</option><option>COMPLETE</option><option>CANCELLED</option></select></div>)}</div></div>}
+      {tab==='activity'&&<div className="space-y-2">{activity.length===0?<Empty text="No activity recorded yet."/>:activity.map(a=><div key={a.id} className="p-4 rounded-2xl border border-white/10 bg-black/40 flex gap-3"><Activity className="w-4 h-4 text-mentra-amber mt-0.5"/><div><div className="text-sm text-white">{a.action}</div><div className="text-[10px] text-white/35 mt-1">{a.resource_type} • {a.created_at?new Date(a.created_at).toLocaleString():''}</div></div></div>)}</div>}
+    </>}
+  </div>;
 }
+function Empty({text}:{text:string}){return <div className="p-6 rounded-2xl border border-white/10 bg-black/35 text-center text-sm text-white/40">{text}</div>}

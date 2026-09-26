@@ -1,34 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createInvitation, can } from '@/lib/db/workspace';
+import { createClient } from '@/lib/supabase/server';
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const workspaceId = params.id;
-    const body = await req.json();
-    const { email, role, invited_by, expiresInDays } = body;
-
-    if (!email || !role || !invited_by) {
-      return NextResponse.json({ error: 'Missing required fields: email, role, invited_by' }, { status: 400 });
-    }
-
-    const isAllowed = await can(invited_by, 'members.invite', workspaceId);
-    if (!isAllowed) {
-      return NextResponse.json({ error: 'FORBIDDEN: Insufficient permissions to invite members' }, { status: 403 });
-    }
-
-    const invitation = await createInvitation({
-      workspace_id: workspaceId,
-      email,
-      role,
-      invited_by,
-      expiresInDays,
+export async function POST(req:NextRequest,{params}:{params:{id:string}}){
+  try{
+    const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
+    if(!user)return NextResponse.json({error:'UNAUTHORIZED'},{status:401});
+    if(!(await can(user.id,'members.invite',params.id)))return NextResponse.json({error:'FORBIDDEN'},{status:403});
+    const body=await req.json();
+    if(!body.email?.trim()||!body.role)return NextResponse.json({error:'email and role are required'},{status:400});
+    const invitation=await createInvitation({
+      workspace_id:params.id,email:body.email.trim(),role:body.role,invited_by:user.id,expiresInDays:body.expiresInDays
     });
-
-    return NextResponse.json({ invitation }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+    return NextResponse.json({invitation},{status:201});
+  }catch(error){return NextResponse.json({error:error instanceof Error?error.message:String(error)},{status:500});}
 }

@@ -1,49 +1,39 @@
 import { supabase } from '@/lib/supabase/client';
 import { IntegrationConnection } from '@/types/mentra';
 
-const defaultIntegrations: Omit<IntegrationConnection, 'id'>[] = [
-  { service: 'GOOGLE_ACCOUNT', name: 'Google Account', status: 'DISCONNECTED', description: 'Primary SSO and master identity verification.' },
-  { service: 'GMAIL', name: 'Gmail Workspace', status: 'DISCONNECTED', description: 'Real-time inbox telemetry and draft assistant.' },
-  { service: 'GOOGLE_CALENDAR', name: 'Google Calendar', status: 'DISCONNECTED', description: 'Deep work block synchronization and event management.' },
-  { service: 'GOOGLE_DRIVE', name: 'Google Drive', status: 'DISCONNECTED', description: 'Mockup assets, tech packs, and brand guideline storage.' },
-  { service: 'GOOGLE_SHEETS', name: 'Google Sheets', status: 'DISCONNECTED', description: 'Inventory, supplier bills, and cash flow ledgers.' },
-  { service: 'GOOGLE_CONTACTS', name: 'Google Contacts', status: 'DISCONNECTED', description: 'Supplier, agency, and logistics contact directory.' },
-  { service: 'WHATSAPP_CLOUD_API', name: 'WhatsApp Cloud Gateway', status: 'DISCONNECTED', description: 'Mobile natural language interface & instant executive audio memos.' },
-];
+const NAMES: Record<string,string> = {
+  GOOGLE: 'Google Workspace',
+  GOOGLE_ACCOUNT: 'Google Account',
+  GMAIL: 'Gmail',
+  GOOGLE_CALENDAR: 'Google Calendar',
+  GOOGLE_DRIVE: 'Google Drive',
+  GOOGLE_SHEETS: 'Google Sheets',
+  GOOGLE_CONTACTS: 'Google Contacts',
+  WHATSAPP: 'WhatsApp',
+  WHATSAPP_CLOUD_API: 'WhatsApp Gateway'
+};
 
 export async function getUserIntegrations(userId: string): Promise<IntegrationConnection[]> {
   const { data, error } = await supabase
     .from('integrations')
     .select('*')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
 
-  if (error || !data || data.length === 0) {
-    return defaultIntegrations.map((item, idx) => ({
-      id: `int_seed_${idx}`,
-      user_id: userId,
-      ...item
-    }));
-  }
+  if (error) throw new Error(error.message);
 
-  return defaultIntegrations.map((def, idx) => {
-    const existing = data.find(d => d.provider === def.service);
-    if (existing) {
-      return {
-        id: existing.id,
-        user_id: existing.user_id,
-        service: def.service,
-        name: def.name,
-        status: existing.status,
-        lastSync: existing.metadata?.last_sync || 'Connected',
-        accountEmail: existing.metadata?.account_email || 'Linked Account',
-        description: def.description
-      };
-    }
+  return (data || []).map((row: any) => {
+    const service = row.service || row.provider;
     return {
-      id: `int_seed_${idx}`,
-      user_id: userId,
-      ...def
-    };
+      id: row.id,
+      user_id: row.user_id,
+      service,
+      name: NAMES[service] || service,
+      status: row.status,
+      lastSync: row.last_sync_at || row.metadata?.last_sync || undefined,
+      accountEmail: row.account_email || row.metadata?.account_email || undefined,
+      description: ''
+    } as IntegrationConnection;
   });
 }
 
@@ -52,15 +42,29 @@ export async function toggleIntegrationStatus(
   provider: string,
   targetStatus: 'CONNECTED' | 'DISCONNECTED'
 ): Promise<boolean> {
+  // This helper never fabricates a connection. It only updates an existing
+  // row after an integration flow has independently established/revoked it.
+  const { data: existing, error: lookupError } = await supabase
+    .from('integrations')
+    .select('id, service')
+    .eq('user_id', userId)
+    .or(`provider.eq.${provider},service.eq.${provider}`)
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) throw new Error(lookupError.message);
+  if (!existing) return false;
+
   const { error } = await supabase
     .from('integrations')
-    .upsert({
-      user_id: userId,
-      provider,
+    .update({
       status: targetStatus,
-      metadata: { last_sync: targetStatus === 'CONNECTED' ? 'Just now' : null },
+      last_sync_at: targetStatus === 'CONNECTED' ? new Date().toISOString() : null,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,provider' });
+    })
+    .eq('id', existing.id)
+    .eq('user_id', userId);
 
-  return !error;
+  if (error) throw new Error(error.message);
+  return true;
 }
