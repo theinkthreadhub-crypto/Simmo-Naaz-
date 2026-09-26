@@ -5,13 +5,14 @@ import { getUserFinance } from '@/lib/db/finance';
 import { getUserQuests, createQuest, completeUserQuest } from '@/lib/db/quests';
 import { getUserGoals, createGoal, updateGoalProgress } from '@/lib/db/goals';
 import { getUserJournal, createJournalEntry } from '@/lib/db/journal';
-import { getUserMemories, createMemory } from '@/lib/db/memories';
+import { searchMemoriesHybrid, storeMemoryWithEmbedding } from '@/lib/memory/hybridMemory';
 import { getPlayerProgress, getProfile, getPlayerStats } from '@/lib/db/profiles';
 import { getLearningProfile, getSkillRoadmapWithModules, getPracticeAttempts, saveLearningProfile, initializePublicSpeakingRoadmap } from '@/lib/db/learning';
 import { getUserSkills } from '@/lib/db/skills';
 import { getUserIntegrations } from '@/lib/db/integrations';
 import { addXPServer } from '@/lib/progression/playerProgression';
 import { QUEST_REWARD_RULES, QuestDifficulty } from '@/types/mentra';
+import { getMentraSkill, listMentraSkills } from '@/lib/skills/catalog';
 
 // ==============================================================================
 // 1. PROGRESS & PROFILE TOOLS
@@ -401,7 +402,7 @@ export const saveJournalTool: ToolDefinition = {
     // Save decision to memory if exists
     if (input.decisions.length > 0) {
       for (const dec of input.decisions) {
-        await createMemory(context.userId, {
+        await storeMemoryWithEmbedding(context.userId, {
           type: 'DECISION',
           title: `Decision: ${dec.slice(0, 50)}`,
           content: dec,
@@ -432,19 +433,14 @@ export const saveJournalTool: ToolDefinition = {
 
 export const searchMemoryTool: ToolDefinition = {
   name: 'searchMemory',
-  description: 'Search Second Brain neural memory for saved decisions, ideas, projects, and principles.',
+  description: 'Search Second Brain memory using hybrid semantic + keyword retrieval.',
   permission: 'READ',
   schema: z.object({
-    query: z.string().min(1, 'Search query required')
+    query: z.string().min(1, 'Search query required'),
+    limit: z.number().int().min(1).max(20).default(6)
   }),
   execute: async (input, context) => {
-    const memories = await getUserMemories(context.userId);
-    const q = input.query.toLowerCase();
-    const matches = memories.filter(m => 
-      m.title.toLowerCase().includes(q) || 
-      m.content.toLowerCase().includes(q) ||
-      m.tags?.some((t: string) => t.toLowerCase().includes(q))
-    );
+    const matches = await searchMemoriesHybrid(context.userId, input.query, input.limit);
 
     if (matches.length === 0) {
       return {
@@ -464,7 +460,57 @@ export const searchMemoryTool: ToolDefinition = {
         subtitle: matches[0].title,
         data: matches[0]
       },
-      message: `Found saved memory: "${matches[0].title}": ${matches[0].content}`
+      message: `Found ${matches.length} relevant memories. Best match: "${matches[0].title}": ${matches[0].content}`
+    };
+  }
+};
+
+export const listMentraSkillsTool: ToolDefinition = {
+  name: 'listMentraSkills',
+  description: 'List reusable MENTRA workflows for research, business, productivity, and weekly reviews.',
+  permission: 'READ',
+  schema: z.object({
+    category: z.enum(['PERSONAL_OS', 'BUSINESS', 'RESEARCH', 'PRODUCTIVITY', 'LEARNING']).optional()
+  }),
+  execute: async (input) => {
+    const skills = listMentraSkills(input.category);
+    return {
+      ok: true,
+      data: skills,
+      message: skills.length > 0
+        ? `Available skills: ${skills.map(skill => skill.name).join(', ')}`
+        : 'No skills found for that category.'
+    };
+  }
+};
+
+export const activateMentraSkillTool: ToolDefinition = {
+  name: 'activateMentraSkill',
+  description: 'Load a reusable workflow manifest so the agent can execute its required tools step-by-step.',
+  permission: 'READ',
+  schema: z.object({
+    skillName: z.string().min(1),
+    objective: z.string().default('')
+  }),
+  execute: async (input) => {
+    const skill = getMentraSkill(input.skillName);
+
+    if (!skill) {
+      return {
+        ok: false,
+        errorCode: 'SKILL_NOT_FOUND',
+        message: `Skill "${input.skillName}" is not installed.`
+      };
+    }
+
+    return {
+      ok: true,
+      data: {
+        ...skill,
+        objective: input.objective,
+        protocol: 'Execute requiredTools in the order that best satisfies the objective. Re-plan after each verified tool result. Never bypass approval gates.'
+      },
+      message: `Skill "${skill.title}" activated. Required tools: ${skill.requiredTools.join(', ')}.`
     };
   }
 };
@@ -979,6 +1025,8 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   getNextLearningActivity: getNextLearningActivityTool,
   saveJournal: saveJournalTool,
   searchMemory: searchMemoryTool,
+  listMentraSkills: listMentraSkillsTool,
+  activateMentraSkill: activateMentraSkillTool,
   getConnections: getConnectionsTool,
   routeToAgent: routeToAgentTool,
   
