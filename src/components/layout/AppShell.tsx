@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import PillNavbar from '@/components/navigation/PillNavbar';
 import MobileDock from '@/components/navigation/MobileDock';
@@ -11,10 +12,15 @@ import { getPublicRuntimeConfig } from '@/lib/config/publicRuntime';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, onboardingCompleted, isLoading } = useAuth();
+  const pathname = usePathname();
   const runtimeConfig = getPublicRuntimeConfig();
 
   if (process.env.NODE_ENV === 'production' && !runtimeConfig.supabaseReady) {
     return <ConfigurationRequired missing={runtimeConfig.missing} />;
+  }
+
+  if (pathname === '/demo') {
+    return <>{children}</>;
   }
 
   if (isLoading) {

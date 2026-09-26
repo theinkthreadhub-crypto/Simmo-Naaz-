@@ -6,6 +6,11 @@ import { Profile, PlayerProgress, PlayerStats } from '@/types/mentra';
 import { getProfile, getPlayerProgress, getPlayerStats, initializeUserProfile } from '@/lib/db/profiles';
 import { useMentraStore } from '@/lib/store/mentraStore';
 
+interface AuthActionResult {
+  error?: string;
+  message?: string;
+}
+
 interface AuthContextType {
   user: any | null;
   profile: Profile | null;
@@ -14,9 +19,9 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   onboardingCompleted: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string, displayName: string) => Promise<{ error?: string }>;
-  signInWithGoogle: () => Promise<{ error?: string }>;
+  signIn: (email: string, password: string) => Promise<AuthActionResult>;
+  signUp: (email: string, password: string, displayName: string) => Promise<AuthActionResult>;
+  signInWithGoogle: () => Promise<AuthActionResult>;
   signOut: () => Promise<void>;
   completeOnboarding: (displayName: string, primaryGoal: string, priorities: string[]) => Promise<boolean>;
   refreshUserData: () => Promise<void>;
@@ -127,7 +132,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return {};
         }
         setIsLoading(false);
-        return { error: error.message };
+        const message = /invalid login credentials/i.test(error.message)
+          ? 'No account found with these credentials. First time here? Choose Create Identity.'
+          : error.message;
+        return { error: message };
       }
       if (data.user) {
         setUser(data.user);
@@ -146,18 +154,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = async (email: string, password: string, displayName: string): Promise<AuthActionResult> => {
     setIsLoading(true);
+
+    if (password.length < 6) {
+      setIsLoading(false);
+      return { error: 'Passphrase must be at least 6 characters.' };
+    }
+
     try {
+      const emailRedirectTo =
+        typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined;
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { display_name: displayName }
+          data: { display_name: displayName },
+          emailRedirectTo
         }
       });
+
       if (error) {
-        if (isDevDemoAllowed() && (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key'))) {
+        if (
+          isDevDemoAllowed() &&
+          (error.message.includes('FetchError') ||
+            error.message.includes('Failed to fetch') ||
+            error.message.includes('Invalid API key'))
+        ) {
           setDemoUser(displayName || email.split('@')[0]);
           setIsLoading(false);
           return {};
@@ -165,13 +189,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
         return { error: error.message };
       }
-      if (data.user) {
+
+      // With email confirmation enabled Supabase returns a user but no session.
+      // Do not pretend the user is authenticated until a real session exists.
+      if (data.user && data.session) {
         setUser(data.user);
         await initializeUserProfile(data.user.id, displayName);
         await loadUserData(data.user.id);
+        setIsLoading(false);
+        return { message: 'Identity created. Welcome to MENTRA.' };
       }
+
       setIsLoading(false);
-      return {};
+      return {
+        message:
+          'Identity created. Check your email to confirm the account, then return here and sign in.'
+      };
     } catch (err: any) {
       if (isDevDemoAllowed()) {
         setDemoUser(displayName || email.split('@')[0]);

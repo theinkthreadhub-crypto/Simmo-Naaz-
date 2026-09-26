@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Sparkles, Shield, ArrowRight, Lock, Mail, User, Terminal } from 'lucide-react';
+import Link from 'next/link';
+import { Shield, ArrowRight, Lock, Mail, User, Terminal } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 const MentraCore3D = dynamic(() => import('@/components/3d/MentraCore3D'), {
@@ -15,17 +16,20 @@ const MentraCore3D = dynamic(() => import('@/components/3d/MentraCore3D'), {
 });
 
 export default function AuthScreen() {
-  const { signIn, signUp, signInWithGoogle, setDemoUser } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const googleAuthEnabled = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === 'true';
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
     setLoading(true);
 
     if (isSignUp) {
@@ -36,9 +40,11 @@ export default function AuthScreen() {
       }
       const res = await signUp(email, password, displayName);
       if (res.error) setErrorMsg(res.error);
+      if (res.message) setSuccessMsg(res.message);
     } else {
       const res = await signIn(email, password);
       if (res.error) setErrorMsg(res.error);
+      if (res.message) setSuccessMsg(res.message);
     }
     setLoading(false);
   };
@@ -95,19 +101,30 @@ export default function AuthScreen() {
               </div>
             )}
 
-            {/* Quick Google OAuth Button */}
-            <button
-              onClick={() => signInWithGoogle()}
-              className="mt-6 w-full flex items-center justify-center gap-3 py-3 px-4 rounded-full bg-white/5 border border-white/15 hover:bg-white/10 text-white text-xs font-medium transition-all group"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.4 8.8 5 12 5z"/>
-                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
-                <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.1-2 .4-2.7L1.6 6.4C.6 8.3 0 10.5 0 12.8s.6 4.5 1.6 6.4l3.7-4.5z"/>
-                <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.2 0-5.8-2.4-6.7-5.3L1.6 18.5C3.5 22.4 7.4 24 12 24z"/>
-              </svg>
-              <span>Continue with Google</span>
-            </button>
+            {successMsg && (
+              <div className="mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
+                {successMsg}
+              </div>
+            )}
+
+            {googleAuthEnabled && (
+              <button
+                onClick={async () => {
+                  setErrorMsg(null);
+                  const res = await signInWithGoogle();
+                  if (res.error) setErrorMsg(res.error);
+                }}
+                className="mt-6 w-full flex items-center justify-center gap-3 py-3 px-4 rounded-full bg-white/5 border border-white/15 hover:bg-white/10 text-white text-xs font-medium transition-all group"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.4 8.8 5 12 5z"/>
+                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
+                  <path fill="#FBBC05" d="M5.3 14.7c-.2-.7-.4-1.5-.4-2.7s.1-2 .4-2.7L1.6 6.4C.6 8.3 0 10.5 0 12.8s.6 4.5 1.6 6.4l3.7-4.5z"/>
+                  <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.2 0-5.8-2.4-6.7-5.3L1.6 18.5C3.5 22.4 7.4 24 12 24z"/>
+                </svg>
+                <span>Continue with Google</span>
+              </button>
+            )}
 
             <div className="my-5 flex items-center gap-3">
               <div className="flex-1 h-[1px] bg-white/10" />
@@ -156,6 +173,8 @@ export default function AuthScreen() {
                   <input
                     type="password"
                     required
+                    minLength={6}
+                    autoComplete={isSignUp ? 'new-password' : 'current-password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
@@ -184,6 +203,8 @@ export default function AuthScreen() {
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setErrorMsg(null);
+                  setSuccessMsg(null);
+                  setPassword('');
                 }}
                 className="text-mentra-amber hover:text-white font-medium transition-colors"
               >
@@ -191,16 +212,14 @@ export default function AuthScreen() {
               </button>
             </div>
 
-            {/* One-Click Demo Operator Bypass */}
             <div className="mt-4 pt-3 border-t border-white/5 text-center">
-              <button
-                type="button"
-                onClick={() => setDemoUser('Operator Naaz')}
+              <Link
+                href="/demo"
                 className="inline-flex items-center gap-1.5 text-[11px] font-mono text-white/40 hover:text-mentra-amber transition-colors"
               >
                 <Terminal className="w-3 h-3" />
-                <span>Instant Demo Access (Operator Naaz)</span>
-              </button>
+                <span>View Read-Only Demo</span>
+              </Link>
             </div>
 
           </div>
