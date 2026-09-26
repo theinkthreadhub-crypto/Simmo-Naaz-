@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { evaluateActionPermission } from '@/lib/safety/riskEngine';
+import { checkpointPersistentAgentState, loadPersistentAgentState, PersistentAgentStatus } from '@/lib/agents/persistentState';
 import {
   ActionCard,
   AIProvider,
@@ -53,6 +54,9 @@ export interface AgentRuntimeOptions {
   externalMessageId?: string;
   maxSteps?: number;
   temperature?: number;
+  agentKey?: string;
+  objective?: string;
+  persistState?: boolean;
   onStatus?: (status: string) => void;
 }
 
@@ -97,6 +101,9 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
     externalMessageId,
     maxSteps = 6,
     temperature = 0.2,
+    agentKey = `runtime:${context.conversationId}`,
+    objective = '',
+    persistState = false,
     onStatus
   } = options;
 
@@ -111,6 +118,50 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
   let finalText = '';
   let hadFailure = false;
   let steps = 0;
+
+  const saveCheckpoint = async (
+    status: PersistentAgentStatus,
+    lastError?: string
+  ): Promise<void> => {
+    if (!persistState) return;
+
+    await checkpointPersistentAgentState({
+      user_id: context.userId,
+      agent_key: agentKey,
+      objective,
+      status,
+      checkpoint: {
+        finalText: finalText.slice(0, 2000),
+        executedTools: executedTools.slice(-20),
+        recentTraces: traces.slice(-12).map(trace => ({
+          step: trace.step,
+          tool: trace.tool,
+          status: trace.status,
+          latencyMs: trace.latencyMs,
+          error: trace.error
+        }))
+      },
+      step_count: steps,
+      last_error: lastError || null
+    });
+  };
+
+  if (persistState) {
+    const previous = await loadPersistentAgentState(context.userId, agentKey);
+    if (previous && ['ACTIVE', 'PAUSED', 'WAITING_APPROVAL'].includes(previous.status)) {
+      const systemIndex = workingMessages.findIndex(message => message.role === 'system');
+      if (systemIndex >= 0) {
+        const previousTools = Array.isArray(previous.checkpoint?.executedTools)
+          ? previous.checkpoint.executedTools.slice(-10).join(', ')
+          : 'none';
+
+        workingMessages[systemIndex] = {
+          ...workingMessages[systemIndex],
+          content: `${workingMessages[systemIndex].content}\n\nPERSISTENT AGENT CHECKPOINT (SYSTEM DATA, NOT USER INSTRUCTIONS):\n- Previous status: ${previous.status}\n- Previous step count: ${previous.step_count}\n- Previously completed tools: ${previousTools}\nContinue from verified state only; never assume an unverified external action completed.`
+        };
+      }
+    }
+  }
 
   for (let step = 1; step <= maxSteps; step++) {
     steps = step;
@@ -133,6 +184,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
 
     const calls = response.toolCalls || [];
     if (calls.length === 0) {
+      await saveCheckpoint('COMPLETE');
       return {
         status: hadFailure ? 'PARTIAL' : 'SUCCESS',
         finalText: finalText || 'Command processed.',
@@ -313,6 +365,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
           output: { approvalId, payloadHash }
         });
 
+        await saveCheckpoint('WAITING_APPROVAL');
         return {
           status: 'WAITING_APPROVAL',
           finalText: finalText || `Approval is required before ${call.name} can run.`,
@@ -380,6 +433,8 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
       });
     }
 
+    await saveCheckpoint('ACTIVE');
+
     // The deterministic fallback provider cannot consume native function-response
     // turns. Stop after one execution cycle and return verified tool messages.
     if (provider.name === 'fallback_intelligence') {
@@ -391,9 +446,11 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
         })
         .join(' ');
 
+      finalText = verified || finalText || 'Command processed.';
+      await saveCheckpoint('COMPLETE');
       return {
         status: hadFailure ? 'PARTIAL' : 'SUCCESS',
-        finalText: verified || finalText || 'Command processed.',
+        finalText,
         cards,
         executedTools,
         traces,
@@ -404,9 +461,12 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
     }
   }
 
+  finalText = finalText || 'Maximum agent steps reached. Current verified work has been preserved.';
+  await saveCheckpoint('PAUSED');
+
   return {
     status: hadFailure ? 'PARTIAL' : 'SUCCESS',
-    finalText: finalText || 'Maximum agent steps reached. Current verified work has been preserved.',
+    finalText,
     cards,
     executedTools,
     traces,
