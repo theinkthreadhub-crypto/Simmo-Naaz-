@@ -101,7 +101,7 @@ export async function runMentra(
 
   // 7. Invoke Provider
   if (callbacks?.onStatus) callbacks.onStatus('ANALYZING_INTENT');
-  const provider = getAIProvider();
+  const provider = getAIProvider({ message: cleanText });
   const maxSteps = Number(process.env.AI_MAX_TOOL_STEPS) || 4;
 
   // Agent Runtime V2 is opt-in until production verification is complete.
@@ -122,6 +122,9 @@ export async function runMentra(
         externalMessageId: incoming.externalMessageId,
         maxSteps,
         temperature: 0.2,
+        agentKey: `core:${conversationId}`,
+        objective: cleanText,
+        persistState: true,
         onStatus: callbacks?.onStatus
       });
 
@@ -152,7 +155,7 @@ export async function runMentra(
         user_id: incoming.userId,
         conversation_id: conversationId,
         provider: provider.name,
-        model: process.env.AI_MODEL_SMART || process.env.AI_MODEL_FAST || 'provider-default',
+        model: provider.model || process.env.AI_MODEL_SMART || process.env.AI_MODEL_FAST || 'provider-default',
         purpose: 'AGENT_RUNTIME_V2',
         input_tokens: runtime.usage.inputTokens,
         output_tokens: runtime.usage.outputTokens,
