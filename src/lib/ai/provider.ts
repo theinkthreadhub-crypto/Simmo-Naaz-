@@ -2,6 +2,7 @@ import { AIProvider } from './types';
 import { GeminiProvider } from './providers/geminiProvider';
 import { OllamaProvider } from './providers/ollamaProvider';
 import { FallbackProvider } from './providers/fallbackProvider';
+import { VercelGatewayProvider } from './providers/vercelGatewayProvider';
 import { ResilientProvider } from './resilientProvider';
 import {
   inferModelPurpose,
@@ -29,6 +30,11 @@ function cloudProvider(
   return new GeminiProvider(apiKey, route.model);
 }
 
+function gatewayProvider(explicitModel?: string): AIProvider | null {
+  const gateway = new VercelGatewayProvider(explicitModel);
+  return gateway.isConfigured() ? gateway : null;
+}
+
 function localProvider(explicitModel?: string): AIProvider | null {
   const baseUrl = process.env.AI_LOCAL_BASE_URL?.trim();
   if (!baseUrl) return null;
@@ -54,11 +60,24 @@ export function getAIProvider(
 
   const fallback = new FallbackProvider();
   const cloud = cloudProvider(purpose, selection.model);
+  const gateway = gatewayProvider(
+    selection.model || process.env.AI_GATEWAY_MODEL
+  );
   const local = localProvider(
     purpose === 'FAST' || purpose === 'MEMORY'
       ? process.env.AI_LOCAL_FAST_MODEL
       : process.env.AI_LOCAL_AGENT_MODEL
   );
+
+  if (
+    providerType === 'gateway' ||
+    providerType === 'vercel' ||
+    providerType === 'vercel-ai-gateway'
+  ) {
+    return new ResilientProvider(
+      [gateway, cloud, local, fallback].filter(Boolean) as AIProvider[]
+    );
+  }
 
   if (providerType === 'gemini' || providerType === 'google') {
     return new ResilientProvider(
@@ -86,8 +105,8 @@ export function getAIProvider(
 
     return new ResilientProvider(
       (preferLocal
-        ? [local, cloud, fallback]
-        : [cloud, local, fallback]
+        ? [local, gateway, cloud, fallback]
+        : [gateway, cloud, local, fallback]
       ).filter(Boolean) as AIProvider[]
     );
   }
