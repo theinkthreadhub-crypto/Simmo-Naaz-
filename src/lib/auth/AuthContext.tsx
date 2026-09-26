@@ -30,6 +30,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const PRODUCTION_APP_URL = 'https://mentra.inkthreadhub.in';
+
+const getAuthCallbackUrl = () => {
+  if (process.env.NODE_ENV === 'production') {
+    return `${PRODUCTION_APP_URL}/auth/callback`;
+  }
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/auth/callback`;
+  }
+  return undefined;
+};
+
 // Helper to strictly gate demo mode to explicit dev environments
 const isDevDemoAllowed = () => {
   return process.env.NODE_ENV !== 'production' && 
@@ -166,8 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const emailRedirectTo =
-        typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined;
+      const emailRedirectTo = getAuthCallbackUrl();
 
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -224,7 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined
+          redirectTo: getAuthCallbackUrl()
         }
       });
       if (error) {
