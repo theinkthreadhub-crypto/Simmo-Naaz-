@@ -114,6 +114,7 @@ export interface ToolExecutionContext {
   messageId?: string;
   idempotencyKey?: string;
   pageContext?: string;
+  approved?: boolean;
 }
 
 export interface ToolResult<T = any> {
