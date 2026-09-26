@@ -6,6 +6,7 @@ import { checkpointPersistentAgentState, loadPersistentAgentState, PersistentAge
 import {
   ActionCard,
   AIProvider,
+  AIProviderResponse,
   ModelMessage,
   ToolDefinition,
   ToolExecutionContext,
@@ -29,6 +30,7 @@ export interface AgentRuntimeTrace {
   input: Record<string, unknown>;
   output?: unknown;
   error?: string;
+  recoveryAttempts?: number;
 }
 
 export interface AgentRuntimeResult {
@@ -59,6 +61,93 @@ export interface AgentRuntimeOptions {
   objective?: string;
   persistState?: boolean;
   onStatus?: (status: string) => void;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function generateWithRecovery(
+  provider: AIProvider,
+  messages: ModelMessage[],
+  tools: ToolDefinition[],
+  temperature: number,
+  onStatus?: (status: string) => void
+): Promise<AIProviderResponse> {
+  const retries = Math.max(
+    0,
+    Math.min(Number(process.env.AI_PROVIDER_RETRY_ATTEMPTS || 2), 3)
+  );
+  const baseMs = Math.max(
+    50,
+    Math.min(Number(process.env.AI_PROVIDER_RETRY_BASE_MS || 300), 3000)
+  );
+
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await provider.generate(messages, {
+        tools,
+        temperature
+      });
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= retries) break;
+
+      onStatus?.(`RECOVERING_AI_${attempt + 1}`);
+      await sleep(baseMs * Math.pow(2, attempt));
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(String(lastError || 'AI provider failed.'));
+}
+
+async function executeToolWithRecovery(
+  tool: ToolDefinition,
+  args: Record<string, unknown>,
+  context: ToolExecutionContext,
+  onStatus?: (status: string) => void
+): Promise<{ result: ToolResult; recoveryAttempts: number }> {
+  const retries =
+    tool.permission === 'READ'
+      ? Math.max(
+          0,
+          Math.min(Number(process.env.AI_READ_TOOL_RETRY_ATTEMPTS || 1), 2)
+        )
+      : 0;
+
+  let recoveryAttempts = 0;
+  let lastResult: ToolResult = {
+    ok: false,
+    errorCode: 'TOOL_EXECUTION_EXCEPTION',
+    message: 'Tool did not execute.'
+  };
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      lastResult = await tool.execute(args, context);
+    } catch (error) {
+      lastResult = {
+        ok: false,
+        errorCode: 'TOOL_EXECUTION_EXCEPTION',
+        message: error instanceof Error ? error.message : String(error)
+      };
+    }
+
+    if (lastResult.ok || attempt >= retries) {
+      return { result: lastResult, recoveryAttempts };
+    }
+
+    recoveryAttempts += 1;
+    onStatus?.(`RECOVERING_TOOL_${tool.name.toUpperCase()}`);
+    await sleep(150 * Math.pow(2, attempt));
+  }
+
+  return { result: lastResult, recoveryAttempts };
 }
 
 function stringifyToolObservation(result: ToolResult): string {
@@ -168,10 +257,36 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
     steps = step;
     onStatus?.(step === 1 ? 'ANALYZING_INTENT' : 'REPLANNING');
 
-    const response = await provider.generate(workingMessages, {
-      tools,
-      temperature
-    });
+    let response: AIProviderResponse;
+
+    try {
+      response = await generateWithRecovery(
+        provider,
+        workingMessages,
+        tools,
+        temperature,
+        onStatus
+      );
+    } catch (error) {
+      hadFailure = true;
+      const message =
+        error instanceof Error ? error.message : String(error);
+
+      finalText =
+        'MENTRA could not recover the AI runtime for this step. Verified work has been preserved.';
+      await saveCheckpoint('FAILED', message);
+
+      return {
+        status: 'FAILED',
+        finalText,
+        cards,
+        executedTools,
+        traces,
+        steps,
+        maxStepsReached: false,
+        usage
+      };
+    }
 
     if (response.usage) {
       usage.inputTokens += response.usage.inputTokens || 0;
@@ -414,19 +529,16 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
 
       onStatus?.(`EXECUTING_${call.name.toUpperCase()}`);
 
-      let result: ToolResult;
-      try {
-        result = await tool.execute(validArgs, {
+      const recoveredExecution = await executeToolWithRecovery(
+        tool,
+        validArgs,
+        {
           ...context,
           idempotencyKey: key
-        });
-      } catch (error) {
-        result = {
-          ok: false,
-          errorCode: 'TOOL_EXECUTION_EXCEPTION',
-          message: error instanceof Error ? error.message : String(error)
-        };
-      }
+        },
+        onStatus
+      );
+      const result = recoveredExecution.result;
 
       const latencyMs = Date.now() - startedAt;
       if (result.card) cards.push(result.card);
@@ -456,7 +568,8 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
         latencyMs,
         input: redactForAudit(validArgs),
         output: result.data,
-        error: result.ok ? undefined : (result.errorCode || result.message)
+        error: result.ok ? undefined : (result.errorCode || result.message),
+        recoveryAttempts: recoveredExecution.recoveryAttempts
       });
 
       workingMessages.push({
