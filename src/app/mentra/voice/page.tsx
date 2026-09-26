@@ -168,7 +168,7 @@ export default function MentraVoicePage() {
                 : voiceState === 'SPEAKING'
                 ? 'bg-mentra-orange/20 scale-110 blur-3xl'
                 : voiceState === 'THINKING'
-                ? 'bg-amber-500/20 scale-100 blur-2xl animate-spin'
+                ? 'bg-cyan-500/20 scale-100 blur-2xl animate-spin'
                 : 'bg-white/5 scale-90 blur-xl'
             }`}
           />
@@ -180,9 +180,9 @@ export default function MentraVoicePage() {
               voiceState === 'LISTENING'
                 ? 'bg-gradient-to-tr from-cyan-600 to-teal-400 border-cyan-300 shadow-cyan-500/50 scale-105'
                 : voiceState === 'SPEAKING'
-                ? 'bg-gradient-to-tr from-mentra-orange to-mentra-amber border-orange-300 shadow-orange-500/50'
+                ? 'bg-gradient-to-tr from-mentra-orange to-mentra-amber border-indigo-300 shadow-indigo-500/50'
                 : voiceState === 'THINKING'
-                ? 'bg-slate-900 border-amber-400/50 shadow-amber-500/30'
+                ? 'bg-slate-900 border-cyan-400/50 shadow-cyan-500/30'
                 : 'bg-slate-950 border-slate-800 hover:border-cyan-500/50'
             }`}
           >
@@ -199,7 +199,7 @@ export default function MentraVoicePage() {
 
         {/* Action / Tool Execution Chip */}
         {currentTool && (
-          <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs font-mono text-amber-300 animate-pulse">
+          <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-xs font-mono text-cyan-300 animate-pulse">
             <Zap className="w-3.5 h-3.5" />
             <span>ACTION: {currentTool}</span>
           </div>

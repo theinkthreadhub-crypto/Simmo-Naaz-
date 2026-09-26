@@ -151,7 +151,7 @@ export default function MissionDetailPage() {
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold border ${
                 mission.status === 'ACTIVE'
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                  : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
               }`}>
                 {mission.status}
               </span>
@@ -208,7 +208,7 @@ export default function MissionDetailPage() {
                     isComplete
                       ? 'bg-slate-950/60 border-slate-800/80 opacity-80'
                       : isWaiting
-                      ? 'bg-amber-500/10 border-amber-500/30'
+                      ? 'bg-cyan-500/10 border-cyan-500/30'
                       : 'bg-slate-900/60 border-slate-800'
                   }`}
                 >
@@ -217,7 +217,7 @@ export default function MissionDetailPage() {
                       isComplete
                         ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                         : isWaiting
-                        ? 'bg-amber-500/20 text-amber-300'
+                        ? 'bg-cyan-500/20 text-cyan-300'
                         : 'bg-slate-800 text-slate-300'
                     }`}>
                       {isComplete ? <CheckCircle2 className="w-4 h-4" /> : step.step_index}
@@ -248,7 +248,7 @@ export default function MissionDetailPage() {
                     {isWaiting ? (
                       <a
                         href="/approvals"
-                        className="px-4 py-2 rounded-xl bg-amber-500 text-black text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl bg-cyan-500 text-black text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all flex items-center gap-1.5"
                       >
                         <ShieldCheck className="w-3.5 h-3.5" />
                         <span>Authorize Action</span>

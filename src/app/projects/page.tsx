@@ -206,7 +206,7 @@ export default function ProjectsPage() {
                 </div>
 
                 <div className="pt-4 border-t border-slate-800/80 mt-4 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-mono text-amber-400">
+                  <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">
                     <Zap className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>NEXT ACTION:</span>
                   </div>

@@ -121,7 +121,7 @@ export default function JournalPage() {
                   onClick={() => setMood(m)}
                   className={`px-3 py-1 rounded-full text-[11px] font-mono transition-all ${
                     mood === m
-                      ? 'bg-mentra-orange text-white shadow-[0_0_10px_#ff4a00]'
+                      ? 'bg-mentra-orange text-white shadow-[0_0_10px_#5b6cff]'
                       : 'bg-white/5 text-white/60 hover:text-white'
                   }`}
                 >
@@ -233,7 +233,7 @@ export default function JournalPage() {
             <button
               type="submit"
               disabled={isSubmitting || !content.trim()}
-              className="px-8 py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 active:scale-98 transition-all flex items-center gap-2 disabled:opacity-40"
+              className="px-8 py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-98 transition-all flex items-center gap-2 disabled:opacity-40"
             >
               <Send className="w-4 h-4" />
               <span>{isSubmitting ? 'LOGGING...' : 'SAVE JOURNAL & CLAIM XP'}</span>

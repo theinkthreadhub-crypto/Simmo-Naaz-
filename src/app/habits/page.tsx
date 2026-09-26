@@ -112,7 +112,7 @@ export default function HabitsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6 mb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-amber-500/20">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
                 <Flame className="w-5 h-5" />
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
@@ -126,7 +126,7 @@ export default function HabitsPage() {
 
           <button
             onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg shadow-amber-500/20 transition-all"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg shadow-cyan-500/20 transition-all"
           >
             <Plus className="w-4 h-4" />
             <span>Establish Habit</span>
@@ -174,7 +174,7 @@ export default function HabitsPage() {
                 className={`p-5 rounded-3xl border transition-all flex items-center justify-between gap-4 ${
                   habit.completedToday
                     ? 'bg-emerald-500/5 border-emerald-500/30'
-                    : 'bg-slate-900/60 border-slate-800 hover:border-amber-500/40'
+                    : 'bg-slate-900/60 border-slate-800 hover:border-cyan-500/40'
                 }`}
               >
                 <div className="space-y-1">
@@ -182,7 +182,7 @@ export default function HabitsPage() {
                     <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-400">
                       {habit.lifeArea}
                     </span>
-                    <span className="text-[10px] font-mono text-amber-400 font-bold">
+                    <span className="text-[10px] font-mono text-cyan-400 font-bold">
                       +{habit.xpReward} XP
                     </span>
                   </div>
@@ -201,7 +201,7 @@ export default function HabitsPage() {
                   className={`px-4 py-2.5 rounded-2xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
                     habit.completedToday
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 cursor-default'
-                      : 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20'
+                      : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-lg shadow-cyan-500/20'
                   }`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
@@ -230,7 +230,7 @@ export default function HabitsPage() {
                     onChange={(e) => setNewTitle(e.target.value)}
                     placeholder="e.g. 15m Public Speaking Voice Warmup"
                     required
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
                   />
                 </div>
 
@@ -240,7 +240,7 @@ export default function HabitsPage() {
                     <select
                       value={newLifeArea}
                       onChange={(e) => setNewLifeArea(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                     >
                       <option value="Personal Growth">Personal Growth</option>
                       <option value="Business">Business</option>
@@ -255,7 +255,7 @@ export default function HabitsPage() {
                     <select
                       value={newTime}
                       onChange={(e) => setNewTime(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                     >
                       <option value="MORNING">Morning</option>
                       <option value="AFTERNOON">Afternoon</option>
@@ -276,7 +276,7 @@ export default function HabitsPage() {
                   <button
                     type="submit"
                     disabled={creating}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 text-black font-bold text-xs uppercase tracking-wider hover:brightness-110 disabled:opacity-50"
                   >
                     {creating ? 'Saving...' : 'Establish'}
                   </button>
