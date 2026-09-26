@@ -69,7 +69,7 @@ export default function QuestCard({ quest, onComplete, onPostReflection }: Quest
       case 'COMMUNICATION':
         return <Sparkles className="w-4 h-4 text-cyan-400" />;
       default:
-        return <Heart className="w-4 h-4 text-amber-300" />;
+        return <Heart className="w-4 h-4 text-cyan-300" />;
     }
   };
 
@@ -83,7 +83,7 @@ export default function QuestCard({ quest, onComplete, onPostReflection }: Quest
         return 'text-mentra-orange border-mentra-orange/30 bg-mentra-orange/10';
       case 'EPIC':
       case 'ELITE':
-        return 'text-amber-300 border-amber-400/40 bg-amber-400/15';
+        return 'text-cyan-300 border-cyan-400/40 bg-cyan-400/15';
       case 'BOSS':
         return 'text-rose-400 border-rose-500/40 bg-rose-500/20 animate-pulse';
     }

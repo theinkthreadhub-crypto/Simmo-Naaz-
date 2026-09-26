@@ -30,7 +30,7 @@ export default function LevelUpModal({
         particleCount: 50,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#ff4a00', '#f59e0b', '#fbbf24', '#ffffff']
+        colors: ['#5b6cff', '#67e8f9', '#a5b4fc', '#ffffff']
       });
     }
   }, [isOpen]);
@@ -39,7 +39,7 @@ export default function LevelUpModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-mentra-orange/40 shadow-[0_0_50px_rgba(255,74,0,0.3)] text-center space-y-6 overflow-hidden">
+      <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-neutral-950 border border-mentra-orange/40 shadow-[0_0_50px_rgba(91,108,255,0.3)] text-center space-y-6 overflow-hidden">
         
         {/* Glow ambient background */}
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-mentra-orange/20 rounded-full blur-3xl pointer-events-none" />
@@ -52,7 +52,7 @@ export default function LevelUpModal({
         </button>
 
         {/* Level Up Badge */}
-        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-mentra-orange/20 to-mentra-amber/20 border border-mentra-orange/40 text-mentra-amber mx-auto shadow-[0_0_20px_rgba(255,74,0,0.3)]">
+        <div className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-mentra-orange/20 to-mentra-amber/20 border border-mentra-orange/40 text-mentra-amber mx-auto shadow-[0_0_20px_rgba(91,108,255,0.3)]">
           <Trophy className="w-10 h-10 text-mentra-orange animate-bounce" />
         </div>
 
@@ -90,7 +90,7 @@ export default function LevelUpModal({
 
         <button
           onClick={onClose}
-          className="w-full py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(255,74,0,0.4)] hover:opacity-90 active:scale-98 transition-all flex items-center justify-center gap-2"
+          className="w-full py-3 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-semibold text-xs font-mono tracking-wider shadow-[0_0_20px_rgba(91,108,255,0.4)] hover:opacity-90 active:scale-98 transition-all flex items-center justify-center gap-2"
         >
           <span>CONTINUE CONQUEST</span>
           <ArrowRight className="w-4 h-4" />

@@ -83,7 +83,7 @@ export default function SystemStatus() {
             <Activity className="w-4 h-4 text-emerald-400" />
             <div>
               <div className="text-[10px] uppercase font-mono text-white/40">KERNEL</div>
-              <div className={`text-xs font-mono font-bold ${kernelStatus === 'HEALTHY' ? 'text-emerald-300' : 'text-amber-300'}`}>
+              <div className={`text-xs font-mono font-bold ${kernelStatus === 'HEALTHY' ? 'text-emerald-300' : 'text-cyan-300'}`}>
                 {kernelStatus}
               </div>
             </div>

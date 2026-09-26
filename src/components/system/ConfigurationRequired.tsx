@@ -10,13 +10,13 @@ export default function ConfigurationRequired({
 }) {
   return (
     <div className="min-h-screen w-full bg-energy-horizon flex items-center justify-center px-4">
-      <div className="w-full max-w-2xl rounded-3xl border border-amber-400/30 bg-black/70 backdrop-blur-xl p-6 sm:p-8 shadow-2xl">
+      <div className="w-full max-w-2xl rounded-3xl border border-cyan-400/30 bg-black/70 backdrop-blur-xl p-6 sm:p-8 shadow-2xl">
         <div className="flex items-start gap-4">
-          <div className="p-3 rounded-2xl bg-amber-400/10 text-amber-300">
+          <div className="p-3 rounded-2xl bg-cyan-400/10 text-cyan-300">
             <AlertTriangle className="w-6 h-6" />
           </div>
           <div className="space-y-2">
-            <div className="text-xs font-mono uppercase tracking-[0.22em] text-amber-300">
+            <div className="text-xs font-mono uppercase tracking-[0.22em] text-cyan-300">
               Production Core Setup Required
             </div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">
@@ -34,7 +34,7 @@ export default function ConfigurationRequired({
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <Database className="w-4 h-4 text-mentra-orange mb-2" />
             <div className="text-xs font-mono text-white/40 uppercase">Database</div>
-            <div className="text-sm font-semibold text-amber-200 mt-1">Not connected</div>
+            <div className="text-sm font-semibold text-cyan-200 mt-1">Not connected</div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <ShieldCheck className="w-4 h-4 text-emerald-400 mb-2" />

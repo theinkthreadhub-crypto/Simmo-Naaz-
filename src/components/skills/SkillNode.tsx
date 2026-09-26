@@ -22,7 +22,7 @@ export default function SkillNode({ skill }: SkillNodeProps) {
     <div className={`p-6 rounded-3xl border transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
       isLocked 
         ? 'bg-black/40 border-white/5 opacity-50' 
-        : 'glass-panel bg-black/60 border-white/10 hover:border-mentra-orange/40 hover:shadow-[0_0_25px_rgba(255,74,0,0.15)]'
+        : 'glass-panel bg-black/60 border-white/10 hover:border-mentra-orange/40 hover:shadow-[0_0_25px_rgba(91,108,255,0.15)]'
     }`}>
       <div>
         {/* Node Header */}
@@ -79,7 +79,7 @@ export default function SkillNode({ skill }: SkillNodeProps) {
 
         <Link
           href={`/skills/${skillSlug}/coach`}
-          className="px-4 py-2 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-mono text-xs font-semibold flex items-center gap-1.5 shadow-[0_0_15px_rgba(255,74,0,0.3)] hover:opacity-90 active:scale-95 transition-all"
+          className="px-4 py-2 rounded-full bg-gradient-to-r from-mentra-orange to-mentra-amber text-white font-mono text-xs font-semibold flex items-center gap-1.5 shadow-[0_0_15px_rgba(91,108,255,0.3)] hover:opacity-90 active:scale-95 transition-all"
         >
           <span>ENTER AI COACH</span>
           <ChevronRight className="w-3.5 h-3.5" />
