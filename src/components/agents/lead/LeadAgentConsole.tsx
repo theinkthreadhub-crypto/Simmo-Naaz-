@@ -132,8 +132,13 @@ export default function LeadAgentConsole() {
             event.preventDefault();
             startRun(query);
           }}
-          className="rounded-3xl border border-mentra-hairline-orange bg-mentra-glass-strong p-5 sm:p-6"
+          className="relative overflow-hidden rounded-3xl border border-mentra-hairline-orange bg-mentra-glass-strong p-5 motion-safe:animate-rise sm:p-6"
         >
+          {submitting && (
+            <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-0.5 overflow-hidden">
+              <span className="block h-full w-full bg-gradient-to-r from-transparent via-mentra-amber to-transparent motion-safe:animate-sweep" />
+            </span>
+          )}
           <label htmlFor="lead-query" className="block font-serif text-2xl leading-tight text-white sm:text-3xl">
             What should MENTRA work on?
           </label>
@@ -196,7 +201,11 @@ export default function LeadAgentConsole() {
         </form>
 
         {/* Selected run */}
-        <section aria-live="polite" className="rounded-3xl border border-mentra-hairline bg-mentra-glass p-5 sm:p-6">
+        <section
+          aria-live="polite"
+          className="rounded-3xl border border-mentra-hairline bg-mentra-glass p-5 motion-safe:animate-rise sm:p-6"
+          style={{ animationDelay: '120ms' }}
+        >
           {!loaded ? (
             <div className="flex items-center gap-2 text-sm text-mentra-muted">
               <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" aria-hidden />
@@ -268,7 +277,7 @@ export default function LeadAgentConsole() {
               )}
 
               {selected.summary && !isRunActive(selected) && (
-                <article className="mt-8 border-t border-mentra-hairline pt-6">
+                <article key={selected.id} className="mt-8 border-t border-mentra-hairline pt-6 motion-safe:animate-rise">
                   <h3 className="font-serif text-2xl text-white">Answer</h3>
                   <p className="mt-3 max-w-prose whitespace-pre-wrap text-[15px] leading-7 text-mentra-text-secondary">
                     {plainText(selected.summary)}
@@ -287,7 +296,7 @@ export default function LeadAgentConsole() {
       </div>
 
       {/* Side column */}
-      <aside className="space-y-6 lg:col-span-4">
+      <aside className="space-y-6 motion-safe:animate-rise lg:col-span-4" style={{ animationDelay: '220ms' }}>
         <section className="rounded-3xl border border-mentra-hairline bg-mentra-glass p-5">
           <div className="flex items-baseline justify-between">
             <h2 className="font-display text-base font-semibold text-white">Recent runs</h2>

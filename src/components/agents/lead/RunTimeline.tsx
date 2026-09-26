@@ -50,10 +50,18 @@ function StepCard({ plan, step }: { plan: RunPlanStep; step?: RunStep }) {
   return (
     <div
       className={[
-        'rounded-2xl border bg-mentra-bg-dark/80 transition-colors',
+        'relative overflow-hidden rounded-2xl border bg-mentra-bg-dark/80 transition-colors duration-500',
         isLive ? 'border-mentra-amber/60 shadow-[0_0_0_1px_rgba(103,232,249,0.22),0_0_28px_-8px_rgba(91,108,255,0.6)]' : 'border-mentra-hairline'
       ].join(' ')}
     >
+      {isLive && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px overflow-hidden"
+        >
+          <span className="block h-full w-full bg-gradient-to-r from-transparent via-mentra-amber to-transparent motion-safe:animate-sweep" />
+        </span>
+      )}
       <button
         type="button"
         onClick={() => hasDetail && setOpen(value => !value)}
@@ -92,7 +100,7 @@ function StepCard({ plan, step }: { plan: RunPlanStep; step?: RunStep }) {
       </button>
 
       {open && hasDetail && (
-        <div className="border-t border-mentra-hairline px-4 pb-4 pt-3">
+        <div className="border-t border-mentra-hairline px-4 pb-4 pt-3 motion-safe:animate-rise">
           {step?.output && (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-mentra-text-secondary">{plainText(step.output)}</p>
           )}
@@ -124,11 +132,21 @@ export default function RunTimeline({
         const waveDone = waveStatuses.every(status => status === 'SUCCESS' || status === 'PARTIAL');
 
         return (
-          <li key={wave.map(step => step.id).join('-')} className="relative">
+          <li
+            key={wave.map(step => step.id).join('-')}
+            className="relative motion-safe:animate-rise"
+            style={{ animationDelay: `${index * 90}ms` }}
+          >
+            {waveLive && (
+              <span
+                aria-hidden
+                className="absolute -left-[26px] top-5 h-2.5 w-2.5 rounded-full bg-mentra-orange motion-safe:animate-node-ping sm:-left-[30px]"
+              />
+            )}
             <span
               aria-hidden
               className={[
-                'absolute -left-[26px] top-5 h-2.5 w-2.5 rounded-full ring-4 ring-mentra-bg-deep sm:-left-[30px]',
+                'absolute -left-[26px] top-5 h-2.5 w-2.5 rounded-full ring-4 ring-mentra-bg-deep transition-colors duration-500 sm:-left-[30px]',
                 waveLive ? 'bg-mentra-orange motion-safe:animate-pulse' : waveDone ? 'bg-mentra-emerald' : 'bg-white/25'
               ].join(' ')}
             />

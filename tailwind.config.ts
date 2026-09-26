@@ -42,12 +42,27 @@ const config: Config = {
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'spin-slow': 'spin 20s linear infinite',
         'float-slow': 'float 6s ease-in-out infinite',
+        rise: 'rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both',
+        sweep: 'sweep 1.8s ease-in-out infinite',
+        'node-ping': 'node-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite',
       },
       keyframes: {
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-10px)' },
-        }
+        },
+        rise: {
+          '0%': { opacity: '0', transform: 'translateY(14px)', filter: 'blur(4px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)', filter: 'blur(0)' },
+        },
+        sweep: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+        'node-ping': {
+          '0%': { transform: 'scale(1)', opacity: '0.7' },
+          '100%': { transform: 'scale(3)', opacity: '0' },
+        },
       }
     },
   },
