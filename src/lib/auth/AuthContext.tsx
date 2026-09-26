@@ -121,34 +121,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (identifier: string, password: string) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        if (isDevDemoAllowed() && (error.message.includes('FetchError') || error.message.includes('Failed to fetch') || error.message.includes('Invalid API key'))) {
-          setDemoUser(email.split('@')[0]);
-          setIsLoading(false);
-          return {};
-        }
+      const response = await fetch('/api/auth/operator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.access_token || !payload?.refresh_token) {
         setIsLoading(false);
-        const message = /invalid login credentials/i.test(error.message)
-          ? 'No account found with these credentials. First time here? Choose Create Identity.'
-          : error.message;
-        return { error: message };
+        return { error: payload?.error || 'Invalid operator credentials.' };
       }
-      if (data.user) {
-        setUser(data.user);
-        await loadUserData(data.user.id);
+
+      const { data, error } = await supabase.auth.setSession({
+        access_token: payload.access_token,
+        refresh_token: payload.refresh_token
+      });
+
+      if (error || !data.user) {
+        setIsLoading(false);
+        return { error: error?.message || 'Unable to establish operator session.' };
       }
+
+      setUser(data.user);
+      await loadUserData(data.user.id);
       setIsLoading(false);
       return {};
     } catch (err: any) {
-      if (isDevDemoAllowed()) {
-        setDemoUser(email.split('@')[0]);
-        setIsLoading(false);
-        return {};
-      }
       setIsLoading(false);
       return { error: err.message || 'Authentication provider unavailable' };
     }
