@@ -166,6 +166,7 @@ export interface AIProviderResponse {
 
 export interface AIProvider {
   name: string;
+  model?: string;
   generate(messages: ModelMessage[], options?: GenerateOptions): Promise<AIProviderResponse>;
   stream(
     messages: ModelMessage[],
