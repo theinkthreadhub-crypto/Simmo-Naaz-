@@ -3,6 +3,7 @@ import { runMentra } from '@/lib/ai/core';
 import {
   verifyBrainWorkerSecret,
   verifyBrainWorkerSignature,
+  verifyBrainWorkerToken,
   verifySupabaseUserToken
 } from '@/lib/worker/auth';
 import { runAsTrustedServer } from '@/lib/supabase/trustedScope';
@@ -14,11 +15,14 @@ export async function POST(req: NextRequest) {
     req.headers.get('x-mentra-worker-signature'),
     rawBody
   );
+  const tokenWorker = verifyBrainWorkerToken(
+    req.headers.get('x-mentra-worker-token')
+  );
   const legacyWorker = verifyBrainWorkerSecret(
     req.headers.get('x-mentra-internal-secret')
   );
 
-  if (!signedWorker && !legacyWorker) {
+  if (!signedWorker && !tokenWorker && !legacyWorker) {
     return NextResponse.json({ error: 'UNAUTHORIZED_WORKER' }, { status: 401 });
   }
 
