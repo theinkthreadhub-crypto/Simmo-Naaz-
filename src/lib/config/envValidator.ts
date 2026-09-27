@@ -167,18 +167,27 @@ export function auditEnvironment(): EnvironmentAudit {
         ? 'Dedicated Tavily live-search provider with source-preserving synthesis.'
         : 'Public-web search fallback is code-ready; Tavily is optional for higher reliability.'
     },
-    browser_cloud: {
-      name: 'Controlled Cloud Browser',
-      category: 'AUTOMATION',
-      requiredEnv: ['BROWSER_API_KEY'],
-      missingEnv: check(['BROWSER_API_KEY']).missing,
-      status: check(['BROWSER_API_KEY']).ready
-        ? 'CONNECTED'
-        : 'CONFIG_REQUIRED',
-      description: check(['BROWSER_API_KEY']).ready
-        ? 'Browserless navigation, rendered reads, screenshots, and approval-gated page mutations are available.'
-        : 'Add a Browserless API key to enable real browser actions. Read-only public HTTP fallback remains available.'
-    },
+    browser_cloud: (() => {
+      const state = check(['BROWSER_API_KEY']);
+      const disabled = env.BROWSER_AGENT_ENABLED === 'false';
+
+      return {
+        name: 'Controlled Cloud Browser',
+        category: 'AUTOMATION' as const,
+        requiredEnv: ['BROWSER_API_KEY'],
+        missingEnv: state.missing,
+        status: disabled
+          ? 'DISABLED' as const
+          : state.ready
+            ? 'CONNECTED' as const
+            : 'CONFIG_REQUIRED' as const,
+        description: disabled
+          ? 'Controlled cloud browser is disabled by configuration. Read-only public HTTP fallback remains available.'
+          : state.ready
+            ? 'Browserless navigation, rendered reads, screenshots, and approval-gated page mutations are available.'
+            : 'Add a Browserless API key to enable real browser actions. Read-only public HTTP fallback remains available.'
+      };
+    })(),
     local_computer: {
       name: 'Local Computer Bridge',
       category: 'AUTOMATION',

@@ -105,7 +105,10 @@ export class BrowserlessProvider implements BrowserProvider {
   }
 
   isConfigured(): boolean {
-    return this.apiKey.trim().length > 0;
+    return (
+      process.env.BROWSER_AGENT_ENABLED !== 'false' &&
+      this.apiKey.trim().length > 0
+    );
   }
 
   getCapabilities(): BrowserCapabilities {
