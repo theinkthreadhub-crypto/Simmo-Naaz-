@@ -120,10 +120,12 @@ export function auditEnvironment(): EnvironmentAudit {
     live_research: {
       name: 'Live Web Research',
       category: 'AUTOMATION',
-      requiredEnv: ['RESEARCH_API_KEY'],
-      missingEnv: check(['RESEARCH_API_KEY']).missing,
-      status: check(['RESEARCH_API_KEY']).ready ? 'CONNECTED' : 'CONFIG_REQUIRED',
-      description: 'Real-time web synthesis via search providers (Tavily/SerpAPI).'
+      requiredEnv: [],
+      missingEnv: [],
+      status: env.TAVILY_API_KEY || env.RESEARCH_API_KEY ? 'CONNECTED' : 'CODE_READY',
+      description: env.TAVILY_API_KEY || env.RESEARCH_API_KEY
+        ? 'Dedicated Tavily live-search provider with source-preserving synthesis.'
+        : 'Public-web search fallback is code-ready; Tavily is optional for higher reliability.'
     },
     browser_computer: {
       name: 'Browser & Computer Automation',

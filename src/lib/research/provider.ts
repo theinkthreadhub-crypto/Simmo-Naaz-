@@ -1,42 +1,55 @@
 import { ResearchProvider, ResearchSource } from './types';
 
+const PRIVATE_IPV4 = [
+  /^10\./,
+  /^127\./,
+  /^169\.254\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^0\./
+];
+
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#x2F;/gi, '/')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
+
+function cleanHtml(value: string): string {
+  return decodeHtml(value.replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
- * SSRF and URL validation: Ensures that research only queries public HTTP/HTTPS endpoints.
- * Blocks localhost, private RFC1918 subnets, cloud metadata IPs, and unsafe protocols.
+ * Public-web boundary used by the research layer.
+ * Rejects credentials, localhost/private/link-local hosts and unsafe protocols.
  */
 export function validatePublicResearchUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      return false;
-    }
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    if (url.username || url.password) return false;
 
-    const host = url.hostname.toLowerCase();
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     if (
       host === 'localhost' ||
-      host === '127.0.0.1' ||
       host === '0.0.0.0' ||
       host === '::1' ||
-      host === '169.254.169.254' || // Cloud metadata endpoint
-      host.startsWith('10.') ||
-      host.startsWith('192.168.') ||
-      host.startsWith('172.16.') ||
-      host.startsWith('172.17.') ||
-      host.startsWith('172.18.') ||
-      host.startsWith('172.19.') ||
-      host.startsWith('172.20.') ||
-      host.startsWith('172.21.') ||
-      host.startsWith('172.22.') ||
-      host.startsWith('172.23.') ||
-      host.startsWith('172.24.') ||
-      host.startsWith('172.25.') ||
-      host.startsWith('172.26.') ||
-      host.startsWith('172.27.') ||
-      host.startsWith('172.28.') ||
-      host.startsWith('172.29.') ||
-      host.startsWith('172.30.') ||
-      host.startsWith('172.31.')
-    ) {
+      host === '169.254.169.254' ||
+      host.endsWith('.local') ||
+      host.endsWith('.localhost') ||
+      host.startsWith('fc') ||
+      host.startsWith('fd') ||
+      host.startsWith('fe80:')
+    ) return false;
+
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(host) && PRIVATE_IPV4.some(rule => rule.test(host))) {
       return false;
     }
 
@@ -46,112 +59,103 @@ export function validatePublicResearchUrl(urlString: string): boolean {
   }
 }
 
+function normalizeDuckDuckGoUrl(raw: string): string | null {
+  try {
+    let decoded = decodeHtml(raw.trim());
+    if (decoded.startsWith('//')) decoded = `https:${decoded}`;
+
+    const url = new URL(decoded);
+    if (url.hostname.endsWith('duckduckgo.com') && url.pathname.startsWith('/l/')) {
+      const target = url.searchParams.get('uddg');
+      if (!target) return null;
+      decoded = decodeURIComponent(target);
+    }
+
+    return validatePublicResearchUrl(decoded) ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
 export class TavilySearchProvider implements ResearchProvider {
   name = 'tavily';
-  private apiKey: string;
+  constructor(private apiKey: string) {}
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
-  }
-
-  async search(query: string, maxResults: number = 5): Promise<ResearchSource[]> {
-    if (!this.apiKey) {
-      return [];
-    }
+  async search(query: string, maxResults = 5): Promise<Omit<ResearchSource, 'id'>[]> {
+    if (!this.apiKey) return [];
 
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({
         api_key: this.apiKey,
         query,
         search_depth: 'advanced',
         include_answer: false,
-        max_results: maxResults
+        max_results: Math.min(Math.max(maxResults, 1), 10)
       })
     });
 
-    if (!res.ok) {
-      throw new Error(`Tavily search failed with status ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`TAVILY_SEARCH_FAILED_${res.status}`);
 
     const data = await res.json();
-    const results: ResearchSource[] = [];
+    return (data.results || [])
+      .filter((r: any) => r?.url && validatePublicResearchUrl(r.url))
+      .map((r: any) => ({
+        title: cleanHtml(r.title || 'Source'),
+        url: r.url,
+        domain: new URL(r.url).hostname.replace(/^www\./, ''),
+        snippet: cleanHtml(r.content || '').slice(0, 1400),
+        publishedDate: r.published_date || undefined,
+        score: typeof r.score === 'number' ? r.score : undefined
+      }));
+  }
+}
 
-    for (const r of data.results || []) {
-      if (r.url && validatePublicResearchUrl(r.url)) {
-        results.push({
-          title: r.title || 'Source',
-          url: r.url,
-          domain: new URL(r.url).hostname.replace('www.', ''),
-          snippet: r.content || '',
-          publishedDate: r.published_date,
-          score: r.score
-        });
-      }
+export class LiveWebSearchProvider implements ResearchProvider {
+  name = 'duckduckgo_public_web';
+
+  async search(query: string, maxResults = 5): Promise<Omit<ResearchSource, 'id'>[]> {
+    const endpoint = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const res = await fetch(endpoint, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MENTRA-Research/1.0; +https://mentra.inkthreadhub.in)',
+        'Accept': 'text/html,application/xhtml+xml'
+      },
+      signal: AbortSignal.timeout(12_000)
+    });
+
+    if (!res.ok) throw new Error(`PUBLIC_SEARCH_FAILED_${res.status}`);
+    const html = await res.text();
+    const results: Omit<ResearchSource, 'id'>[] = [];
+
+    const resultRegex = /<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let match: RegExpExecArray | null;
+
+    while ((match = resultRegex.exec(html)) !== null && results.length < maxResults) {
+      const target = normalizeDuckDuckGoUrl(match[1]);
+      if (!target) continue;
+
+      const title = cleanHtml(match[2]);
+      const snippet = cleanHtml(match[3]);
+      if (!title || !snippet) continue;
+
+      results.push({
+        title,
+        url: target,
+        domain: new URL(target).hostname.replace(/^www\./, ''),
+        snippet: snippet.slice(0, 1000)
+      });
     }
 
     return results;
   }
 }
 
-export class LiveWebSearchProvider implements ResearchProvider {
-  name = 'live_web';
-
-  async search(query: string, maxResults: number = 5): Promise<ResearchSource[]> {
-    try {
-      // Use DuckDuckGo HTML endpoint
-      const endpoint = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-      const res = await fetch(endpoint, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-
-      if (!res.ok) {
-        // Return empty array truthfully when provider fails. Never synthesize fake articles.
-        return [];
-      }
-
-      const html = await res.text();
-      const results: ResearchSource[] = [];
-
-      // Parse DuckDuckGo search result links and snippets
-      const resultRegex = /<a class="result__url" href="([^"]+)">([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet[^>]*>([\s\S]*?)<\/a>/g;
-      let match;
-      while ((match = resultRegex.exec(html)) !== null && results.length < maxResults) {
-        let rawUrl = match[1];
-        if (rawUrl.startsWith('//duckduckgo.com/l/?uddg=')) {
-          const urlParams = new URLSearchParams(rawUrl.split('?')[1]);
-          rawUrl = decodeURIComponent(urlParams.get('uddg') || rawUrl);
-        }
-
-        const snippet = match[3].replace(/<[^>]*>?/gm, '').trim();
-        let domain = 'web';
-        try { domain = new URL(rawUrl).hostname.replace('www.', ''); } catch {}
-
-        if (snippet && rawUrl.startsWith('http') && validatePublicResearchUrl(rawUrl)) {
-          results.push({
-            title: match[2].replace(/<[^>]*>?/gm, '').trim() || domain,
-            url: rawUrl,
-            domain,
-            snippet
-          });
-        }
-      }
-
-      return results;
-    } catch {
-      // Never fabricate sources on network failure
-      return [];
-    }
-  }
-}
-
 export function getResearchProvider(): ResearchProvider {
   const tavilyKey = process.env.TAVILY_API_KEY || process.env.RESEARCH_API_KEY;
-  if (tavilyKey) {
-    return new TavilySearchProvider(tavilyKey);
-  }
-  return new LiveWebSearchProvider();
+  return tavilyKey
+    ? new TavilySearchProvider(tavilyKey)
+    : new LiveWebSearchProvider();
 }

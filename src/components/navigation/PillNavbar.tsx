@@ -21,7 +21,8 @@ import {
   Sparkles,
   Flame,
   ShieldCheck,
-  Users
+  Users,
+  Search
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
@@ -40,6 +41,7 @@ const primaryNavItems = [
 const secondaryNavItems = [
   { href: '/workspace/settings', label: 'Team & Collaboration', icon: Users },
   { href: '/business', label: 'Business Hub', icon: DollarSign },
+  { href: '/research', label: 'Live Research', icon: Search },
   { href: '/creator', label: 'Creator Studio', icon: Sparkles },
   { href: '/mentra/voice', label: 'Voice MENTRA', icon: Sparkles },
   { href: '/missions', label: 'Missions & Plans', icon: Target },
@@ -68,7 +70,7 @@ export default function PillNavbar() {
   const displayLevel = progress?.level ?? player.level;
   const displayXp = progress?.current_xp ?? player.currentXp;
   const displayStreak = progress?.current_streak ?? player.streakDays;
-  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator Naaz';
+  const displayName = profile?.display_name || user?.user_metadata?.display_name || 'Operator';
 
   return (
     <header className="hidden lg:flex fixed top-5 inset-x-0 z-50 justify-center px-6 pointer-events-none">

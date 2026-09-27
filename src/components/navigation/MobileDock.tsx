@@ -19,7 +19,8 @@ import {
   Settings, 
   LogOut,
   Sparkles,
-  Flame
+  Flame,
+  Search
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
@@ -42,6 +43,7 @@ export default function MobileDock() {
     { href: '/calendar', label: 'Calendar Focus', icon: Calendar },
     { href: '/memory', label: 'Neural Memory', icon: HardDrive },
     { href: '/connections', label: 'Connected Apps', icon: Share2 },
+    { href: '/research', label: 'Live Research', icon: Search },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 

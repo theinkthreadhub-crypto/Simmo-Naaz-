@@ -1224,7 +1224,7 @@ export const searchContactsTool: ToolDefinition = {
 
 export const runWebResearchTool: ToolDefinition = {
   name: 'runWebResearch',
-  description: 'Conduct deep live web research across credible sources and synthesize structured intelligence report.',
+  description: 'Search the live public web, preserve source URLs, and return an evidence-backed report with [S#] citations.',
   permission: 'READ',
   schema: z.object({
     topic: z.string().min(1, 'Research topic required'),
@@ -1232,20 +1232,47 @@ export const runWebResearchTool: ToolDefinition = {
     depth: z.enum(['QUICK', 'STANDARD', 'DEEP']).default('STANDARD')
   }),
   execute: async (input, context) => {
-    const report = await executeWebResearch(context.userId, input.topic, input.objective, input.depth);
+    try {
+      const report = await executeWebResearch(
+        context.userId,
+        input.topic,
+        input.objective,
+        input.depth
+      );
 
-    return {
-      ok: true,
-      data: report,
-      card: {
-        id: `card_${Date.now()}`,
-        type: 'DAILY_PLAN',
-        title: `Intelligence Report: "${input.topic}"`,
-        subtitle: `Synthesized ${report.sources.length} sources • Depth: ${input.depth}`,
-        data: report
-      },
-      message: `Research synthesized (${report.sources.length} sources):\n\n${report.summary}\n\nKey Findings:\n` + report.keyFindings.map((f, i) => `${i + 1}. **${f.topic}**: ${f.insight}`).join('\n')
-    };
+      const sourceList = report.sources
+        .map(source => `[${source.id}] ${source.title} — ${source.url}`)
+        .join('\n');
+
+      return {
+        ok: true,
+        data: report,
+        card: {
+          id: `card_${Date.now()}`,
+          type: 'DAILY_PLAN',
+          title: `Live Research: "${input.topic}"`,
+          subtitle: `${report.sources.length} verified source(s) • ${report.synthesisMode}`,
+          data: report,
+          actionUrl: `/research?run=${encodeURIComponent(report.id)}`,
+          actionLabel: 'Open sources'
+        },
+        message:
+          `${report.summary}\n\nKey Findings:\n` +
+          report.keyFindings.map((finding, index) =>
+            `${index + 1}. ${finding.topic}: ${finding.insight}`
+          ).join('\n') +
+          `\n\nSources:\n${sourceList}`
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        errorCode: 'LIVE_RESEARCH_FAILED',
+        message:
+          error instanceof Error
+            ? `Live research failed: ${error.message}`
+            : 'Live research failed.'
+      };
+    }
   }
 };
 
