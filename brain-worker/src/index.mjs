@@ -512,4 +512,8 @@ process.on('SIGTERM', async () => {
   }
 });
 
-main().catch(error => {\n  backendReady = false;\n  backendError = error instanceof Error ? error.message : String(error);\n  console.error('[MENTRA Brain Worker] Startup error:', error);\n});
+main().catch(error => {
+  backendReady = false;
+  backendError = error instanceof Error ? error.message : String(error);
+  console.error('[MENTRA Brain Worker] Startup error:', error);
+});
