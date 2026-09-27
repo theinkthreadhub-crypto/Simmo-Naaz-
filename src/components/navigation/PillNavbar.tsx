@@ -77,10 +77,10 @@ export default function PillNavbar() {
         {/* Left: Brand Wordmark */}
         <Link 
           href="/" 
-          className="flex items-center gap-2.5 px-4 py-2 glass-pill bg-black/40 border-white/10 hover:border-mentra-orange/40 transition-all group"
+          className="flex items-center gap-2.5 px-4 py-2 glass-pill bg-black/40 border-white/10 hover:border-[#d8ff63]/40 transition-all group"
         >
-          <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_8px_#5b6cff]" />
-          <span className="font-display font-bold tracking-wider text-sm text-white group-hover:text-mentra-amber transition-colors">
+          <div className="w-2 h-2 rounded-full bg-[#d8ff63] shadow-[0_0_14px_rgba(216,255,99,0.55)]" />
+          <span className="font-display font-bold tracking-wider text-sm text-white group-hover:text-[#d8ff63] transition-colors">
             MENTRA
           </span>
           <span className="text-[10px] uppercase font-mono tracking-widest text-white/40 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
@@ -99,7 +99,7 @@ export default function PillNavbar() {
                 href={item.href}
                 className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${
                   isActive
-                    ? 'bg-gradient-to-r from-mentra-orange to-mentra-amber text-white shadow-[0_0_15px_rgba(91,108,255,0.4)]'
+                    ? 'bg-[#f4f1e8] text-[#0b0c09] shadow-[0_8px_30px_rgba(0,0,0,0.28)]'
                     : 'text-white/70 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -134,11 +134,11 @@ export default function PillNavbar() {
                       onClick={() => setDropdownOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all ${
                         isSubActive 
-                          ? 'bg-mentra-orange/20 text-mentra-amber border border-mentra-orange/30' 
+                          ? 'bg-[#d8ff63]/10 text-[#d8ff63] border border-[#d8ff63]/25' 
                           : 'text-white/70 hover:text-white hover:bg-white/5'
                       }`}
                     >
-                      <SubIcon className="w-3.5 h-3.5 text-mentra-amber" />
+                      <SubIcon className="w-3.5 h-3.5 text-[#d8ff63]" />
                       <span>{sub.label}</span>
                     </Link>
                   );
@@ -152,13 +152,13 @@ export default function PillNavbar() {
         <div className="relative flex items-center gap-2">
           {/* Level & Streak Quick Badge */}
           <div className="flex items-center gap-3 px-3.5 py-1.5 glass-pill bg-black/40 border-white/10 text-xs">
-            <div className="flex items-center gap-1.5 text-mentra-amber font-mono font-medium">
-              <Sparkles className="w-3.5 h-3.5 text-mentra-orange" />
+            <div className="flex items-center gap-1.5 text-[#d8ff63] font-mono font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-[#d8ff63]" />
               <span>LVL {displayLevel}</span>
             </div>
             <div className="w-[1px] h-3 bg-white/10" />
             <div className="flex items-center gap-1 text-white/80 font-mono text-[11px]">
-              <Flame className="w-3.5 h-3.5 text-mentra-orange" />
+              <Flame className="w-3.5 h-3.5 text-[#d8ff63]" />
               <span>{displayStreak}d</span>
             </div>
           </div>
@@ -166,9 +166,9 @@ export default function PillNavbar() {
           {/* Profile Trigger */}
           <button
             onClick={() => setProfileOpen(!profileOpen)}
-            className="flex items-center gap-2 p-1.5 pr-3 glass-pill bg-black/40 border-white/10 hover:border-mentra-orange/40 transition-all text-left"
+            className="flex items-center gap-2 p-1.5 pr-3 glass-pill bg-black/40 border-white/10 hover:border-[#d8ff63]/40 transition-all text-left"
           >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber flex items-center justify-center text-[10px] font-bold text-white shadow-[0_0_8px_rgba(91,108,255,0.4)]">
+            <div className="w-6 h-6 rounded-full bg-[#f4f1e8] flex items-center justify-center text-[10px] font-bold text-[#0b0c09] shadow-[0_0_20px_rgba(216,255,99,0.12)]">
               {displayName.charAt(0).toUpperCase()}
             </div>
             <span className="text-xs font-medium text-white/90 max-w-[100px] truncate">
@@ -186,13 +186,13 @@ export default function PillNavbar() {
               <div className="px-3 py-2 border-b border-white/5">
                 <div className="text-xs font-semibold text-white truncate">{displayName}</div>
                 <div className="text-[10px] font-mono text-white/40 truncate">{user?.email || 'operator@mentra.system'}</div>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-mentra-amber">
+                <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-[#d8ff63]">
                   <span>XP: {displayXp} / 1000</span>
                   <span>{Math.round((displayXp / 1000) * 100)}%</span>
                 </div>
                 <div className="mt-1 w-full bg-white/5 rounded-full h-1 overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-mentra-orange to-mentra-amber rounded-full" 
+                    className="h-full bg-[#d8ff63] rounded-full" 
                     style={{ width: `${Math.min(100, Math.round((displayXp / 1000) * 100))}%` }} 
                   />
                 </div>
