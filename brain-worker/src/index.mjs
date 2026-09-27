@@ -43,6 +43,7 @@ const sentByBot = new Set();
 let activeSocket = null;
 let reconnectTimer = null;
 let privateKey = null;
+let configError = '';
 
 function assertConfig() {
   const missing = [];
@@ -413,6 +414,8 @@ function startHealthServer() {
         JSON.stringify({
           ok: true,
           service: 'mentra-brain-worker',
+          configured: !configError,
+          configError: configError || null,
           whatsappConnected: Boolean(activeSocket?.user),
           selfChat: allowSelfChat,
           workerId,
@@ -434,8 +437,15 @@ function startHealthServer() {
 }
 
 async function main() {
-  assertConfig();
   startHealthServer();
+
+  try {
+    assertConfig();
+  } catch (error) {
+    configError = error instanceof Error ? error.message : String(error);
+    console.error('[MENTRA Brain Worker] Configuration required:', configError);
+    return;
+  }
 
   await sendHeartbeat('STARTING', { node: process.version });
   await sendWhatsAppEvent('WAITING_QR');
