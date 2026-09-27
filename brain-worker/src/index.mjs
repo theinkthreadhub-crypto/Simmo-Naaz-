@@ -45,6 +45,8 @@ let activeSocket = null;
 let reconnectTimer = null;
 let privateKey = null;
 let configError = '';
+let backendError = '';
+let backendReady = false;
 
 function assertConfig() {
   const missing = [];
@@ -428,6 +430,8 @@ function startHealthServer() {
           service: 'mentra-brain-worker',
           configured: !configError,
           configError: configError || null,
+          backendReady,
+          backendError: backendError || null,
           whatsappConnected: Boolean(activeSocket?.user),
           selfChat: allowSelfChat,
           workerId,
@@ -448,6 +452,22 @@ function startHealthServer() {
   return server;
 }
 
+async function startBackendLoop() {
+  if (activeSocket) return;
+
+  try {
+    await sendHeartbeat('STARTING', { node: process.version });
+    await sendWhatsAppEvent('WAITING_QR');
+    backendReady = true;
+    backendError = '';
+    await connectWhatsApp();
+  } catch (error) {
+    backendReady = false;
+    backendError = error instanceof Error ? error.message : String(error);
+    console.warn('[MENTRA Brain Worker] Backend not ready:', backendError);
+  }
+}
+
 async function main() {
   startHealthServer();
 
@@ -459,20 +479,28 @@ async function main() {
     return;
   }
 
-  await sendHeartbeat('STARTING', { node: process.version });
-  await sendWhatsAppEvent('WAITING_QR');
+  await startBackendLoop();
 
   setInterval(() => {
+    if (!backendReady || !activeSocket) {
+      startBackendLoop().catch(error =>
+        console.warn('[Backend retry]', error)
+      );
+      return;
+    }
+
     sendHeartbeat('ONLINE', {
       whatsappConnected: Boolean(activeSocket?.user)
-    }).catch(error => console.warn('[Heartbeat]', error));
+    }).catch(error => {
+      backendReady = false;
+      backendError = error instanceof Error ? error.message : String(error);
+      console.warn('[Heartbeat]', error);
+    });
   }, heartbeatInterval).unref();
 
   setInterval(() => {
     triggerScheduler().catch(error => console.warn('[Scheduler]', error));
   }, schedulerInterval).unref();
-
-  await connectWhatsApp();
 }
 
 process.on('SIGTERM', async () => {
@@ -484,7 +512,4 @@ process.on('SIGTERM', async () => {
   }
 });
 
-main().catch(error => {
-  console.error('[MENTRA Brain Worker] Fatal:', error);
-  process.exit(1);
-});
+main().catch(error => {\n  backendReady = false;\n  backendError = error instanceof Error ? error.message : String(error);\n  console.error('[MENTRA Brain Worker] Startup error:', error);\n});
