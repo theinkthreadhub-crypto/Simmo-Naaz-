@@ -167,13 +167,25 @@ export function auditEnvironment(): EnvironmentAudit {
         ? 'Dedicated Tavily live-search provider with source-preserving synthesis.'
         : 'Public-web search fallback is code-ready; Tavily is optional for higher reliability.'
     },
-    browser_computer: {
-      name: 'Browser & Computer Automation',
+    browser_cloud: {
+      name: 'Controlled Cloud Browser',
       category: 'AUTOMATION',
       requiredEnv: ['BROWSER_API_KEY'],
       missingEnv: check(['BROWSER_API_KEY']).missing,
-      status: check(['BROWSER_API_KEY']).ready ? 'CONNECTED' : 'CONFIG_REQUIRED',
-      description: 'Controlled browser action execution with snapshot verification.'
+      status: check(['BROWSER_API_KEY']).ready
+        ? 'CONNECTED'
+        : 'CONFIG_REQUIRED',
+      description: check(['BROWSER_API_KEY']).ready
+        ? 'Browserless navigation, rendered reads, screenshots, and approval-gated page mutations are available.'
+        : 'Add a Browserless API key to enable real browser actions. Read-only public HTTP fallback remains available.'
+    },
+    local_computer: {
+      name: 'Local Computer Bridge',
+      category: 'AUTOMATION',
+      requiredEnv: [],
+      missingEnv: [],
+      status: 'DISABLED',
+      description: 'Local desktop control is intentionally disabled until a real device-side bridge is installed. MENTRA does not simulate desktop actions.'
     }
   };
 

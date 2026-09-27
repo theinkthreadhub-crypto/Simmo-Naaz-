@@ -1,88 +1,63 @@
-import { ActionRiskLevel, evaluateActionPermission } from '../safety/riskEngine';
-
 export interface ComputerActionResult {
   success: boolean;
   action: string;
   targetApp?: string;
   requiresApproval?: boolean;
   error?: string;
+  detail?: string;
 }
 
-export interface ComputerTool {
-  openApp(appName: string): Promise<ComputerActionResult>;
-  readScreen(): Promise<ComputerActionResult>;
-  clickUI(x: number, y: number): Promise<ComputerActionResult>;
-  typeText(text: string): Promise<ComputerActionResult>;
+export interface ComputerCapabilities {
+  desktopBridgeConfigured: boolean;
+  openApp: boolean;
+  readScreen: boolean;
+  clickUI: boolean;
+  typeText: boolean;
 }
 
-export class ControlledComputerAgent implements ComputerTool {
-  private provider: string;
-  private apiKey: string;
-
-  constructor() {
-    this.provider = process.env.COMPUTER_PROVIDER || 'anthropic_computer_use';
-    this.apiKey = process.env.COMPUTER_API_KEY || '';
+export class ControlledComputerAgent {
+  getCapabilities(): ComputerCapabilities {
+    return {
+      desktopBridgeConfigured: false,
+      openApp: false,
+      readScreen: false,
+      clickUI: false,
+      typeText: false
+    };
   }
 
   isConfigured(): boolean {
-    return Boolean(this.apiKey);
+    return false;
+  }
+
+  private unavailable(
+    action: string,
+    targetApp?: string
+  ): ComputerActionResult {
+    return {
+      success: false,
+      action,
+      targetApp,
+      error: 'LOCAL_COMPUTER_BRIDGE_NOT_CONFIGURED',
+      detail:
+        'MENTRA will not simulate desktop control. Use the controlled cloud browser for web actions until a real local desktop bridge is installed.'
+    };
   }
 
   async openApp(appName: string): Promise<ComputerActionResult> {
-    if (!this.isConfigured()) {
-      return {
-        success: false,
-        action: 'OPEN_APP',
-        targetApp: appName,
-        error: 'COMPUTER_USE_PROVIDER_UNCONFIGURED'
-      };
-    }
-
-    const perm = evaluateActionPermission('ASSISTED', 'open_application', { appName });
-    if (perm.requiresApproval) {
-      return {
-        success: false,
-        action: 'OPEN_APP',
-        targetApp: appName,
-        requiresApproval: true,
-        error: 'APPROVAL_REQUIRED_BEFORE_OPENING_APP'
-      };
-    }
-
-    return { success: true, action: 'OPEN_APP', targetApp: appName };
+    return this.unavailable('OPEN_APP', appName);
   }
 
   async readScreen(): Promise<ComputerActionResult> {
-    if (!this.isConfigured()) {
-      return {
-        success: false,
-        action: 'READ_SCREEN',
-        error: 'COMPUTER_USE_PROVIDER_UNCONFIGURED'
-      };
-    }
-
-    return { success: true, action: 'READ_SCREEN' };
+    return this.unavailable('READ_SCREEN');
   }
 
-  async clickUI(x: number, y: number): Promise<ComputerActionResult> {
-    if (!this.isConfigured()) {
-      return { success: false, action: 'CLICK_UI', error: 'COMPUTER_USE_PROVIDER_UNCONFIGURED' };
-    }
-
-    const perm = evaluateActionPermission('ASSISTED', 'computer_click', { x, y });
-    if (perm.requiresApproval) {
-      return { success: false, action: 'CLICK_UI', requiresApproval: true, error: 'APPROVAL_REQUIRED' };
-    }
-
-    return { success: true, action: 'CLICK_UI' };
+  async clickUI(_x: number, _y: number): Promise<ComputerActionResult> {
+    return this.unavailable('CLICK_UI');
   }
 
-  async typeText(text: string): Promise<ComputerActionResult> {
-    if (!this.isConfigured()) {
-      return { success: false, action: 'TYPE_TEXT', error: 'COMPUTER_USE_PROVIDER_UNCONFIGURED' };
-    }
-
-    return { success: true, action: 'TYPE_TEXT' };
+  async typeText(_text: string): Promise<ComputerActionResult> {
+    return this.unavailable('TYPE_TEXT');
   }
 }
 

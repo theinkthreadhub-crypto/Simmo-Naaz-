@@ -916,29 +916,86 @@ export const listMonitorsTool: ToolDefinition = {
   }
 };
 
-export const browserReadTool: ToolDefinition = {
-  name: 'browserRead',
-  description: 'Open a public URL and read visible page content through the controlled browser layer.',
+export const browserNavigateTool: ToolDefinition = {
+  name: 'browserNavigate',
+  description: 'Open a public URL in the controlled cloud browser and return the rendered page state.',
   permission: 'READ',
   schema: z.object({
     url: z.string().url()
   }),
   execute: async (input, context) => {
-    const result = await browserAgent.readPage(input.url);
+    const sessionId = await browserAgent.ensureSession(context.userId, input.url);
+    const result = await browserAgent.navigate(input.url);
+
     await browserAgent.logBrowserAction(
       context.userId,
-      context.conversationId || `browser_${Date.now()}`,
+      sessionId,
       result,
-      'LOW_RISK_EXTERNAL'
+      'LOW_RISK_EXTERNAL',
+      {
+        idempotencyKey: context.idempotencyKey
+      }
     );
 
     const safeContent = result.extractedContent
-      ? sanitizeExternalContent(result.extractedContent, 'BROWSER_PAGE').sanitizedContent
+      ? sanitizeExternalContent(
+          result.extractedContent,
+          'BROWSER_PAGE'
+        ).sanitizedContent
       : undefined;
 
     return {
       ok: result.success,
-      data: { ...result, extractedContent: safeContent },
+      data: {
+        ...result,
+        screenshotUrl: undefined,
+        extractedContent: safeContent,
+        sessionId
+      },
+      errorCode: result.success ? undefined : result.status,
+      message: result.success
+        ? `Opened ${result.targetUrl} in the controlled browser.`
+        : (result.error || 'Browser navigation failed.')
+    };
+  }
+};
+
+export const browserReadTool: ToolDefinition = {
+  name: 'browserRead',
+  description: 'Read visible rendered text from a public URL through the controlled browser layer.',
+  permission: 'READ',
+  schema: z.object({
+    url: z.string().url()
+  }),
+  execute: async (input, context) => {
+    const sessionId = await browserAgent.ensureSession(context.userId, input.url);
+    const result = await browserAgent.readPage(input.url);
+
+    await browserAgent.logBrowserAction(
+      context.userId,
+      sessionId,
+      result,
+      'LOW_RISK_EXTERNAL',
+      {
+        idempotencyKey: context.idempotencyKey
+      }
+    );
+
+    const safeContent = result.extractedContent
+      ? sanitizeExternalContent(
+          result.extractedContent,
+          'BROWSER_PAGE'
+        ).sanitizedContent
+      : undefined;
+
+    return {
+      ok: result.success,
+      data: {
+        ...result,
+        screenshotUrl: undefined,
+        extractedContent: safeContent,
+        sessionId
+      },
       errorCode: result.success ? undefined : result.status,
       message: result.success
         ? `Read ${result.targetUrl} successfully.`
@@ -947,15 +1004,56 @@ export const browserReadTool: ToolDefinition = {
   }
 };
 
+export const browserScreenshotTool: ToolDefinition = {
+  name: 'browserScreenshot',
+  description: 'Capture a viewport screenshot of a public URL in the controlled cloud browser.',
+  permission: 'READ',
+  schema: z.object({
+    url: z.string().url()
+  }),
+  execute: async (input, context) => {
+    const sessionId = await browserAgent.ensureSession(context.userId, input.url);
+    const result = await browserAgent.screenshot(input.url);
+
+    await browserAgent.logBrowserAction(
+      context.userId,
+      sessionId,
+      result,
+      'LOW_RISK_EXTERNAL',
+      {
+        idempotencyKey: context.idempotencyKey
+      }
+    );
+
+    return {
+      ok: result.success,
+      data: {
+        success: result.success,
+        actionType: result.actionType,
+        targetUrl: result.targetUrl,
+        status: result.status,
+        screenshotUrl: result.screenshotUrl,
+        durationMs: result.durationMs,
+        sessionId
+      },
+      errorCode: result.success ? undefined : result.status,
+      message: result.success
+        ? `Screenshot captured for ${result.targetUrl}.`
+        : (result.error || 'Browser screenshot failed.')
+    };
+  }
+};
+
 export const browserClickTool: ToolDefinition = {
   name: 'browserClick',
-  description: 'Click a specific CSS selector on a public webpage. Requires explicit approval.',
+  description: 'Click a specific CSS selector on a public webpage. Requires explicit operator approval.',
   permission: 'APPROVAL_REQUIRED',
   schema: z.object({
     url: z.string().url(),
     selector: z.string().min(1).max(500)
   }),
   execute: async (input, context) => {
+    const sessionId = await browserAgent.ensureSession(context.userId, input.url);
     const result = await browserAgent.click(
       input.url,
       input.selector,
@@ -964,18 +1062,31 @@ export const browserClickTool: ToolDefinition = {
 
     await browserAgent.logBrowserAction(
       context.userId,
-      context.conversationId || `browser_${Date.now()}`,
+      sessionId,
       result,
-      'SENSITIVE'
+      'SENSITIVE',
+      {
+        selector: input.selector,
+        requiresApproval: true,
+        idempotencyKey: context.idempotencyKey
+      }
     );
 
     const safeContent = result.extractedContent
-      ? sanitizeExternalContent(result.extractedContent, 'BROWSER_PAGE').sanitizedContent
+      ? sanitizeExternalContent(
+          result.extractedContent,
+          'BROWSER_PAGE'
+        ).sanitizedContent
       : undefined;
 
     return {
       ok: result.success,
-      data: { ...result, extractedContent: safeContent },
+      data: {
+        ...result,
+        screenshotUrl: undefined,
+        extractedContent: safeContent,
+        sessionId
+      },
       errorCode: result.success ? undefined : result.status,
       message: result.success
         ? `Clicked ${input.selector} on ${result.targetUrl}.`
@@ -986,14 +1097,15 @@ export const browserClickTool: ToolDefinition = {
 
 export const browserTypeTool: ToolDefinition = {
   name: 'browserType',
-  description: 'Type text into a CSS selector on a public webpage. Requires explicit approval.',
+  description: 'Type text into a CSS selector on a public webpage. Requires explicit operator approval.',
   permission: 'APPROVAL_REQUIRED',
   schema: z.object({
     url: z.string().url(),
     selector: z.string().min(1).max(500),
-    text: z.string().max(4000)
+    text: z.string().min(1).max(4000)
   }),
   execute: async (input, context) => {
+    const sessionId = await browserAgent.ensureSession(context.userId, input.url);
     const result = await browserAgent.type(
       input.url,
       input.selector,
@@ -1003,18 +1115,32 @@ export const browserTypeTool: ToolDefinition = {
 
     await browserAgent.logBrowserAction(
       context.userId,
-      context.conversationId || `browser_${Date.now()}`,
+      sessionId,
       result,
-      'SENSITIVE'
+      'SENSITIVE',
+      {
+        selector: input.selector,
+        payload: { textLength: input.text.length },
+        requiresApproval: true,
+        idempotencyKey: context.idempotencyKey
+      }
     );
 
     const safeContent = result.extractedContent
-      ? sanitizeExternalContent(result.extractedContent, 'BROWSER_PAGE').sanitizedContent
+      ? sanitizeExternalContent(
+          result.extractedContent,
+          'BROWSER_PAGE'
+        ).sanitizedContent
       : undefined;
 
     return {
       ok: result.success,
-      data: { ...result, extractedContent: safeContent },
+      data: {
+        ...result,
+        screenshotUrl: undefined,
+        extractedContent: safeContent,
+        sessionId
+      },
       errorCode: result.success ? undefined : result.status,
       message: result.success
         ? `Typed into ${input.selector} on ${result.targetUrl}.`
@@ -1025,14 +1151,17 @@ export const browserTypeTool: ToolDefinition = {
 
 export const browserSubmitTool: ToolDefinition = {
   name: 'browserSubmit',
-  description: 'Fill named fields and submit a form selected by CSS selector. Requires explicit approval.',
+  description: 'Fill named fields and submit a public web form. Requires explicit operator approval.',
   permission: 'APPROVAL_REQUIRED',
   schema: z.object({
     url: z.string().url(),
     selector: z.string().min(1).max(500),
-    fields: z.record(z.union([z.string(), z.number(), z.boolean()]))
+    fields: z.record(
+      z.union([z.string(), z.number(), z.boolean()])
+    )
   }),
   execute: async (input, context) => {
+    const sessionId = await browserAgent.ensureSession(context.userId, input.url);
     const result = await browserAgent.submit(
       input.url,
       input.selector,
@@ -1042,18 +1171,35 @@ export const browserSubmitTool: ToolDefinition = {
 
     await browserAgent.logBrowserAction(
       context.userId,
-      context.conversationId || `browser_${Date.now()}`,
+      sessionId,
       result,
-      'SENSITIVE'
+      'SENSITIVE',
+      {
+        selector: input.selector,
+        payload: {
+          fieldNames: Object.keys(input.fields),
+          fieldCount: Object.keys(input.fields).length
+        },
+        requiresApproval: true,
+        idempotencyKey: context.idempotencyKey
+      }
     );
 
     const safeContent = result.extractedContent
-      ? sanitizeExternalContent(result.extractedContent, 'BROWSER_PAGE').sanitizedContent
+      ? sanitizeExternalContent(
+          result.extractedContent,
+          'BROWSER_PAGE'
+        ).sanitizedContent
       : undefined;
 
     return {
       ok: result.success,
-      data: { ...result, extractedContent: safeContent },
+      data: {
+        ...result,
+        screenshotUrl: undefined,
+        extractedContent: safeContent,
+        sessionId
+      },
       errorCode: result.success ? undefined : result.status,
       message: result.success
         ? `Submitted the approved form on ${result.targetUrl}.`
@@ -1749,7 +1895,9 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   listScheduledJobs: listScheduledJobsTool,
   scheduleMonitor: scheduleMonitorTool,
   listMonitors: listMonitorsTool,
+  browserNavigate: browserNavigateTool,
   browserRead: browserReadTool,
+  browserScreenshot: browserScreenshotTool,
   browserClick: browserClickTool,
   browserType: browserTypeTool,
   browserSubmit: browserSubmitTool,

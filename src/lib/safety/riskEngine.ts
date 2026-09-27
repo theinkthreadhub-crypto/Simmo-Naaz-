@@ -33,12 +33,16 @@ export function classifyActionRisk(
   payload?: Record<string, unknown>
 ): ActionRiskLevel {
   const name = toolOrActionName.toLowerCase();
+  const payloadText = payload
+    ? JSON.stringify(payload).toLowerCase()
+    : '';
 
   if (
     name.includes('token') ||
     name.includes('password') ||
     name.includes('auth') ||
-    name.includes('credential')
+    name.includes('credential') ||
+    /password|passcode|otp|token|secret|credential|api[_ -]?key/.test(payloadText)
   ) {
     return 'SECURITY';
   }
@@ -56,7 +60,8 @@ export function classifyActionRisk(
     name.includes('payment') ||
     name.includes('transfer') ||
     name.includes('checkout') ||
-    name.includes('purchase')
+    name.includes('purchase') ||
+    /checkout|purchase|buy now|place order|pay now|payment|transfer/.test(payloadText)
   ) {
     return 'FINANCIAL';
   }
