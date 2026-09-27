@@ -9,8 +9,8 @@ function mapRun(row: any) {
     topic: row.topic,
     objective: row.objective || undefined,
     depth: row.depth,
-    provider: row.sources?.[0]?.domain ? 'stored_live_web' : 'stored',
-    synthesisMode: row.key_findings?.length ? 'AI_SYNTHESIS' : 'EVIDENCE_ONLY',
+    provider: row.provider || 'stored',
+    synthesisMode: row.synthesis_mode || 'EVIDENCE_ONLY',
     persisted: true,
     summary: row.summary || '',
     keyFindings: row.key_findings || [],
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('research_runs')
-      .select('id, topic, objective, depth, status, summary, created_at')
+      .select('id, topic, objective, depth, status, summary, provider, synthesis_mode, source_count, created_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(30);

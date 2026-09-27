@@ -214,7 +214,10 @@ export async function executeWebResearch(
       topic: cleanTopic,
       objective: objective?.trim() || null,
       depth,
-      status: 'SEARCHING'
+      status: 'SEARCHING',
+      provider: provider.name,
+      synthesis_mode: null,
+      source_count: 0
     })
     .select('id')
     .maybeSingle();
@@ -287,7 +290,10 @@ export async function executeWebResearch(
           key_findings: report.keyFindings,
           evidence: report.evidence,
           sources: report.sources,
-          recommendations: report.recommendations
+          recommendations: report.recommendations,
+          provider: report.provider,
+          synthesis_mode: report.synthesisMode,
+          source_count: report.sources.length
         })
         .eq('id', runId)
         .eq('user_id', userId);
