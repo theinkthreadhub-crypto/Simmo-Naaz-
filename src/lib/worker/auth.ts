@@ -1,10 +1,7 @@
 import crypto from 'crypto';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
-const DEFAULT_WORKER_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAPI3D3XPFBvaudF6GRBmJ21KsF+i2o33eG2oCAUQhfyc=
------END PUBLIC KEY-----`;
-
+const DEFAULT_WORKER_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAPI3D3XPFBvaudF6GRBmJ21KsF+i2o33eG2oCAUQhfyc=\n-----END PUBLIC KEY-----`;\n\nconst DEFAULT_WORKER_TOKEN_HASH = 'bcc6fa8390ec665681108a5516c9d1fd23fdfbe3102d9c9f12d0d4e77b11beac';\n
 function safeEqual(provided: string | null, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
   const a = Buffer.from(provided);
@@ -13,10 +10,7 @@ function safeEqual(provided: string | null, expected: string | undefined): boole
   return crypto.timingSafeEqual(a, b);
 }
 
-export function verifyBrainWorkerSecret(provided: string | null): boolean {
-  return safeEqual(provided, process.env.BRAIN_WORKER_SECRET);
-}
-
+export function verifyBrainWorkerSecret(provided: string | null): boolean {\n  return safeEqual(provided, process.env.BRAIN_WORKER_SECRET);\n}\n\nexport function verifyBrainWorkerToken(provided: string | null): boolean {\n  if (!provided) return false;\n  const expectedHash = process.env.BRAIN_WORKER_TOKEN_HASH || DEFAULT_WORKER_TOKEN_HASH;\n  const actualHash = crypto.createHash('sha256').update(provided).digest('hex');\n  return safeEqual(actualHash, expectedHash);\n}\n
 export function verifyBrainWorkerSignature(
   timestampHeader: string | null,
   signatureHeader: string | null,
