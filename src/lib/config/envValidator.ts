@@ -120,14 +120,35 @@ export function auditEnvironment(): EnvironmentAudit {
             : 'Google Workspace requires OAuth credentials plus server-only token encryption/storage configuration.'
       };
     })(),
-    whatsapp_cloud: {
-      name: 'WhatsApp Cloud API',
-      category: 'INTEGRATION',
-      requiredEnv: ['WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_ACCESS_TOKEN'],
-      missingEnv: check(['WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_ACCESS_TOKEN']).missing,
-      status: check(['WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_ACCESS_TOKEN']).ready ? 'CONNECTED' : 'CONFIG_REQUIRED',
-      description: 'Two-way WhatsApp messaging, reminders, and voice transcription.'
-    },
+    whatsapp_cloud: (() => {
+      const required = [
+        'WHATSAPP_PHONE_NUMBER_ID',
+        'WHATSAPP_ACCESS_TOKEN',
+        'WHATSAPP_VERIFY_TOKEN',
+        'WHATSAPP_APP_SECRET',
+        'WHATSAPP_BUSINESS_DISPLAY_NUMBER',
+        'WHATSAPP_ALLOWED_NUMBERS'
+      ];
+      const state = check(required);
+      const disabled = env.WHATSAPP_ENABLED === 'false';
+
+      return {
+        name: 'WhatsApp Cloud API',
+        category: 'INTEGRATION' as const,
+        requiredEnv: required,
+        missingEnv: state.missing,
+        status: disabled
+          ? 'DISABLED' as const
+          : state.ready
+            ? 'CODE_READY' as const
+            : 'CONFIG_REQUIRED' as const,
+        description: disabled
+          ? 'Official Meta WhatsApp Cloud API is disabled by configuration.'
+          : state.ready
+            ? 'Official Cloud API webhook and outbound transport are server-ready; per-user phone linking is verified separately.'
+            : 'Official Cloud API requires Meta phone, access token, webhook verify token, app secret, business display number, and an explicit owner allowlist.'
+      };
+    })(),
     voice_speech: {
       name: 'Sovereign Speech Engine',
       category: 'VOICE',

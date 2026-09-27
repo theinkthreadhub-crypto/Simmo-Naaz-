@@ -14,6 +14,11 @@ const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const authDir = process.env.WHATSAPP_AUTH_DIR || './data/whatsapp-auth';
 const workerId = process.env.WORKER_ID || 'mentra-brain-01';
+const workerUserId = process.env.WORKER_USER_ID || '';
+const whatsappMode = (process.env.WHATSAPP_WORKER_MODE || 'disabled').toLowerCase();
+const schedulerEnabled =
+  (process.env.SCHEDULER_ENABLED || 'true').toLowerCase() !== 'false';
+
 const schedulerInterval = Math.max(
   60_000,
   Number(process.env.SCHEDULER_INTERVAL_MS || 60_000)
@@ -24,63 +29,90 @@ const heartbeatInterval = Math.max(
 );
 const sessionFile = path.resolve('./data/user-session.json');
 
-// Who MENTRA replies to on WhatsApp (see isAllowedChat).
 const allowedNumbers = new Set(
   (process.env.WHATSAPP_ALLOWED_NUMBERS || '')
     .split(',')
     .map(value => value.replace(/[^0-9]/g, ''))
     .filter(Boolean)
 );
-const allowSelfChat = (process.env.WHATSAPP_SELF_CHAT || 'true').toLowerCase() !== 'false';
+const allowSelfChat =
+  (process.env.WHATSAPP_SELF_CHAT || 'true').toLowerCase() !== 'false';
+
 const REPLY_MARK = '🧠 MENTRA';
 const sentByBot = new Set();
 
 let accessToken = '';
 let refreshToken = process.env.MENTRA_REFRESH_TOKEN || '';
 let accessTokenExpiresAt = 0;
-let userId = '';
+let userId = workerUserId;
 let activeSocket = null;
 let reconnectTimer = null;
+let shuttingDown = false;
 
 function assertConfig() {
   const missing = [];
+
   if (!baseUrl) missing.push('MENTRA_BASE_URL');
   if (!workerSecret) missing.push('BRAIN_WORKER_SECRET');
-  if (!supabaseUrl) missing.push('SUPABASE_URL');
-  if (!supabaseAnonKey) missing.push('SUPABASE_ANON_KEY');
-  if (!refreshToken) missing.push('MENTRA_REFRESH_TOKEN');
+
+  if (schedulerEnabled && !cronSecret) {
+    missing.push('CRON_SECRET');
+  }
+
+  if (whatsappMode === 'baileys') {
+    if (!supabaseUrl) missing.push('SUPABASE_URL');
+    if (!supabaseAnonKey) missing.push('SUPABASE_ANON_KEY');
+    if (!refreshToken) missing.push('MENTRA_REFRESH_TOKEN');
+  } else if (whatsappMode !== 'disabled') {
+    throw new Error(
+      'WHATSAPP_WORKER_MODE must be "disabled" or "baileys". Official Cloud API runs in the MENTRA web app webhook, not this worker.'
+    );
+  }
+
   if (missing.length) {
     throw new Error(`Missing worker env: ${missing.join(', ')}`);
   }
 }
 
 async function loadPersistedSession() {
+  if (whatsappMode !== 'baileys') return;
+
   try {
     const raw = JSON.parse(await fs.readFile(sessionFile, 'utf8'));
     refreshToken = raw.refreshToken || refreshToken;
     accessToken = raw.accessToken || '';
     accessTokenExpiresAt = Number(raw.accessTokenExpiresAt || 0);
-    userId = raw.userId || '';
+    userId = raw.userId || userId;
   } catch {
-    // First boot.
+    // First boot or no persisted user session.
   }
 }
 
 async function persistSession() {
+  if (whatsappMode !== 'baileys') return;
+
   await fs.mkdir(path.dirname(sessionFile), { recursive: true });
   await fs.writeFile(
     sessionFile,
-    JSON.stringify({
-      refreshToken,
-      accessToken,
-      accessTokenExpiresAt,
-      userId
-    }, null, 2),
+    JSON.stringify(
+      {
+        refreshToken,
+        accessToken,
+        accessTokenExpiresAt,
+        userId
+      },
+      null,
+      2
+    ),
     { mode: 0o600 }
   );
 }
 
 async function refreshUserSession(force = false) {
+  if (whatsappMode !== 'baileys') {
+    throw new Error('USER_SESSION_NOT_REQUIRED_IN_DISABLED_WHATSAPP_MODE');
+  }
+
   if (
     !force &&
     accessToken &&
@@ -97,13 +129,16 @@ async function refreshUserSession(force = false) {
         'Content-Type': 'application/json',
         apikey: supabaseAnonKey
       },
-      body: JSON.stringify({ refresh_token: refreshToken })
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: AbortSignal.timeout(15_000)
     }
   );
 
   if (!response.ok) {
     throw new Error(
-      `Supabase token refresh failed: ${response.status} ${await response.text()}`
+      `Supabase token refresh failed: ${response.status} ${(
+        await response.text()
+      ).slice(0, 500)}`
     );
   }
 
@@ -135,11 +170,13 @@ async function postInternal(endpoint, body, { userAuth = false } = {}) {
   const response = await fetch(`${baseUrl}${endpoint}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000)
   });
 
   const text = await response.text();
   let data = {};
+
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
@@ -156,17 +193,22 @@ async function postInternal(endpoint, body, { userAuth = false } = {}) {
 }
 
 async function sendHeartbeat(status = 'ONLINE', metadata = {}) {
-  if (!userId) await refreshUserSession();
   await postInternal('/api/worker/heartbeat', {
     workerId,
-    userId,
+    userId: userId || null,
     status,
-    metadata
+    metadata: {
+      schedulerEnabled,
+      whatsappMode,
+      ...metadata
+    }
   });
 }
 
 async function sendWhatsAppEvent(status, extra = {}) {
+  if (whatsappMode !== 'baileys') return;
   if (!userId) await refreshUserSession();
+
   await postInternal('/api/worker/whatsapp/event', {
     workerId,
     userId,
@@ -185,47 +227,54 @@ function extractText(message) {
   );
 }
 
-/** "916392995127:12@s.whatsapp.net" -> "916392995127" */
 function jidNumber(jid) {
-  return String(jid || '').split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+  return String(jid || '')
+    .split('@')[0]
+    .split(':')[0]
+    .replace(/[^0-9]/g, '');
 }
 
 function rememberBotMessage(id) {
   if (!id) return;
   sentByBot.add(id);
+
   if (sentByBot.size > 500) {
     const oldest = sentByBot.values().next().value;
-    sentByBot.delete(oldest);
+    if (oldest) sentByBot.delete(oldest);
   }
 }
 
-/**
- * Who may talk to MENTRA:
- * - Self chat ("Message yourself") on the linked account, if WHATSAPP_SELF_CHAT is not "false".
- * - Numbers in WHATSAPP_ALLOWED_NUMBERS.
- * Everyone else is ignored silently, so friends and customers never get AI replies.
- */
 function isAllowedChat(sock, envelope) {
   const key = envelope.key || {};
   const jid = key.remoteJid || '';
   const ownNumber = jidNumber(sock.user?.id);
   const ownLid = jidNumber(sock.user?.lid);
 
-  // Baileys v7 may address chats by LID; the phone-number JID can be in an alternate field.
-  const candidates = [jid, key.remoteJidAlt, key.senderPn, key.participantPn]
+  const candidates = [
+    jid,
+    key.remoteJidAlt,
+    key.senderPn,
+    key.participantPn
+  ]
     .filter(Boolean)
     .map(jidNumber)
     .filter(Boolean);
 
-  const isSelfChat = candidates.some(number => number === ownNumber || (ownLid && number === ownLid));
-  if (isSelfChat) return allowSelfChat;
+  const isSelfChat = candidates.some(
+    number =>
+      number === ownNumber ||
+      Boolean(ownLid && number === ownLid)
+  );
 
-  if (key.fromMe) return false; // your own messages to other people
+  if (isSelfChat) return allowSelfChat;
+  if (key.fromMe) return false;
+
   return candidates.some(number => allowedNumbers.has(number));
 }
 
 async function handleIncoming(sock, envelope) {
   const jid = envelope.key?.remoteJid || '';
+
   if (
     !jid ||
     jid.endsWith('@g.us') ||
@@ -235,36 +284,39 @@ async function handleIncoming(sock, envelope) {
     return;
   }
 
-  // Never answer our own replies (important in self chat).
   if (sentByBot.has(envelope.key?.id)) return;
 
   const text = extractText(envelope.message).trim();
   if (!text || text.startsWith(REPLY_MARK)) return;
-
   if (!isAllowedChat(sock, envelope)) return;
+
+  const messageId = envelope.key?.id;
+  if (!messageId) return;
 
   const result = await postInternal(
     '/api/worker/whatsapp/inbound',
     {
       jid,
-      messageId: envelope.key?.id || `wa_${Date.now()}`,
+      messageId,
       text,
       pushName: envelope.pushName || ''
     },
     { userAuth: true }
   );
 
-  if (result?.reply) {
-    const sent = await sock.sendMessage(jid, {
-      text: `${REPLY_MARK}\n${String(result.reply)}`.slice(0, 12000)
-    });
-    rememberBotMessage(sent?.key?.id);
-  }
+  if (result?.duplicate || !result?.reply) return;
+
+  const sent = await sock.sendMessage(jid, {
+    text: `${REPLY_MARK}\n${String(result.reply)}`.slice(0, 12000)
+  });
+
+  rememberBotMessage(sent?.key?.id);
 }
 
 async function connectWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState(authDir);
+  if (whatsappMode !== 'baileys' || shuttingDown) return;
 
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const sock = makeWASocket({
     auth: state,
     markOnlineOnConnect: false,
@@ -287,23 +339,13 @@ async function connectWhatsApp() {
           .split('@')[0];
 
         await sendWhatsAppEvent('CONNECTED', { connectedNumber });
-        console.log(
-          '[MENTRA Brain Worker] WhatsApp connected:',
-          connectedNumber || 'linked device'
-        );
-        console.log(
-          '[MENTRA Brain Worker] Replies to:',
-          [
-            allowSelfChat ? 'self chat' : null,
-            ...Array.from(allowedNumbers)
-          ].filter(Boolean).join(', ') || 'nobody (set WHATSAPP_ALLOWED_NUMBERS)'
-        );
       }
 
       if (update.connection === 'close') {
         const statusCode =
           update.lastDisconnect?.error?.output?.statusCode;
-        const loggedOut = statusCode === DisconnectReason.loggedOut;
+        const loggedOut =
+          statusCode === DisconnectReason.loggedOut;
 
         await sendWhatsAppEvent(
           loggedOut ? 'DISCONNECTED' : 'ERROR',
@@ -316,7 +358,7 @@ async function connectWhatsApp() {
 
         activeSocket = null;
 
-        if (!loggedOut && !reconnectTimer) {
+        if (!loggedOut && !shuttingDown && !reconnectTimer) {
           reconnectTimer = setTimeout(() => {
             reconnectTimer = null;
             connectWhatsApp().catch(error =>
@@ -344,21 +386,22 @@ async function connectWhatsApp() {
 }
 
 async function triggerScheduler() {
-  if (!cronSecret) return;
+  if (!schedulerEnabled || !cronSecret || shuttingDown) return;
 
   try {
     const response = await fetch(`${baseUrl}/api/cron/dispatch`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${cronSecret}`
-      }
+      },
+      signal: AbortSignal.timeout(45_000)
     });
 
     if (!response.ok) {
       console.warn(
         '[Scheduler tick]',
         response.status,
-        await response.text()
+        (await response.text()).slice(0, 500)
       );
     }
   } catch (error) {
@@ -369,30 +412,62 @@ async function triggerScheduler() {
 async function main() {
   assertConfig();
   await loadPersistedSession();
-  await refreshUserSession(true);
-  await sendHeartbeat('STARTING', { node: process.version });
-  await sendWhatsAppEvent('WAITING_QR');
 
-  setInterval(() => {
+  if (whatsappMode === 'baileys') {
+    await refreshUserSession(true);
+  }
+
+  await sendHeartbeat('STARTING', { node: process.version });
+
+  const heartbeatTimer = setInterval(() => {
     sendHeartbeat('ONLINE', {
       whatsappConnected: Boolean(activeSocket?.user)
     }).catch(error => console.warn('[Heartbeat]', error));
-  }, heartbeatInterval).unref();
+  }, heartbeatInterval);
+  heartbeatTimer.unref();
 
-  setInterval(() => {
-    triggerScheduler().catch(error => console.warn('[Scheduler]', error));
-  }, schedulerInterval).unref();
+  if (schedulerEnabled) {
+    await triggerScheduler();
+    const schedulerTimer = setInterval(() => {
+      triggerScheduler().catch(error =>
+        console.warn('[Scheduler]', error)
+      );
+    }, schedulerInterval);
+    schedulerTimer.unref();
+  }
 
-  await connectWhatsApp();
+  if (whatsappMode === 'baileys') {
+    await sendWhatsAppEvent('WAITING_QR');
+    await connectWhatsApp();
+  } else {
+    await sendHeartbeat('ONLINE', {
+      whatsappConnected: false,
+      note: 'Official WhatsApp Cloud API is handled by the MENTRA webhook.'
+    });
+  }
 }
 
-process.on('SIGTERM', async () => {
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
   try {
-    await sendHeartbeat('STOPPING');
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    await sendHeartbeat('STOPPING', { signal });
     activeSocket?.end?.(new Error('Worker shutting down'));
+  } catch (error) {
+    console.warn('[Worker shutdown]', error);
   } finally {
     process.exit(0);
   }
+}
+
+process.on('SIGTERM', () => {
+  shutdown('SIGTERM');
+});
+
+process.on('SIGINT', () => {
+  shutdown('SIGINT');
 });
 
 main().catch(error => {

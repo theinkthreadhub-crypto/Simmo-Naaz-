@@ -5,11 +5,26 @@ export interface WhatsAppButton {
   title: string;
 }
 
+export interface WhatsAppTemplateParameter {
+  type: 'text';
+  text: string;
+}
+
 export interface WhatsAppSendResult {
   success: boolean;
   messageId?: string;
   error?: string;
-  mock?: boolean;
+  replayed?: boolean;
+}
+
+interface SendOptions {
+  userId?: string;
+  deduplicationKey?: string;
+}
+
+function cleanPhoneNumber(value: string): string | null {
+  const digits = String(value || '').replace(/[^0-9]/g, '');
+  return /^[0-9]{8,15}$/.test(digits) ? digits : null;
 }
 
 export class WhatsAppClient {
@@ -20,160 +35,339 @@ export class WhatsAppClient {
   constructor() {
     this.phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
     this.accessToken = process.env.WHATSAPP_ACCESS_TOKEN || '';
-    this.apiVersion = process.env.WHATSAPP_API_VERSION || 'v19.0';
+    this.apiVersion = process.env.WHATSAPP_API_VERSION || 'v21.0';
   }
 
   public isConfigured(): boolean {
     return Boolean(this.phoneNumberId && this.accessToken);
   }
 
-  /**
-   * Send a standard text message to a WhatsApp user
-   */
-  async sendTextMessage(to: string, text: string, userId?: string): Promise<WhatsAppSendResult> {
-    const cleanPhone = to.replace(/[^0-9]/g, '');
+  private async reserveOutbound(
+    recipient: string,
+    messageType: 'TEXT' | 'TEMPLATE' | 'INTERACTIVE',
+    content: string,
+    options: SendOptions
+  ): Promise<{ rowId?: string; replay?: WhatsAppSendResult; error?: string }> {
+    if (!options.userId || !options.deduplicationKey) return {};
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('outbound_messages')
+      .insert({
+        user_id: options.userId,
+        channel: 'WHATSAPP',
+        recipient,
+        message_type: messageType,
+        content,
+        status: 'QUEUED',
+        deduplication_key: options.deduplicationKey,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+
+    if (!error && data?.id) return { rowId: data.id };
+
+    if (error?.code !== '23505') {
+      return { error: error?.message || 'OUTBOUND_RESERVATION_FAILED' };
+    }
+
+    const { data: existing } = await supabase
+      .from('outbound_messages')
+      .select('id, status, provider_message_id, error')
+      .eq('user_id', options.userId)
+      .eq('deduplication_key', options.deduplicationKey)
+      .maybeSingle();
+
+    if (!existing) return { error: 'OUTBOUND_RESERVATION_CONFLICT' };
+
+    if (['SENT', 'DELIVERED', 'READ'].includes(existing.status)) {
+      return {
+        replay: {
+          success: true,
+          messageId: existing.provider_message_id || undefined,
+          replayed: true
+        }
+      };
+    }
+
+    if (existing.status === 'QUEUED') {
+      return { error: 'OUTBOUND_ALREADY_IN_PROGRESS' };
+    }
+
+    const { data: reclaimed } = await supabase
+      .from('outbound_messages')
+      .update({
+        status: 'QUEUED',
+        error: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existing.id)
+      .eq('status', 'FAILED')
+      .select('id')
+      .maybeSingle();
+
+    return reclaimed?.id
+      ? { rowId: reclaimed.id }
+      : { error: 'OUTBOUND_RETRY_ALREADY_CLAIMED' };
+  }
+
+  private async finalizeOutbound(
+    rowId: string | undefined,
+    options: SendOptions,
+    recipient: string,
+    messageType: 'TEXT' | 'TEMPLATE' | 'INTERACTIVE',
+    content: string,
+    status: 'SENT' | 'FAILED',
+    providerMessageId?: string,
+    error?: string
+  ): Promise<void> {
+    if (!options.userId) return;
+
+    const supabase = createClient();
+    const payload = {
+      provider_message_id: providerMessageId || null,
+      status,
+      error: error || null,
+      updated_at: new Date().toISOString()
+    };
+
+    if (rowId) {
+      await supabase
+        .from('outbound_messages')
+        .update(payload)
+        .eq('id', rowId)
+        .eq('user_id', options.userId);
+      return;
+    }
+
+    await supabase.from('outbound_messages').insert({
+      user_id: options.userId,
+      channel: 'WHATSAPP',
+      recipient,
+      message_type: messageType,
+      content,
+      provider_message_id: providerMessageId || null,
+      status,
+      error: error || null,
+      deduplication_key: options.deduplicationKey || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+  }
+
+  private async sendPayload(
+    recipient: string,
+    messageType: 'TEXT' | 'TEMPLATE' | 'INTERACTIVE',
+    contentForAudit: string,
+    payload: Record<string, unknown>,
+    options: SendOptions = {}
+  ): Promise<WhatsAppSendResult> {
+    const cleanPhone = cleanPhoneNumber(recipient);
+    if (!cleanPhone) return { success: false, error: 'INVALID_WHATSAPP_PHONE' };
+
+    const reservation = await this.reserveOutbound(
+      cleanPhone,
+      messageType,
+      contentForAudit,
+      options
+    );
+
+    if (reservation.replay) return reservation.replay;
+    if (reservation.error) return { success: false, error: reservation.error };
 
     if (!this.isConfigured()) {
-      // Graceful unconfigured logging - does not fake successful sending to Meta
-      console.warn('[WhatsAppClient] Credentials not configured. Outbound message skipped.');
-      if (userId) {
-        await this.logOutbound(userId, cleanPhone, 'TEXT', text, 'FAILED', undefined, 'WhatsApp credentials not configured in environment');
-      }
+      await this.finalizeOutbound(
+        reservation.rowId,
+        options,
+        cleanPhone,
+        messageType,
+        contentForAudit,
+        'FAILED',
+        undefined,
+        'WHATSAPP_NOT_CONFIGURED'
+      );
       return { success: false, error: 'WHATSAPP_NOT_CONFIGURED' };
     }
 
     try {
-      const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: cleanPhone,
-          type: 'text',
-          text: { preview_url: false, body: text }
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        const errorMsg = data?.error?.message || response.statusText;
-        if (userId) {
-          await this.logOutbound(userId, cleanPhone, 'TEXT', text, 'FAILED', undefined, errorMsg);
+      const response = await fetch(
+        `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(15_000),
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            ...payload
+          })
         }
-        return { success: false, error: errorMsg };
+      );
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const errorMessage =
+          data?.error?.message ||
+          data?.error?.error_user_msg ||
+          `WHATSAPP_API_ERROR_${response.status}`;
+
+        await this.finalizeOutbound(
+          reservation.rowId,
+          options,
+          cleanPhone,
+          messageType,
+          contentForAudit,
+          'FAILED',
+          undefined,
+          errorMessage
+        );
+
+        return { success: false, error: errorMessage };
       }
 
       const messageId = data?.messages?.[0]?.id;
-      if (userId) {
-        await this.logOutbound(userId, cleanPhone, 'TEXT', text, 'SENT', messageId);
+      if (!messageId) {
+        await this.finalizeOutbound(
+          reservation.rowId,
+          options,
+          cleanPhone,
+          messageType,
+          contentForAudit,
+          'FAILED',
+          undefined,
+          'WHATSAPP_MESSAGE_ID_MISSING'
+        );
+        return { success: false, error: 'WHATSAPP_MESSAGE_ID_MISSING' };
       }
+
+      await this.finalizeOutbound(
+        reservation.rowId,
+        options,
+        cleanPhone,
+        messageType,
+        contentForAudit,
+        'SENT',
+        messageId
+      );
+
       return { success: true, messageId };
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      if (userId) {
-        await this.logOutbound(userId, cleanPhone, 'TEXT', text, 'FAILED', undefined, errorMsg);
-      }
-      return { success: false, error: errorMsg };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      await this.finalizeOutbound(
+        reservation.rowId,
+        options,
+        cleanPhone,
+        messageType,
+        contentForAudit,
+        'FAILED',
+        undefined,
+        message
+      );
+
+      return { success: false, error: message };
     }
   }
 
-  /**
-   * Send interactive quick-reply buttons (e.g. for Approvals or Quests)
-   */
+  async sendTextMessage(
+    to: string,
+    text: string,
+    userId?: string,
+    deduplicationKey?: string
+  ): Promise<WhatsAppSendResult> {
+    const body = String(text || '').trim();
+    if (!body) return { success: false, error: 'WHATSAPP_TEXT_REQUIRED' };
+
+    return this.sendPayload(
+      to,
+      'TEXT',
+      body,
+      {
+        type: 'text',
+        text: { preview_url: false, body: body.slice(0, 4096) }
+      },
+      { userId, deduplicationKey }
+    );
+  }
+
+  async sendTemplateMessage(
+    to: string,
+    templateName: string,
+    parameters: string[] = [],
+    options: SendOptions & { languageCode?: string } = {}
+  ): Promise<WhatsAppSendResult> {
+    const name = String(templateName || '').trim();
+    if (!name) return { success: false, error: 'WHATSAPP_TEMPLATE_REQUIRED' };
+
+    const components = parameters.length > 0
+      ? [{
+          type: 'body',
+          parameters: parameters.slice(0, 20).map(value => ({
+            type: 'text',
+            text: String(value).slice(0, 1024)
+          }))
+        }]
+      : undefined;
+
+    return this.sendPayload(
+      to,
+      'TEMPLATE',
+      `template:${name}`,
+      {
+        type: 'template',
+        template: {
+          name,
+          language: { code: options.languageCode || 'en_US' },
+          ...(components ? { components } : {})
+        }
+      },
+      options
+    );
+  }
+
   async sendInteractiveButtons(
     to: string,
     bodyText: string,
     buttons: WhatsAppButton[],
-    userId?: string
+    userId?: string,
+    deduplicationKey?: string
   ): Promise<WhatsAppSendResult> {
-    const cleanPhone = to.replace(/[^0-9]/g, '');
+    const usableButtons = buttons
+      .filter(button => button.id && button.title)
+      .slice(0, 3);
 
-    if (!this.isConfigured()) {
-      return { success: false, error: 'WHATSAPP_NOT_CONFIGURED' };
+    if (usableButtons.length === 0) {
+      return { success: false, error: 'WHATSAPP_BUTTONS_REQUIRED' };
     }
 
-    try {
-      const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: cleanPhone,
-          type: 'interactive',
-          interactive: {
-            type: 'button',
-            body: { text: bodyText },
-            action: {
-              buttons: buttons.slice(0, 3).map((btn) => ({
-                type: 'reply',
-                reply: {
-                  id: btn.id,
-                  title: btn.title.slice(0, 20) // WhatsApp limit
-                }
-              }))
-            }
+    return this.sendPayload(
+      to,
+      'INTERACTIVE',
+      bodyText,
+      {
+        type: 'interactive',
+        interactive: {
+          type: 'button',
+          body: { text: bodyText.slice(0, 1024) },
+          action: {
+            buttons: usableButtons.map(button => ({
+              type: 'reply',
+              reply: {
+                id: button.id.slice(0, 256),
+                title: button.title.slice(0, 20)
+              }
+            }))
           }
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        const errorMsg = data?.error?.message || response.statusText;
-        if (userId) {
-          await this.logOutbound(userId, cleanPhone, 'INTERACTIVE', bodyText, 'FAILED', undefined, errorMsg);
         }
-        return { success: false, error: errorMsg };
-      }
-
-      const messageId = data?.messages?.[0]?.id;
-      if (userId) {
-        await this.logOutbound(userId, cleanPhone, 'INTERACTIVE', bodyText, 'SENT', messageId);
-      }
-      return { success: true, messageId };
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      return { success: false, error: errorMsg };
-    }
-  }
-
-  /**
-   * Log outbound message delivery record
-   */
-  private async logOutbound(
-    userId: string,
-    recipientPhone: string,
-    messageType: string,
-    content: string,
-    status: 'SENT' | 'FAILED' | 'DELIVERED',
-    providerMessageId?: string,
-    error?: string
-  ): Promise<void> {
-    try {
-      const supabase = createClient();
-      await supabase.from('outbound_messages').insert({
-        user_id: userId,
-        channel: 'WHATSAPP',
-        recipient: recipientPhone,
-        message_type: messageType,
-        content,
-        provider_message_id: providerMessageId,
-        status,
-        error,
-        created_at: new Date().toISOString()
-      });
-    } catch (e) {
-      console.error('[WhatsAppClient] Failed to log outbound message:', e);
-    }
+      },
+      { userId, deduplicationKey }
+    );
   }
 }
 

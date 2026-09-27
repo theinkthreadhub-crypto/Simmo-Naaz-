@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import PillNavbar from '@/components/navigation/PillNavbar';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Smartphone,
   ShieldCheck,
@@ -10,12 +9,18 @@ import {
   RefreshCw,
   Unlink,
   ExternalLink,
-  MessageSquare,
   Key
 } from 'lucide-react';
 
 interface WhatsAppConn {
-  status: 'NOT_CONFIGURED' | 'READY_TO_CONNECT' | 'WAITING_LINK' | 'CONNECTED' | 'TOKEN_ERROR' | 'DISCONNECTED';
+  status:
+    | 'NOT_CONFIGURED'
+    | 'READY_TO_CONNECT'
+    | 'WAITING_LINK'
+    | 'CONNECTED'
+    | 'TOKEN_ERROR'
+    | 'WEBHOOK_ERROR'
+    | 'DISCONNECTED';
   verified: boolean;
   phone_number?: string | null;
   display_phone_number?: string | null;
@@ -28,235 +33,337 @@ export default function WhatsAppConnectionPage() {
     verified: false,
     phone_number: null
   });
-
+  const [cloudReady, setCloudReady] = useState(false);
+  const [officialNumber, setOfficialNumber] = useState<string | null>(null);
   const [linkCode, setLinkCode] = useState<string | null>(null);
-  const [expiresIn, setExpiresIn] = useState<number | null>(null);
+  const [expiresIn, setExpiresIn] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [toast, setToast] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const fetchConnectionStatus = async () => {
+    try {
+      const res = await fetch('/api/whatsapp/link', { cache: 'no-store' });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'WhatsApp status unavailable.');
+      }
+
+      setConnection(data.connection);
+      setCloudReady(Boolean(data.cloudApiReady));
+      setOfficialNumber(data.officialDisplayNumber || null);
+
+      if (data.connection?.status === 'CONNECTED') {
+        setLinkCode(null);
+        setExpiresIn(0);
+      }
+    } catch (error) {
+      setToast({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'WhatsApp status unavailable.'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchConnectionStatus();
   }, []);
 
   useEffect(() => {
-    if (!expiresIn || expiresIn <= 0) return;
-    const interval = setInterval(() => {
-      setExpiresIn((prev) => (prev && prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [expiresIn]);
+    if (!linkCode) return;
+    const poll = setInterval(fetchConnectionStatus, 5000);
+    return () => clearInterval(poll);
+  }, [linkCode]);
 
-  const fetchConnectionStatus = async () => {
-    try {
-      const res = await fetch('/api/whatsapp/link');
-      const data = await res.json();
-      if (data.success && data.connection) {
-        setConnection(data.connection);
-      }
-    } catch (e) {
-      console.error('Failed to fetch connection status:', e);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!linkCode || expiresIn <= 0) return;
+
+    const timer = setInterval(() => {
+      setExpiresIn(current => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [linkCode, expiresIn]);
+
+  useEffect(() => {
+    if (expiresIn === 0 && linkCode) {
+      setLinkCode(null);
     }
-  };
+  }, [expiresIn, linkCode]);
 
   const handleGenerateCode = async () => {
     setGenerating(true);
     setToast(null);
+
     try {
       const res = await fetch('/api/whatsapp/link', { method: 'POST' });
       const data = await res.json();
-      if (data.success && data.linkCode) {
-        setLinkCode(data.linkCode);
-        setExpiresIn(15 * 60); // 15 minutes
-        setToast({ type: 'success', message: 'Verification link code generated.' });
-      } else {
-        setToast({ type: 'error', message: data.error || 'Failed to generate link code.' });
+
+      if (!res.ok || !data.success || !data.linkCode) {
+        throw new Error(data.error || 'Failed to generate link code.');
       }
-    } catch (e) {
-      setToast({ type: 'error', message: 'Network error generating code.' });
+
+      setLinkCode(data.linkCode);
+      setExpiresIn(Number(data.expiresInSeconds || 900));
+      setOfficialNumber(data.officialDisplayNumber || officialNumber);
+      setToast({
+        type: 'success',
+        message: 'Single-use WhatsApp link code generated.'
+      });
+    } catch (error) {
+      setToast({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to generate link code.'
+      });
     } finally {
       setGenerating(false);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect WhatsApp from MENTRA?')) return;
+    if (!confirm('Disconnect WhatsApp from MENTRA?')) return;
+
     setDisconnecting(true);
+    setToast(null);
+
     try {
-      const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
+      const res = await fetch('/api/whatsapp/disconnect', {
+        method: 'POST'
+      });
       const data = await res.json();
-      if (data.success) {
-        setConnection({ status: 'DISCONNECTED', verified: false, phone_number: null });
-        setLinkCode(null);
-        setToast({ type: 'success', message: 'WhatsApp disconnected successfully.' });
-      } else {
-        setToast({ type: 'error', message: data.error || 'Failed to disconnect.' });
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Disconnect failed.');
       }
-    } catch (e) {
-      setToast({ type: 'error', message: 'Network error disconnecting WhatsApp.' });
+
+      setConnection({
+        status: 'DISCONNECTED',
+        verified: false,
+        phone_number: null
+      });
+      setToast({
+        type: 'success',
+        message: 'WhatsApp disconnected.'
+      });
+    } catch (error) {
+      setToast({
+        type: 'error',
+        message:
+          error instanceof Error ? error.message : 'Disconnect failed.'
+      });
     } finally {
       setDisconnecting(false);
     }
   };
 
-  const formatTimer = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
+  const formattedTimer = useMemo(() => {
+    const minutes = Math.floor(expiresIn / 60);
+    const seconds = expiresIn % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  }, [expiresIn]);
+
+  const waHref =
+    linkCode && officialNumber
+      ? `https://wa.me/${officialNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(linkCode)}`
+      : null;
+
+  const connected =
+    connection.status === 'CONNECTED' && connection.verified;
 
   return (
-    <div className="min-h-screen bg-black text-slate-100 pb-28">
-      <PillNavbar />
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-28">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6 mb-8">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                <Smartphone className="w-5 h-5" />
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-                WhatsApp Sovereign Gateway
-              </h1>
-            </div>
-            <p className="text-sm text-slate-400">
-              Official Meta WhatsApp Cloud API bridge. Access MENTRA Core 24/7 without opening the browser.
-            </p>
-          </div>
-
-          <button
-            onClick={fetchConnectionStatus}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-medium text-slate-300 transition-all"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh Status
-          </button>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
+      <div className="border-b border-white/10 pb-5">
+        <div className="flex items-center gap-2 text-xs font-mono tracking-widest text-emerald-300">
+          <Smartphone className="w-4 h-4" />
+          OFFICIAL META CLOUD API
         </div>
+        <h1 className="mt-2 text-2xl sm:text-4xl font-bold text-white">
+          WhatsApp
+        </h1>
+        <p className="mt-2 text-sm text-white/45 max-w-2xl">
+          Real two-way MENTRA chat, delivery tracking, and proactive alerts.
+          Outside Meta&apos;s customer-service window, proactive messages require
+          approved WhatsApp templates.
+        </p>
+      </div>
 
-        {/* Toast */}
-        {toast && (
-          <div
-            className={`p-4 rounded-xl mb-6 flex items-center gap-3 text-sm border ${
-              toast.type === 'success'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-            }`}
-          >
-            {toast.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            ) : (
-              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-            )}
-            <span>{toast.message}</span>
-          </div>
-        )}
+      {toast && (
+        <div
+          className={`p-4 rounded-2xl border text-sm flex gap-2 ${toast.type === 'success'
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+              : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          )}
+          {toast.message}
+        </div>
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Connection Status Card */}
-          <div className="md:col-span-1 p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
+      <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-4">
+        <section className="p-5 rounded-3xl border border-white/10 bg-black/45">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
-                Status
-              </span>
-              <div className="mt-3 flex items-center gap-3">
+              <div className="text-xs text-white/40">Connection status</div>
+              <div className="mt-2 flex items-center gap-2">
                 <span
-                  className={`w-3 h-3 rounded-full ${
-                    connection.status === 'CONNECTED'
-                      ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50'
-                      : 'bg-cyan-500'
+                  className={`w-2.5 h-2.5 rounded-full ${connected
+                      ? 'bg-emerald-400'
+                      : cloudReady
+                        ? 'bg-amber-300'
+                        : 'bg-rose-400'
                   }`}
                 />
-                <span className="text-lg font-bold text-white tracking-wide">
-                  {connection.status === 'CONNECTED' ? 'CONNECTED' : 'NOT LINKED'}
+                <span className="font-semibold text-white">
+                  {connected
+                    ? 'CONNECTED'
+                    : cloudReady
+                      ? 'READY TO LINK'
+                      : 'SETUP REQUIRED'}
                 </span>
               </div>
+            </div>
 
-              {connection.phone_number && (
-                <div className="mt-4 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
-                  <div className="text-slate-400 mb-1">Linked Phone</div>
-                  <div className="font-mono text-emerald-400 font-medium">
-                    {connection.display_phone_number || `+${connection.phone_number}`}
-                  </div>
+            <button
+              onClick={fetchConnectionStatus}
+              disabled={loading}
+              className="p-2.5 rounded-xl border border-white/10 bg-white/5"
+            >
+              <RefreshCw
+                className={`w-4 h-4 text-white/55 ${loading ? 'animate-spin' : ''}`}
+              />
+            </button>
+          </div>
+
+          {connected && connection.phone_number && (
+            <div className="mt-5 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+              <div className="text-[10px] text-emerald-300 font-mono">
+                LINKED OPERATOR NUMBER
+              </div>
+              <div className="mt-1 text-sm font-mono text-white">
+                {connection.display_phone_number ||
+                  `+${connection.phone_number}`}
+              </div>
+              {connection.last_active_at && (
+                <div className="mt-2 text-[10px] text-white/35">
+                  Last inbound:{' '}
+                  {new Date(connection.last_active_at).toLocaleString()}
                 </div>
               )}
             </div>
+          )}
 
-            {connection.status === 'CONNECTED' && (
-              <button
-                onClick={handleDisconnect}
-                disabled={disconnecting}
-                className="mt-6 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 text-xs font-semibold transition-all"
-              >
-                <Unlink className="w-4 h-4" />
-                {disconnecting ? 'Disconnecting...' : 'Disconnect WhatsApp'}
-              </button>
-            )}
+          {!cloudReady && (
+            <div className="mt-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-100/80">
+              Meta Cloud API credentials/webhook are not configured. MENTRA
+              will not pretend WhatsApp is connected.
+            </div>
+          )}
+
+          {connected && (
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="mt-5 w-full py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs font-semibold flex items-center justify-center gap-2"
+            >
+              <Unlink className="w-4 h-4" />
+              {disconnecting ? 'DISCONNECTING…' : 'DISCONNECT'}
+            </button>
+          )}
+        </section>
+
+        <section className="p-5 sm:p-6 rounded-3xl border border-white/10 bg-black/45">
+          <div className="flex gap-3">
+            <div className="p-2.5 rounded-xl bg-white/5 h-fit text-emerald-300">
+              <Key className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-white">
+                Secure phone linking
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-white/45">
+                A 6-digit code is single-use and expires after 15 minutes.
+                Sending it from WhatsApp binds that phone to your authenticated
+                MENTRA account.
+              </p>
+            </div>
           </div>
 
-          {/* Verification / Linking Flow Card */}
-          <div className="md:col-span-2 p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md">
-            <h2 className="text-base font-semibold text-white mb-2 flex items-center gap-2">
-              <Key className="w-4 h-4 text-emerald-400" />
-              Secure Account Linking Protocol
-            </h2>
-            <p className="text-xs text-slate-400 mb-6">
-              To prevent unauthorized access, MENTRA uses an ephemeral single-use 6-digit cryptographic handshake.
-            </p>
-
-            {connection.status === 'CONNECTED' ? (
-              <div className="p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs space-y-3">
-                <div className="flex items-center gap-2 font-semibold text-sm">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  WhatsApp Sovereign Channel Verified
-                </div>
-                <p className="text-slate-300">
-                  You can now send natural language commands, log expenses, complete quests with &quot;1 done&quot;, receive morning briefs, and practice public speaking directly over WhatsApp.
-                </p>
+          {connected ? (
+            <div className="mt-6 p-5 rounded-2xl border border-emerald-500/25 bg-emerald-500/10">
+              <div className="flex gap-2 items-center text-emerald-200 font-semibold text-sm">
+                <ShieldCheck className="w-4 h-4" />
+                Verified channel active
               </div>
-            ) : (
-              <div className="space-y-6">
-                {!linkCode ? (
-                  <div>
-                    <button
-                      onClick={handleGenerateCode}
-                      disabled={generating}
-                      className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-medium text-sm transition-all shadow-lg shadow-emerald-500/20"
+              <p className="mt-2 text-xs leading-5 text-white/55">
+                Text commands, approval replies, quest completion shortcuts,
+                delivery receipts, and configured proactive alerts are enabled.
+              </p>
+            </div>
+          ) : !linkCode ? (
+            <button
+              onClick={handleGenerateCode}
+              disabled={!cloudReady || generating}
+              className="mt-6 w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-500 text-black text-sm font-semibold disabled:opacity-40"
+            >
+              {generating ? 'GENERATING…' : 'GENERATE 6-DIGIT CODE'}
+            </button>
+          ) : (
+            <div className="mt-6 p-5 rounded-2xl border border-emerald-500/30 bg-black/60 text-center">
+              <div className="text-[10px] font-mono text-white/40">
+                SINGLE-USE CODE
+              </div>
+              <div className="mt-2 text-4xl font-mono font-bold tracking-[0.25em] text-emerald-300">
+                {linkCode}
+              </div>
+              <div className="mt-2 text-xs text-amber-200">
+                Expires in {formattedTimer}
+              </div>
+
+              {officialNumber ? (
+                <>
+                  <p className="mt-5 text-xs text-white/50">
+                    Send this code from your phone to the configured MENTRA
+                    WhatsApp number: {officialNumber}
+                  </p>
+                  {waHref && (
+                    <a
+                      href={waHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 text-black text-xs font-semibold"
                     >
-                      <Smartphone className="w-4 h-4" />
-                      {generating ? 'Generating Link Code...' : 'Generate 6-Digit Link Code'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="p-5 rounded-xl bg-slate-950/80 border border-emerald-500/40 text-center space-y-4">
-                    <div className="text-xs text-slate-400 uppercase tracking-wider">
-                      Your Single-Use Verification Code
-                    </div>
-                    <div className="text-4xl font-extrabold tracking-widest text-emerald-400 font-mono">
-                      {linkCode}
-                    </div>
-                    <div className="text-xs text-cyan-400">
-                      Expires in: {expiresIn ? formatTimer(expiresIn) : '0:00'}
-                    </div>
-
-                    <div className="border-t border-slate-800 pt-4 text-left text-xs text-slate-300 space-y-2">
-                      <div className="font-semibold text-white">Next Steps:</div>
-                      <div>1. Open WhatsApp on your mobile device.</div>
-                      <div>2. Send this 6-digit code to the official MENTRA WhatsApp number.</div>
-                      <div>3. Webhook will immediately verify and bind your sovereign session.</div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
+                      OPEN WHATSAPP
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </>
+              ) : (
+                <p className="mt-5 text-xs text-amber-200">
+                  Business display number is missing from server
+                  configuration. Add it before linking.
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

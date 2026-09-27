@@ -12,7 +12,7 @@ export type NotificationCategory =
   | 'JOURNAL'
   | 'SYSTEM';
 
-export type NotificationChannel = 'WEB' | 'WHATSAPP' | 'EMAIL';
+export type NotificationChannel = 'WEB' | 'WHATSAPP';
 
 export interface UserNotificationSettings {
   user_id: string;
@@ -83,7 +83,10 @@ export async function getUserNotificationSettings(userId: string): Promise<UserN
     gmail_alerts: data.gmail_alerts ?? DEFAULT_SETTINGS.gmail_alerts,
     agent_updates: data.agent_updates ?? DEFAULT_SETTINGS.agent_updates,
     weekly_report: data.weekly_report ?? DEFAULT_SETTINGS.weekly_report,
-    preferred_channel: data.preferred_channel ?? DEFAULT_SETTINGS.preferred_channel,
+    preferred_channel:
+      data.preferred_channel === 'WHATSAPP' || data.preferred_channel === 'WEB'
+        ? data.preferred_channel
+        : 'WEB',
     quiet_hours_enabled: data.quiet_hours_enabled ?? DEFAULT_SETTINGS.quiet_hours_enabled,
     quiet_hours_start: data.quiet_hours_start ?? DEFAULT_SETTINGS.quiet_hours_start,
     quiet_hours_end: data.quiet_hours_end ?? DEFAULT_SETTINGS.quiet_hours_end,

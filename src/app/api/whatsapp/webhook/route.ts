@@ -61,11 +61,28 @@ export async function POST(req: NextRequest) {
       processWhatsAppInboundWebhook(payload)
     );
 
-    return NextResponse.json({ success: true, processed: result.processed });
+    if (result.errors.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          processed: result.processed,
+          duplicates: result.duplicates,
+          errors: result.errors.slice(0, 10)
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      processed: result.processed,
+      duplicates: result.duplicates
+    });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('[WhatsAppWebhook] Processing error:', errorMsg);
-    // Still return 200 to Meta to prevent duplicate webhook delivery storm
-    return NextResponse.json({ success: false, error: errorMsg }, { status: 200 });
+    // Return a retryable error. Successfully processed provider message IDs are
+    // idempotently skipped on the next delivery.
+    return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
   }
 }

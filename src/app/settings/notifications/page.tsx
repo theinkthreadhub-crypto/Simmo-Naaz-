@@ -32,7 +32,7 @@ interface NotificationSettings {
   gmail_alerts: boolean;
   agent_updates: boolean;
   weekly_report: boolean;
-  preferred_channel: 'WEB' | 'WHATSAPP' | 'EMAIL';
+  preferred_channel: 'WEB' | 'WHATSAPP';
   quiet_hours_enabled: boolean;
   quiet_hours_start: string;
   quiet_hours_end: string;
@@ -165,8 +165,8 @@ export default function NotificationSettingsPage() {
               Choose where proactive briefs, reflections, and notifications should be dispatched.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {(['WHATSAPP', 'WEB', 'EMAIL'] as const).map((channel) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(['WHATSAPP', 'WEB'] as const).map((channel) => (
                 <button
                   key={channel}
                   type="button"
@@ -179,9 +179,8 @@ export default function NotificationSettingsPage() {
                 >
                   <div className="font-semibold text-sm mb-1">{channel}</div>
                   <div className="text-xs text-slate-400">
-                    {channel === 'WHATSAPP' && 'Official 24/7 Meta Cloud API'}
+                    {channel === 'WHATSAPP' && 'Official Meta Cloud API; proactive delivery uses approved templates when required'}
                     {channel === 'WEB' && 'In-app notification tray'}
-                    {channel === 'EMAIL' && 'Digest to verified address'}
                   </div>
                 </button>
               ))}

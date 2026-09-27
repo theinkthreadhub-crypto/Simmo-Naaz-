@@ -99,8 +99,10 @@ export const addFinanceTransactionTool: ToolDefinition = {
       .from('finance_transactions')
       .insert({
         user_id: context.userId,
-        amount: input.amount,
-        type: input.type,
+        amount:
+          input.type === 'EXPENSE'
+            ? -Math.abs(input.amount)
+            : Math.abs(input.amount),
         category: input.category,
         description: input.description,
         business_personal: input.scope,
@@ -660,24 +662,200 @@ export const getConnectionsTool: ToolDefinition = {
 
 export const routeToAgentTool: ToolDefinition = {
   name: 'routeToAgent',
-  description: 'Dispatch complex task to specialized autonomous agent.',
+  description: 'Execute a real specialized multi-agent task and persist its verified run state.',
   permission: 'WRITE_LOW',
   schema: z.object({
-    agentId: z.enum(['research_agent', 'finance_agent', 'learning_agent', 'business_agent', 'memory_agent', 'gmail_agent']),
-    taskDescription: z.string().min(1, 'Task description required')
+    agentId: z.enum([
+      'research_agent',
+      'finance_agent',
+      'learning_agent',
+      'business_agent',
+      'memory_agent',
+      'gmail_agent'
+    ]),
+    taskDescription: z.string().min(1, 'Task description required').max(4000)
   }),
   execute: async (input, context) => {
+    const agentMap: Record<string, string> = {
+      research_agent: 'ag_research',
+      finance_agent: 'ag_finance',
+      learning_agent: 'ag_learning',
+      business_agent: 'ag_business',
+      memory_agent: 'ag_memory',
+      gmail_agent: 'ag_gmail'
+    };
+
+    const agent = agentMap[input.agentId];
+    const result = await runMultiAgentTask(context.userId, {
+      taskTitle: `${input.agentId.replace('_agent', '').replace('_', ' ')} task`,
+      agentChain: [agent],
+      query: input.taskDescription
+    });
+
+    return {
+      ok: result.status !== 'FAILED',
+      data: result,
+      errorCode:
+        result.status === 'FAILED' ? 'AGENT_TASK_FAILED' : undefined,
+      card: {
+        id: result.taskId,
+        type: 'AGENT_WORKING',
+        title: `Agent Run: ${input.agentId.replace('_', ' ').toUpperCase()}`,
+        subtitle: result.summary,
+        data: {
+          taskId: result.taskId,
+          status: result.status,
+          currentStage: result.currentStage
+        }
+      },
+      message: result.summary
+    };
+  }
+};
+
+export const scheduleReminderTool: ToolDefinition = {
+  name: 'scheduleReminder',
+  description: 'Schedule a real one-time or recurring reminder in MENTRA background jobs.',
+  permission: 'WRITE_LOW',
+  schema: z.object({
+    text: z.string().min(1, 'Reminder text required').max(3000),
+    scheduledFor: z.string().min(1, 'ISO date-time required'),
+    recurrence: z.enum(['NONE', 'DAILY', 'WEEKLY', 'MONTHLY']).default('NONE'),
+    timezone: z.string().min(1).max(100).default('Asia/Kolkata')
+  }),
+  execute: async (input, context) => {
+    const scheduledAt = new Date(input.scheduledFor);
+    if (!Number.isFinite(scheduledAt.getTime())) {
+      return {
+        ok: false,
+        errorCode: 'INVALID_REMINDER_TIME',
+        message: 'Reminder time is invalid.'
+      };
+    }
+
+    if (scheduledAt.getTime() <= Date.now()) {
+      return {
+        ok: false,
+        errorCode: 'REMINDER_TIME_MUST_BE_FUTURE',
+        message: 'Reminder time must be in the future.'
+      };
+    }
+
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: input.timezone }).format(new Date());
+    } catch {
+      return {
+        ok: false,
+        errorCode: 'INVALID_REMINDER_TIMEZONE',
+        message: 'Reminder timezone is invalid.'
+      };
+    }
+
+    const supabase = createClient();
+    const deduplicationKey = context.idempotencyKey
+      ? `reminder:${context.idempotencyKey}`
+      : `reminder:${context.userId}:${scheduledAt.toISOString()}:${input.text.slice(0, 80)}`;
+
+    const { data: existing, error: lookupError } = await supabase
+      .from('scheduled_jobs')
+      .select('id, status, scheduled_for, recurrence')
+      .eq('user_id', context.userId)
+      .eq('deduplication_key', deduplicationKey)
+      .maybeSingle();
+
+    if (lookupError) {
+      return {
+        ok: false,
+        errorCode: 'REMINDER_LOOKUP_FAILED',
+        message: lookupError.message
+      };
+    }
+
+    if (existing?.id) {
+      return {
+        ok: true,
+        data: existing,
+        message: 'This reminder is already scheduled.'
+      };
+    }
+
+    const { data: job, error } = await supabase
+      .from('scheduled_jobs')
+      .insert({
+        user_id: context.userId,
+        type: 'REMINDER',
+        payload: { text: input.text.trim() },
+        scheduled_for: scheduledAt.toISOString(),
+        timezone: input.timezone,
+        recurrence: input.recurrence,
+        status: 'SCHEDULED',
+        deduplication_key: deduplicationKey,
+        next_run_at: scheduledAt.toISOString(),
+        attempt_count: 0
+      })
+      .select('id, type, scheduled_for, recurrence, timezone, status')
+      .single();
+
+    if (error || !job) {
+      return {
+        ok: false,
+        errorCode: 'REMINDER_CREATE_FAILED',
+        message: error?.message || 'Reminder could not be scheduled.'
+      };
+    }
+
     return {
       ok: true,
-      data: input,
+      data: job,
       card: {
-        id: `card_${Date.now()}`,
-        type: 'AGENT_WORKING',
-        title: `Agent Dispatched: ${input.agentId.replace('_', ' ').toUpperCase()}`,
-        subtitle: input.taskDescription,
-        data: input
+        id: job.id,
+        type: 'DAILY_PLAN',
+        title: 'Reminder Scheduled',
+        subtitle: `${job.scheduled_for} • ${job.recurrence}`,
+        data: job
       },
-      message: `Dispatched task to ${input.agentId}.`
+      message: `Reminder scheduled for ${job.scheduled_for}.`
+    };
+  }
+};
+
+export const listScheduledJobsTool: ToolDefinition = {
+  name: 'listScheduledJobs',
+  description: 'List the operator\'s real scheduled reminders, briefs, reports and background jobs.',
+  permission: 'READ',
+  schema: z.object({
+    includeCompleted: z.boolean().default(false)
+  }),
+  execute: async (input, context) => {
+    const supabase = createClient();
+    let query = supabase
+      .from('scheduled_jobs')
+      .select(
+        'id, type, payload, scheduled_for, timezone, recurrence, status, next_run_at, last_run_at, attempt_count'
+      )
+      .eq('user_id', context.userId)
+      .order('scheduled_for', { ascending: true })
+      .limit(100);
+
+    if (!input.includeCompleted) {
+      query = query.in('status', ['SCHEDULED', 'CLAIMED', 'RUNNING', 'PAUSED']);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      return {
+        ok: false,
+        errorCode: 'SCHEDULE_LIST_FAILED',
+        message: error.message
+      };
+    }
+
+    return {
+      ok: true,
+      data: data || [],
+      message: data?.length
+        ? `Found ${data.length} scheduled background job(s).`
+        : 'No scheduled background jobs found.'
     };
   }
 };
@@ -1567,6 +1745,8 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   disableCustomMentraSkill: disableCustomMentraSkillTool,
   getConnections: getConnectionsTool,
   routeToAgent: routeToAgentTool,
+  scheduleReminder: scheduleReminderTool,
+  listScheduledJobs: listScheduledJobsTool,
   scheduleMonitor: scheduleMonitorTool,
   listMonitors: listMonitorsTool,
   browserRead: browserReadTool,

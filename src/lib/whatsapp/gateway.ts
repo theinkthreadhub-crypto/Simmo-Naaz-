@@ -1,41 +1,77 @@
-/**
- * WhatsApp Cloud API Gateway
- * Architecture for receiving operator voice and text commands and sending executive briefings.
- */
+import { runMentra } from '@/lib/ai/core';
+import { whatsappClient } from '@/lib/integrations/whatsapp/client';
+import {
+  verifyWebhookChallenge,
+  verifyWebhookSignature
+} from '@/lib/integrations/whatsapp/security';
 
 export interface WhatsAppInboundMessage {
   from: string;
   messageId: string;
   type: 'text' | 'audio' | 'document';
   text?: string;
-  mediaUrl?: string;
   timestamp: string;
+  userId?: string;
 }
 
 export class WhatsAppGatewayService {
-  static verifyWebhook(mode: string, token: string, challenge: string): string | null {
-    const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || 'mentra_secure_webhook_token';
-    if (mode === 'subscribe' && token === verifyToken) {
-      return challenge;
-    }
-    return null;
+  static verifyWebhook(
+    mode: string,
+    token: string,
+    challenge: string
+  ): string | null {
+    const result = verifyWebhookChallenge(mode, token, challenge);
+    return result.verified ? result.challenge : null;
   }
 
-  static async processInboundCommand(payload: WhatsAppInboundMessage): Promise<{ replyText: string }> {
-    const query = payload.text || 'Voice memo received';
-    
-    // Future integration connects to MentraCoreAgent.parseIntent(query)
+  static verifySignature(signature: string | null, rawBody: string): boolean {
+    return verifyWebhookSignature(signature, rawBody);
+  }
+
+  static async processInboundCommand(
+    payload: WhatsAppInboundMessage
+  ): Promise<{ replyText: string; success: boolean }> {
+    if (!payload.userId) {
+      return {
+        success: false,
+        replyText: 'WHATSAPP_USER_NOT_LINKED'
+      };
+    }
+
+    if (!payload.text?.trim()) {
+      return {
+        success: false,
+        replyText: 'WHATSAPP_TEXT_REQUIRED'
+      };
+    }
+
+    const result = await runMentra({
+      userId: payload.userId,
+      channel: 'WHATSAPP',
+      externalMessageId: payload.messageId,
+      text: payload.text.trim(),
+      timestamp: payload.timestamp || new Date().toISOString()
+    });
+
     return {
-      replyText: `[MENTRA OS]: Received "${query}". Telemetry logged in command center.`
+      success: result.success,
+      replyText: result.message || result.error || 'MENTRA_RESPONSE_UNAVAILABLE'
     };
   }
 
-  static async sendExecutiveAlert(toPhoneNumber: string, message: string): Promise<boolean> {
-    if (!process.env.WHATSAPP_API_TOKEN) {
-      console.log(`[WHATSAPP SANDBOX]: Sent to ${toPhoneNumber} -> ${message}`);
-      return true;
-    }
-    // Official Cloud API call
-    return true;
+  static async sendExecutiveAlert(
+    toPhoneNumber: string,
+    message: string,
+    userId?: string,
+    deduplicationKey?: string
+  ): Promise<boolean> {
+    const result = await whatsappClient.sendTextMessage(
+      toPhoneNumber,
+      message,
+      userId,
+      deduplicationKey
+    );
+
+    return result.success;
   }
 }

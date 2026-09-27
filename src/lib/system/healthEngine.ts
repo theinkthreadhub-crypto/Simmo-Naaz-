@@ -121,7 +121,7 @@ export async function getSystemHealthSnapshot(userId?: string) {
   try {
     const { data: jobs, error } = await supabase
       .from('scheduled_jobs')
-      .select('status, updated_at')
+      .select('status, updated_at, lease_expires_at')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
       .limit(100);
@@ -129,11 +129,17 @@ export async function getSystemHealthSnapshot(userId?: string) {
     if (error) throw error;
 
     const staleCutoff = Date.now() - 15 * 60 * 1000;
+    const now = Date.now();
     const failed = (jobs || []).filter(job => job.status === 'FAILED').length;
-    const stale = (jobs || []).filter(job =>
-      ['CLAIMED', 'RUNNING'].includes(job.status) &&
-      new Date(job.updated_at).getTime() < staleCutoff
-    ).length;
+    const stale = (jobs || []).filter(job => {
+      if (!['CLAIMED', 'RUNNING'].includes(job.status)) return false;
+
+      if (job.lease_expires_at) {
+        return new Date(job.lease_expires_at).getTime() <= now;
+      }
+
+      return new Date(job.updated_at).getTime() < staleCutoff;
+    }).length;
 
     components.push({
       key: 'scheduler',

@@ -95,6 +95,7 @@ export function classifyActionRisk(
     name.includes('addfinancetransaction') ||
     name.includes('memory') ||
     name.includes('routetoagent') ||
+    name.includes('schedulereminder') ||
     name.includes('schedulemonitor')
   ) {
     return 'LOW_RISK_INTERNAL';
