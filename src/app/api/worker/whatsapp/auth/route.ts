@@ -28,7 +28,11 @@ export async function POST(req: NextRequest) {
     rawBody
   );
 
-  if (!verified) {
+  const tokenWorker = verifyBrainWorkerToken(
+    req.headers.get('x-mentra-worker-token')
+  );
+
+  if (!verified && !tokenWorker) {
     return NextResponse.json({ error: 'UNAUTHORIZED_WORKER' }, { status: 401 });
   }
 
