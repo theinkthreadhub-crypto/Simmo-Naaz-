@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { verifyBrainWorkerSignature } from '@/lib/worker/auth';
+import { verifyBrainWorkerSignature, verifyBrainWorkerToken } from '@/lib/worker/auth';
 import { runAsTrustedServer } from '@/lib/supabase/trustedScope';
 
 export const runtime = 'nodejs';
