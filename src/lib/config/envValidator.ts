@@ -149,14 +149,27 @@ export function auditEnvironment(): EnvironmentAudit {
             : 'Official Cloud API requires Meta phone, access token, webhook verify token, app secret, business display number, and an explicit owner allowlist.'
       };
     })(),
-    voice_speech: {
-      name: 'Sovereign Speech Engine',
-      category: 'VOICE',
-      requiredEnv: ['SPEECH_API_KEY'],
-      missingEnv: check(['SPEECH_API_KEY']).missing,
-      status: check(['SPEECH_API_KEY']).ready ? 'CONNECTED' : 'CONFIG_REQUIRED',
-      description: 'Real-time STT transcription, TTS synthesis, and Public Speaking voice analysis.'
-    },
+    voice_speech: (() => {
+      const state = check(['SPEECH_API_KEY']);
+      const disabled = env.VOICE_ENABLED === 'false';
+
+      return {
+        name: 'Sovereign Speech Engine',
+        category: 'VOICE' as const,
+        requiredEnv: ['SPEECH_API_KEY'],
+        missingEnv: state.missing,
+        status: disabled
+          ? 'DISABLED' as const
+          : state.ready
+            ? 'CONNECTED' as const
+            : 'CONFIG_REQUIRED' as const,
+        description: disabled
+          ? 'Real voice input/output is disabled by configuration.'
+          : state.ready
+            ? 'Server STT, TTS, conversational voice, and speaking analysis are available.'
+            : 'Add a speech provider key to enable server-side STT and TTS.'
+      };
+    })(),
     live_research: {
       name: 'Live Web Research',
       category: 'AUTOMATION',

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type ChannelType = 'WEB' | 'WHATSAPP' | 'MOBILE' | 'API';
+export type ChannelType = 'WEB' | 'WHATSAPP' | 'MOBILE' | 'VOICE' | 'API';
 
 export type MentraRole = 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL';
 

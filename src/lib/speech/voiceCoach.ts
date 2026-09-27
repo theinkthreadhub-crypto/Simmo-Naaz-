@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { speechProvider, SpeechAnalysisResult } from './speechProvider';
+import { addXPServer } from '@/lib/progression/playerProgression';
 
 export interface SpeakingFeedback {
   strengths: string[];
@@ -85,25 +86,31 @@ export async function evaluateSpeakingAttempt(
       .select()
       .single();
 
-    if (!error && record) {
-      // Award skill XP & player XP
-      try {
-        await supabase.rpc('increment_player_xp', { p_user_id: userId, p_xp: xpReward });
-      } catch {
-        // Fallback
-      }
+    if (error || !record) {
+      return {
+        success: false,
+        error: error?.message || 'VOICE_PRACTICE_SAVE_FAILED'
+      };
     }
+
+    await addXPServer(
+      userId,
+      xpReward,
+      'SKILL_PRACTICE',
+      record.id,
+      `Public speaking practice: ${topic.slice(0, 80)}`
+    );
 
     return {
       success: true,
       attempt: {
-        id: record?.id || `vp_${Date.now()}`,
+        id: record.id,
         skillId: 'public_speaking',
         topic,
         transcript,
         metrics,
         feedback,
-        createdAt: new Date().toISOString()
+        createdAt: record.created_at || new Date().toISOString()
       }
     };
   } catch (err: unknown) {

@@ -29,7 +29,7 @@ export default function VoiceSettingsPage() {
     speech_speed: 1.0,
     language: 'hi-IN',
     auto_speak_responses: true,
-    audio_retention_days: 30
+    audio_retention_days: 0
   });
 
   const [loading, setLoading] = useState(true);
@@ -184,10 +184,10 @@ export default function VoiceSettingsPage() {
               </div>
 
               <div>
-                <label className="text-xs font-mono text-slate-400 block mb-1.5">Audio Retention (Days)</label>
+                <label className="text-xs font-mono text-slate-400 block mb-1.5">Audio Retention (Days, 0 = do not store raw audio)</label>
                 <input
                   type="number"
-                  min={1}
+                  min={0}
                   max={365}
                   value={settings.audio_retention_days}
                   onChange={(e) => setSettings({ ...settings, audio_retention_days: parseInt(e.target.value, 10) })}
