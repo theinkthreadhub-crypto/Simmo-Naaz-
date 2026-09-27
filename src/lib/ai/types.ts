@@ -115,6 +115,7 @@ export interface ToolExecutionContext {
   idempotencyKey?: string;
   pageContext?: string;
   approved?: boolean;
+  approvalId?: string;
 }
 
 export interface ToolResult<T = any> {

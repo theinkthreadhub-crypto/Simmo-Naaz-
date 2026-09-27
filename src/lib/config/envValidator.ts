@@ -93,14 +93,33 @@ export function auditEnvironment(): EnvironmentAudit {
       status: aiStatus,
       description: aiDescription
     },
-    google_workspace: {
-      name: 'Google Workspace Integration',
-      category: 'INTEGRATION',
-      requiredEnv: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
-      missingEnv: check(['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']).missing,
-      status: check(['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']).ready ? 'CONNECTED' : 'CONFIG_REQUIRED',
-      description: 'Gmail, Google Calendar, Drive, and Sheets read/draft operations.'
-    },
+    google_workspace: (() => {
+      const required = [
+        'GOOGLE_CLIENT_ID',
+        'GOOGLE_CLIENT_SECRET',
+        'SUPABASE_SERVICE_ROLE_KEY',
+        'TOKEN_ENCRYPTION_KEY'
+      ];
+      const state = check(required);
+      const disabled = env.GOOGLE_ENABLED === 'false';
+
+      return {
+        name: 'Google Workspace Integration',
+        category: 'INTEGRATION' as const,
+        requiredEnv: required,
+        missingEnv: state.missing,
+        status: disabled
+          ? 'DISABLED' as const
+          : state.ready
+            ? 'CODE_READY' as const
+            : 'CONFIG_REQUIRED' as const,
+        description: disabled
+          ? 'Google Workspace integration is disabled by configuration.'
+          : state.ready
+            ? 'OAuth, encrypted token storage, Gmail, Calendar, Drive, Sheets, and Contacts are code-ready; per-user connection is verified separately.'
+            : 'Google Workspace requires OAuth credentials plus server-only token encryption/storage configuration.'
+      };
+    })(),
     whatsapp_cloud: {
       name: 'WhatsApp Cloud API',
       category: 'INTEGRATION',

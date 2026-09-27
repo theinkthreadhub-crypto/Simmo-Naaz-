@@ -1,64 +1,62 @@
-import { getValidGoogleAccessToken } from './tokens';
+import { googleApiFetch } from './tokens';
 
 export async function readGoogleSheetRange(
   userId: string,
   spreadsheetId: string,
-  range: string = 'Sheet1!A1:Z50'
-): Promise<{ rows: any[][]; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { rows: [], error: error || 'CONNECTION_REQUIRED' };
+  range = 'Sheet1!A1:Z50'
+): Promise<{ rows: unknown[][]; error?: string }> {
+  if (!spreadsheetId.trim()) return { rows: [], error: 'SPREADSHEET_ID_REQUIRED' };
+  if (!range.trim() || range.length > 300) return { rows: [], error: 'INVALID_SHEET_RANGE' };
+
+  const result = await googleApiFetch(
+    userId,
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`
+  );
+
+  if (!result.response) return { rows: [], error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { rows: [], error: `SHEETS_API_ERROR_${result.response.status}` };
   }
 
-  try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (!res.ok) {
-      if (res.status === 401) return { rows: [], error: 'TOKEN_EXPIRED' };
-      return { rows: [], error: `SHEETS_API_ERROR_${res.status}` };
-    }
-
-    const data = await res.json();
-    return { rows: data.values || [] };
-  } catch (err: any) {
-    return { rows: [], error: err.message };
-  }
+  const data = await result.response.json();
+  return { rows: (data.values || []).slice(0, 500) };
 }
 
 export async function appendGoogleSheetRow(
   userId: string,
   spreadsheetId: string,
   range: string,
-  values: (string | number)[]
-): Promise<{ updatedRows?: number; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { error: error || 'CONNECTION_REQUIRED' };
+  values: Array<string | number | boolean>
+): Promise<{ updatedRows?: number; updatedRange?: string; error?: string }> {
+  if (!spreadsheetId.trim()) return { error: 'SPREADSHEET_ID_REQUIRED' };
+  if (!range.trim() || range.length > 300) return { error: 'INVALID_SHEET_RANGE' };
+  if (!Array.isArray(values) || values.length === 0 || values.length > 100) {
+    return { error: 'INVALID_SHEET_VALUES' };
   }
 
-  try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
-    const res = await fetch(url, {
+  const params = new URLSearchParams({
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS'
+  });
+
+  const result = await googleApiFetch(
+    userId,
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:append?${params.toString()}`,
+    {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        values: [values]
-      })
-    });
-
-    if (!res.ok) {
-      return { error: `SHEET_APPEND_FAILED_${res.status}` };
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [values] })
     }
+  );
 
-    const data = await res.json();
-    return { updatedRows: data.updates?.updatedRows || 1 };
-  } catch (err: any) {
-    return { error: err.message };
+  if (!result.response) return { error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { error: `SHEET_APPEND_FAILED_${result.response.status}` };
   }
+
+  const data = await result.response.json();
+  return {
+    updatedRows: Number(data.updates?.updatedRows || 0),
+    updatedRange: data.updates?.updatedRange || undefined
+  };
 }

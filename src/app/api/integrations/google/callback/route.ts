@@ -1,93 +1,117 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { exchangeCodeForGoogleTokens, getGoogleUserProfile } from '@/lib/integrations/google/client';
-import { encryptToken } from '@/lib/integrations/crypto';
+import {
+  exchangeCodeForGoogleTokens,
+  getGoogleUserProfile,
+  GOOGLE_SERVICE_SCOPE_REQUIREMENTS
+} from '@/lib/integrations/google/client';
+import { verifyGoogleOAuthState } from '@/lib/integrations/google/oauthState';
+import { storeGoogleTokens } from '@/lib/integrations/google/tokens';
 
 const PRODUCTION_APP_URL = 'https://mentra.inkthreadhub.in';
 
+function appOrigin(req: NextRequest): string {
+  return process.env.NODE_ENV === 'production'
+    ? PRODUCTION_APP_URL
+    : process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
+}
+
+function redirectError(origin: string, message: string) {
+  return NextResponse.redirect(
+    `${origin}/connections?status=error&message=${encodeURIComponent(message)}`
+  );
+}
+
 export async function GET(req: NextRequest) {
+  const origin = appOrigin(req);
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
-  const error = url.searchParams.get('error');
+  const providerError = url.searchParams.get('error');
 
-  const origin =
-    process.env.NODE_ENV === 'production'
-      ? PRODUCTION_APP_URL
-      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3010';
+  if (providerError) return redirectError(origin, providerError);
+  if (!code || !state) return redirectError(origin, 'MISSING_AUTH_CODE_OR_STATE');
 
-  if (error || !code || !state) {
-    return NextResponse.redirect(`${origin}/connections?status=error&message=${error || 'MISSING_AUTH_CODE'}`);
-  }
-
-  // Verify and decode state token
-  let parsedState: { userId: string; timestamp: number };
+  let verifiedState: { userId: string; issuedAt: number; nonce: string };
   try {
-    parsedState = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-  } catch {
-    return NextResponse.redirect(`${origin}/connections?status=error&message=INVALID_STATE_TOKEN`);
+    verifiedState = verifyGoogleOAuthState(state);
+  } catch (error) {
+    return redirectError(
+      origin,
+      error instanceof Error ? error.message : 'INVALID_STATE_TOKEN'
+    );
   }
 
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  // Validate session user matches state token
-  const targetUserId = user?.id || parsedState.userId;
-  if (!targetUserId) {
-    return NextResponse.redirect(`${origin}/connections?status=error&message=UNAUTHENTICATED`);
+  if (authError || !user) {
+    return redirectError(origin, 'UNAUTHENTICATED_CALLBACK');
+  }
+
+  if (user.id !== verifiedState.userId) {
+    return redirectError(origin, 'OAUTH_STATE_USER_MISMATCH');
   }
 
   try {
-    // 1. Exchange authorization code for tokens
     const tokens = await exchangeCodeForGoogleTokens(code);
-
-    // 2. Fetch Google User Profile (email)
     const profile = await getGoogleUserProfile(tokens.accessToken);
 
-    // 3. Encrypt Tokens (AES-256-GCM)
-    const encryptedAccess = encryptToken(tokens.accessToken);
-    const encryptedRefresh = tokens.refreshToken ? encryptToken(tokens.refreshToken) : null;
-    const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000).toISOString();
+    await storeGoogleTokens(user.id, tokens);
 
-    // 4. Upsert integration_tokens (Server-only table)
-    const { error: tokenError } = await supabase
-      .from('integration_tokens')
-      .upsert({
-        user_id: targetUserId,
-        provider: 'GOOGLE',
-        encrypted_access_token: encryptedAccess.ciphertext,
-        encrypted_refresh_token: encryptedRefresh?.ciphertext || null,
-        token_iv: encryptedAccess.iv,
-        token_tag: encryptedAccess.tag,
-        expires_at: expiresAt,
-        scopes: tokens.scopes,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,provider' });
+    const grantedScopes = new Set(tokens.scopes);
+    const now = new Date().toISOString();
 
-    if (tokenError) {
-      console.error('[GOOGLE CALLBACK ERR]: Token save error:', tokenError);
-    }
-
-    // 5. Upsert active services in integrations table
-    const services = ['GOOGLE_ACCOUNT', 'GMAIL', 'GOOGLE_CALENDAR', 'GOOGLE_DRIVE', 'GOOGLE_SHEETS', 'GOOGLE_CONTACTS'];
-    for (const s of services) {
-      await supabase
-        .from('integrations')
-        .upsert({
-          user_id: targetUserId,
+    const services = Object.entries(GOOGLE_SERVICE_SCOPE_REQUIREMENTS).map(
+      ([service, requiredScopes]) => {
+        const missingScopes = requiredScopes.filter(scope => !grantedScopes.has(scope));
+        return {
+          user_id: user.id,
           provider: 'GOOGLE',
-          service: s,
-          status: 'CONNECTED',
+          service,
+          status: missingScopes.length === 0 ? 'CONNECTED' : 'ACTION_REQUIRED',
           account_email: profile.email,
+          account_id: profile.id || null,
           scopes: tokens.scopes,
-          last_sync_at: new Date().toISOString(),
-          metadata: { account_name: profile.name, email: profile.email }
-        }, { onConflict: 'user_id,service' });
-    }
+          last_sync_at: now,
+          metadata: {
+            account_name: profile.name || null,
+            missing_scopes: missingScopes,
+            oauth_verified_at: now
+          },
+          updated_at: now
+        };
+      }
+    );
 
-    return NextResponse.redirect(`${origin}/connections?status=success&service=google`);
-  } catch (err: any) {
-    console.error('[GOOGLE CALLBACK ERROR]:', err);
-    return NextResponse.redirect(`${origin}/connections?status=error&message=${encodeURIComponent(err.message)}`);
+    const { error: integrationError } = await supabase
+      .from('integrations')
+      .upsert(services, { onConflict: 'user_id,service' });
+
+    if (integrationError) throw new Error(integrationError.message);
+
+    await supabase.from('activity_logs').insert({
+      user_id: user.id,
+      action: 'GOOGLE_WORKSPACE_CONNECTED',
+      module: 'INTEGRATIONS',
+      details: {
+        account_email: profile.email,
+        services: services.map(service => ({
+          service: service.service,
+          status: service.status
+        }))
+      }
+    });
+
+    const allConnected = services.every(service => service.status === 'CONNECTED');
+
+    return NextResponse.redirect(
+      `${origin}/connections?status=${allConnected ? 'success' : 'partial'}&service=google`
+    );
+  } catch (error) {
+    return redirectError(
+      origin,
+      error instanceof Error ? error.message : 'GOOGLE_CALLBACK_FAILED'
+    );
   }
 }

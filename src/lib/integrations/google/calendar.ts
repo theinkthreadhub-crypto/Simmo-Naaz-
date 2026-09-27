@@ -1,4 +1,4 @@
-import { getValidGoogleAccessToken } from './tokens';
+import { googleApiFetch } from './tokens';
 
 export interface CalendarEventSummary {
   id: string;
@@ -9,51 +9,76 @@ export interface CalendarEventSummary {
   location?: string;
   meetLink?: string;
   attendeesCount?: number;
+  htmlLink?: string;
+}
+
+function istDayWindow(): { min: string; max: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+
+  const get = (type: string) => parts.find(part => part.type === type)?.value || '';
+  const date = `${get('year')}-${get('month')}-${get('day')}`;
+
+  return {
+    min: `${date}T00:00:00+05:30`,
+    max: `${date}T23:59:59+05:30`
+  };
+}
+
+function validDateTime(value: string): boolean {
+  return Boolean(value && Number.isFinite(new Date(value).getTime()));
 }
 
 export async function getGoogleCalendarEvents(
   userId: string,
   timeMin?: string,
   timeMax?: string,
-  maxResults: number = 10
+  maxResults = 10
 ): Promise<{ events: CalendarEventSummary[]; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { events: [], error: error || 'CONNECTION_REQUIRED' };
+  const day = istDayWindow();
+  const min = timeMin || day.min;
+  const max = timeMax || day.max;
+
+  if (!validDateTime(min) || !validDateTime(max)) {
+    return { events: [], error: 'INVALID_CALENDAR_WINDOW' };
   }
 
-  try {
-    const min = timeMin || new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
-    const max = timeMax || new Date(new Date().setHours(23, 59, 59, 999)).toISOString();
+  const params = new URLSearchParams({
+    timeMin: min,
+    timeMax: max,
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: String(Math.min(50, Math.max(1, Number(maxResults) || 10)))
+  });
 
-    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}&singleEvents=true&orderBy=startTime&maxResults=${maxResults}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+  const result = await googleApiFetch(
+    userId,
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`
+  );
 
-    if (!res.ok) {
-      if (res.status === 401) return { events: [], error: 'TOKEN_EXPIRED' };
-      return { events: [], error: `CALENDAR_API_ERROR_${res.status}` };
-    }
+  if (!result.response) return { events: [], error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { events: [], error: `CALENDAR_API_ERROR_${result.response.status}` };
+  }
 
-    const data = await res.json();
-    const items = data.items || [];
-
-    const events: CalendarEventSummary[] = items.map((item: any) => ({
+  const data = await result.response.json();
+  return {
+    events: (data.items || []).map((item: any) => ({
       id: item.id,
       summary: item.summary || '(Untitled Event)',
-      description: item.description,
+      description: item.description || undefined,
       start: item.start?.dateTime || item.start?.date || '',
       end: item.end?.dateTime || item.end?.date || '',
-      location: item.location,
-      meetLink: item.hangoutLink || item.conferenceData?.entryPoints?.[0]?.uri,
-      attendeesCount: item.attendees?.length || 0
-    }));
-
-    return { events };
-  } catch (err: any) {
-    return { events: [], error: err.message };
-  }
+      location: item.location || undefined,
+      meetLink: item.hangoutLink || item.conferenceData?.entryPoints?.[0]?.uri || undefined,
+      attendeesCount: item.attendees?.length || 0,
+      htmlLink: item.htmlLink || undefined
+    }))
+  };
 }
 
 export async function createGoogleCalendarEvent(
@@ -61,48 +86,53 @@ export async function createGoogleCalendarEvent(
   event: {
     summary: string;
     description?: string;
-    startDateTime: string; // ISO String
-    endDateTime: string;   // ISO String
+    startDateTime: string;
+    endDateTime: string;
     location?: string;
     attendees?: string[];
   }
 ): Promise<{ eventId?: string; htmlLink?: string; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { error: error || 'CONNECTION_REQUIRED' };
+  if (!event.summary?.trim()) return { error: 'EVENT_TITLE_REQUIRED' };
+  if (!validDateTime(event.startDateTime) || !validDateTime(event.endDateTime)) {
+    return { error: 'INVALID_EVENT_DATETIME' };
   }
 
-  try {
-    const payload: any = {
-      summary: event.summary,
-      description: event.description || 'Created via MENTRA Personal AI OS',
-      start: { dateTime: event.startDateTime, timeZone: 'Asia/Kolkata' },
-      end: { dateTime: event.endDateTime, timeZone: 'Asia/Kolkata' }
-    };
+  if (new Date(event.endDateTime).getTime() <= new Date(event.startDateTime).getTime()) {
+    return { error: 'EVENT_END_MUST_BE_AFTER_START' };
+  }
 
-    if (event.location) payload.location = event.location;
-    if (event.attendees && event.attendees.length > 0) {
-      payload.attendees = event.attendees.map(email => ({ email }));
-    }
+  const attendees = (event.attendees || [])
+    .map(email => email.trim())
+    .filter(email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    .slice(0, 50);
 
-    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+  const params = new URLSearchParams();
+  if (attendees.length > 0) params.set('sendUpdates', 'all');
+
+  const result = await googleApiFetch(
+    userId,
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events${params.toString() ? `?${params.toString()}` : ''}`,
+    {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      return { error: `EVENT_CREATION_FAILED_${res.status}` };
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        summary: event.summary.trim(),
+        description: event.description?.trim() || undefined,
+        start: { dateTime: event.startDateTime, timeZone: 'Asia/Kolkata' },
+        end: { dateTime: event.endDateTime, timeZone: 'Asia/Kolkata' },
+        ...(event.location?.trim() ? { location: event.location.trim() } : {}),
+        ...(attendees.length > 0 ? { attendees: attendees.map(email => ({ email })) } : {})
+      })
     }
+  );
 
-    const data = await res.json();
-    return { eventId: data.id, htmlLink: data.htmlLink };
-  } catch (err: any) {
-    return { error: err.message };
+  if (!result.response) return { error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { error: `EVENT_CREATION_FAILED_${result.response.status}` };
   }
+
+  const data = await result.response.json();
+  return { eventId: data.id, htmlLink: data.htmlLink };
 }
 
 export async function detectCalendarConflicts(
@@ -110,7 +140,17 @@ export async function detectCalendarConflicts(
   targetStart: string,
   targetEnd: string
 ): Promise<{ hasConflict: boolean; conflictingEvents: CalendarEventSummary[]; error?: string }> {
-  const { events, error } = await getGoogleCalendarEvents(userId, targetStart, targetEnd);
+  if (!validDateTime(targetStart) || !validDateTime(targetEnd)) {
+    return { hasConflict: false, conflictingEvents: [], error: 'INVALID_EVENT_DATETIME' };
+  }
+
+  const { events, error } = await getGoogleCalendarEvents(
+    userId,
+    targetStart,
+    targetEnd,
+    50
+  );
+
   if (error) {
     return { hasConflict: false, conflictingEvents: [], error };
   }
@@ -118,14 +158,12 @@ export async function detectCalendarConflicts(
   const startMs = new Date(targetStart).getTime();
   const endMs = new Date(targetEnd).getTime();
 
-  const conflicts = events.filter(e => {
-    const eStart = new Date(e.start).getTime();
-    const eEnd = new Date(e.end).getTime();
-    return (startMs < eEnd && endMs > eStart);
+  const conflicts = events.filter(event => {
+    const eventStart = new Date(event.start).getTime();
+    const eventEnd = new Date(event.end).getTime();
+    return Number.isFinite(eventStart) && Number.isFinite(eventEnd) &&
+      startMs < eventEnd && endMs > eventStart;
   });
 
-  return {
-    hasConflict: conflicts.length > 0,
-    conflictingEvents: conflicts
-  };
+  return { hasConflict: conflicts.length > 0, conflictingEvents: conflicts };
 }

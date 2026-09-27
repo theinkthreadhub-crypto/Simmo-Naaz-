@@ -1,4 +1,4 @@
-import { getValidGoogleAccessToken } from './tokens';
+import { googleApiFetch } from './tokens';
 
 export interface GmailEmailSnippet {
   id: string;
@@ -15,117 +15,168 @@ export interface GmailEmailDetail extends GmailEmailSnippet {
   bodyText: string;
 }
 
+function header(headers: any[], name: string): string {
+  return headers.find((h: any) => String(h.name).toLowerCase() === name.toLowerCase())?.value || '';
+}
+
+function decodeBase64Url(value: string): string {
+  try {
+    return Buffer.from(value, 'base64url').toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+function stripHtml(value: string): string {
+  return value
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function collectMimeText(part: any, mimeType: 'text/plain' | 'text/html'): string[] {
+  const output: string[] = [];
+  if (!part) return output;
+
+  if (part.mimeType === mimeType && part.body?.data) {
+    output.push(decodeBase64Url(part.body.data));
+  }
+
+  for (const child of part.parts || []) {
+    output.push(...collectMimeText(child, mimeType));
+  }
+
+  return output.filter(Boolean);
+}
+
+function bodyFromPayload(payload: any, fallback = ''): string {
+  const plain = collectMimeText(payload, 'text/plain').join('\n\n').trim();
+  if (plain) return plain.slice(0, 12_000);
+
+  const html = collectMimeText(payload, 'text/html').join('\n').trim();
+  if (html) return stripHtml(html).slice(0, 12_000);
+
+  if (payload?.body?.data) {
+    return stripHtml(decodeBase64Url(payload.body.data)).slice(0, 12_000);
+  }
+
+  return fallback.slice(0, 12_000);
+}
+
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim();
+}
+
+function validateRecipient(value: string): string | null {
+  const clean = sanitizeHeaderValue(value);
+  if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return null;
+  return clean;
+}
+
+function encodeMessage(raw: string): string {
+  return Buffer.from(raw, 'utf8').toString('base64url');
+}
+
 export async function searchGmail(
   userId: string,
-  query: string = 'is:inbox',
-  maxResults: number = 5
+  query = 'is:inbox',
+  maxResults = 5
 ): Promise<{ emails: GmailEmailSnippet[]; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { emails: [], error: error || 'CONNECTION_REQUIRED' };
+  const limit = Math.min(20, Math.max(1, Number(maxResults) || 5));
+  const listUrl =
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${limit}`;
+
+  const list = await googleApiFetch(userId, listUrl);
+  if (!list.response) return { emails: [], error: list.error || 'CONNECTION_REQUIRED' };
+
+  if (!list.response.ok) {
+    return { emails: [], error: `GMAIL_API_ERROR_${list.response.status}` };
   }
 
-  try {
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults}`;
-    const listRes = await fetch(listUrl, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+  const listData = await list.response.json();
+  const messages = listData.messages || [];
 
-    if (!listRes.ok) {
-      if (listRes.status === 401) return { emails: [], error: 'TOKEN_EXPIRED' };
-      return { emails: [], error: `GMAIL_API_ERROR_${listRes.status}` };
-    }
-
-    const listData = await listRes.json();
-    const messages = listData.messages || [];
-
-    const detailedEmails: GmailEmailSnippet[] = [];
-    for (const msg of messages) {
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date&metadataHeaders=To`,
-        { headers: { Authorization: `Bearer ${token}` } }
+  const detailed = await Promise.all(
+    messages.map(async (msg: any) => {
+      const details = await googleApiFetch(
+        userId,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(msg.id)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date&metadataHeaders=To`
       );
 
-      if (msgRes.ok) {
-        const d = await msgRes.json();
-        const headers = d.payload?.headers || [];
-        const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No Subject)';
-        const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown Sender';
-        const date = headers.find((h: any) => h.name === 'Date')?.value || '';
-        const to = headers.find((h: any) => h.name === 'To')?.value || '';
-        const isUnread = (d.labelIds || []).includes('UNREAD');
+      if (!details.response?.ok) return null;
+      const data = await details.response.json();
+      const headers = data.payload?.headers || [];
 
-        detailedEmails.push({
-          id: d.id,
-          threadId: d.threadId,
-          subject,
-          from,
-          to,
-          date,
-          snippet: d.snippet || '',
-          isUnread
-        });
-      }
-    }
+      return {
+        id: data.id,
+        threadId: data.threadId,
+        subject: header(headers, 'Subject') || '(No Subject)',
+        from: header(headers, 'From') || 'Unknown Sender',
+        to: header(headers, 'To') || undefined,
+        date: header(headers, 'Date'),
+        snippet: data.snippet || '',
+        isUnread: (data.labelIds || []).includes('UNREAD')
+      } as GmailEmailSnippet;
+    })
+  );
 
-    return { emails: detailedEmails };
-  } catch (err: any) {
-    return { emails: [], error: err.message };
-  }
+  return { emails: detailed.filter(Boolean) as GmailEmailSnippet[] };
 }
 
 export async function readGmailMessage(
   userId: string,
   messageId: string
 ): Promise<{ email?: GmailEmailDetail; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { error: error || 'CONNECTION_REQUIRED' };
+  const result = await googleApiFetch(
+    userId,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=full`
+  );
+
+  if (!result.response) return { error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { error: `GMAIL_FETCH_FAILED_${result.response.status}` };
   }
 
-  try {
-    const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+  const data = await result.response.json();
+  const headers = data.payload?.headers || [];
 
-    if (!res.ok) {
-      return { error: `GMAIL_FETCH_FAILED_${res.status}` };
+  return {
+    email: {
+      id: data.id,
+      threadId: data.threadId,
+      subject: header(headers, 'Subject') || '(No Subject)',
+      from: header(headers, 'From') || 'Unknown Sender',
+      to: header(headers, 'To') || undefined,
+      date: header(headers, 'Date'),
+      snippet: data.snippet || '',
+      isUnread: (data.labelIds || []).includes('UNREAD'),
+      bodyText: bodyFromPayload(data.payload, data.snippet || '')
     }
+  };
+}
 
-    const data = await res.json();
-    const headers = data.payload?.headers || [];
-    const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No Subject)';
-    const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown Sender';
-    const date = headers.find((h: any) => h.name === 'Date')?.value || '';
+async function replyThreadHeaders(
+  userId: string,
+  messageId: string
+): Promise<{ threadId?: string; messageIdHeader?: string }> {
+  const result = await googleApiFetch(
+    userId,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Message-ID`
+  );
 
-    // Extract text body
-    let bodyText = data.snippet || '';
-    if (data.payload?.parts) {
-      const textPart = data.payload.parts.find((p: any) => p.mimeType === 'text/plain');
-      if (textPart?.body?.data) {
-        bodyText = Buffer.from(textPart.body.data, 'base64').toString('utf8');
-      }
-    } else if (data.payload?.body?.data) {
-      bodyText = Buffer.from(data.payload.body.data, 'base64').toString('utf8');
-    }
+  if (!result.response?.ok) return {};
+  const data = await result.response.json();
 
-    // Strip out HTML tags if present and cap length
-    bodyText = bodyText.replace(/<[^>]*>?/gm, '').slice(0, 3000);
-
-    return {
-      email: {
-        id: data.id,
-        threadId: data.threadId,
-        subject,
-        from,
-        date,
-        snippet: data.snippet || '',
-        bodyText
-      }
-    };
-  } catch (err: any) {
-    return { error: err.message };
-  }
+  return {
+    threadId: data.threadId,
+    messageIdHeader: header(data.payload?.headers || [], 'Message-ID') || undefined
+  };
 }
 
 export async function createGmailDraft(
@@ -135,45 +186,54 @@ export async function createGmailDraft(
   body: string,
   replyToMessageId?: string
 ): Promise<{ draftId?: string; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { error: error || 'CONNECTION_REQUIRED' };
+  const recipient = validateRecipient(to);
+  if (!recipient) return { error: 'INVALID_RECIPIENT_EMAIL' };
+
+  const cleanSubject = sanitizeHeaderValue(subject);
+  if (!cleanSubject) return { error: 'EMAIL_SUBJECT_REQUIRED' };
+
+  const rawHeaders = [
+    `To: ${recipient}`,
+    `Subject: ${cleanSubject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit'
+  ];
+
+  let threadId: string | undefined;
+  if (replyToMessageId) {
+    const reply = await replyThreadHeaders(userId, replyToMessageId);
+    threadId = reply.threadId;
+    if (reply.messageIdHeader) {
+      const messageId = sanitizeHeaderValue(reply.messageIdHeader);
+      rawHeaders.push(`In-Reply-To: ${messageId}`);
+      rawHeaders.push(`References: ${messageId}`);
+    }
   }
 
-  try {
-    const rawHeaders = [
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      `Content-Type: text/plain; charset="UTF-8"`
-    ];
-
-    if (replyToMessageId) {
-      rawHeaders.push(`In-Reply-To: ${replyToMessageId}`);
-    }
-
-    const rawEmail = `${rawHeaders.join('\r\n')}\r\n\r\n${body}`;
-    const base64EncodedEmail = Buffer.from(rawEmail).toString('base64url');
-
-    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts', {
+  const raw = `${rawHeaders.join('\r\n')}\r\n\r\n${body}`;
+  const result = await googleApiFetch(
+    userId,
+    'https://gmail.googleapis.com/gmail/v1/users/me/drafts',
+    {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: { raw: base64EncodedEmail }
+        message: {
+          raw: encodeMessage(raw),
+          ...(threadId ? { threadId } : {})
+        }
       })
-    });
-
-    if (!res.ok) {
-      return { error: `DRAFT_CREATION_FAILED_${res.status}` };
     }
+  );
 
-    const data = await res.json();
-    return { draftId: data.id };
-  } catch (err: any) {
-    return { error: err.message };
+  if (!result.response) return { error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { error: `DRAFT_CREATION_FAILED_${result.response.status}` };
   }
+
+  const data = await result.response.json();
+  return { draftId: data.id };
 }
 
 export async function sendGmailMessage(
@@ -181,34 +241,38 @@ export async function sendGmailMessage(
   to: string,
   subject: string,
   body: string
-): Promise<{ messageId?: string; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { error: error || 'CONNECTION_REQUIRED' };
-  }
+): Promise<{ messageId?: string; threadId?: string; error?: string }> {
+  const recipient = validateRecipient(to);
+  if (!recipient) return { error: 'INVALID_RECIPIENT_EMAIL' };
 
-  try {
-    const rawEmail = `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset="UTF-8"\r\n\r\n${body}`;
-    const base64EncodedEmail = Buffer.from(rawEmail).toString('base64url');
+  const cleanSubject = sanitizeHeaderValue(subject);
+  if (!cleanSubject) return { error: 'EMAIL_SUBJECT_REQUIRED' };
 
-    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+  const raw = [
+    `To: ${recipient}`,
+    `Subject: ${cleanSubject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    body
+  ].join('\r\n');
+
+  const result = await googleApiFetch(
+    userId,
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+    {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        raw: base64EncodedEmail
-      })
-    });
-
-    if (!res.ok) {
-      return { error: `GMAIL_SEND_FAILED_${res.status}` };
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw: encodeMessage(raw) })
     }
+  );
 
-    const data = await res.json();
-    return { messageId: data.id };
-  } catch (err: any) {
-    return { error: err.message };
+  if (!result.response) return { error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { error: `GMAIL_SEND_FAILED_${result.response.status}` };
   }
+
+  const data = await result.response.json();
+  return { messageId: data.id, threadId: data.threadId };
 }

@@ -9,7 +9,6 @@ import { searchMemoriesHybrid, storeMemoryWithEmbedding } from '@/lib/memory/hyb
 import { getPlayerProgress, getProfile, getPlayerStats } from '@/lib/db/profiles';
 import { getLearningProfile, getSkillRoadmapWithModules, getPracticeAttempts, saveLearningProfile, initializePublicSpeakingRoadmap } from '@/lib/db/learning';
 import { getUserSkills } from '@/lib/db/skills';
-import { getUserIntegrations } from '@/lib/db/integrations';
 import { addXPServer } from '@/lib/progression/playerProgression';
 import { QUEST_REWARD_RULES, QuestDifficulty } from '@/types/mentra';
 import { scheduleOperativeAgent } from '@/lib/agents/monitorScheduler';
@@ -582,37 +581,79 @@ export const disableCustomMentraSkillTool: ToolDefinition = {
 // ==============================================================================
 export const getConnectionsTool: ToolDefinition = {
   name: 'getConnections',
-  description: 'Verify connected Google Workspace or WhatsApp integration status.',
+  description: 'Verify persisted integration status and Google token health before using external services.',
   permission: 'READ',
   schema: z.object({
     service: z.string().default('GOOGLE_ACCOUNT')
   }),
   execute: async (input, context) => {
-    const integrations = await getUserIntegrations(context.userId);
-    const found = integrations.find(i => i.service === input.service || i.name.toLowerCase().includes(input.service.toLowerCase()));
-    const isConnected = found?.status === 'CONNECTED';
+    const supabase = createClient();
+    const { data: integrations, error } = await supabase
+      .from('integrations')
+      .select('service, provider, status, account_email, scopes, metadata, last_sync_at')
+      .eq('user_id', context.userId);
 
-    if (!isConnected) {
+    if (error) {
+      return {
+        ok: false,
+        errorCode: 'CONNECTION_STATUS_FAILED',
+        message: error.message
+      };
+    }
+
+    const found = (integrations || []).find((item: any) =>
+      item.service === input.service ||
+      String(item.service || '').toLowerCase() === input.service.toLowerCase()
+    );
+
+    const isGoogleService =
+      input.service === 'GOOGLE_ACCOUNT' ||
+      String(input.service).startsWith('GOOGLE_') ||
+      input.service === 'GMAIL';
+
+    let tokenHealth: any = undefined;
+    if (isGoogleService) {
+      tokenHealth = await getGoogleTokenHealth(context.userId).catch(() => ({
+        tokenPresent: false,
+        refreshAvailable: false,
+        scopes: []
+      }));
+    }
+
+    const connected =
+      found?.status === 'CONNECTED' &&
+      (!isGoogleService || Boolean(tokenHealth?.tokenPresent));
+
+    if (!connected) {
       return {
         ok: true,
-        data: { connected: false, service: input.service },
+        data: {
+          connected: false,
+          service: input.service,
+          status: found?.status || 'DISCONNECTED',
+          tokenPresent: tokenHealth?.tokenPresent ?? undefined
+        },
         card: {
           id: `card_${Date.now()}`,
           type: 'CONNECTION_REQUIRED',
-          title: 'Google Workspace Disconnected',
-          subtitle: 'Connect your Google account in Settings to enable Gmail/Calendar tools.',
-          data: { service: input.service },
+          title: `${input.service} Connection Required`,
+          subtitle: 'Open Connections to authorize or repair this integration.',
+          data: { service: input.service, status: found?.status || 'DISCONNECTED' },
           actionUrl: '/connections',
-          actionLabel: 'Connect Google'
+          actionLabel: 'Open Connections'
         },
-        message: `Google Workspace is currently not connected. Please connect your account in Settings.`
+        message: `${input.service} is not currently verified as connected.`
       };
     }
 
     return {
       ok: true,
-      data: found,
-      message: `${input.service} is connected and active.`
+      data: {
+        ...found,
+        tokenPresent: tokenHealth?.tokenPresent,
+        refreshAvailable: tokenHealth?.refreshAvailable
+      },
+      message: `${input.service} is connected with a verified token state.`
     };
   }
 };
@@ -852,6 +893,11 @@ import { getGoogleCalendarEvents, createGoogleCalendarEvent, detectCalendarConfl
 import { searchGoogleDrive, readGoogleDriveFileText } from '@/lib/integrations/google/drive';
 import { readGoogleSheetRange, appendGoogleSheetRow } from '@/lib/integrations/google/sheets';
 import { searchGoogleContacts } from '@/lib/integrations/google/contacts';
+import { getGoogleTokenHealth } from '@/lib/integrations/google/tokens';
+import {
+  findExternalActionByIdempotency,
+  logExternalGoogleAction
+} from '@/lib/integrations/google/audit';
 import { executeWebResearch } from '@/lib/research/researchAgent';
 import { runMultiAgentTask } from '@/lib/agents/orchestrator';
 
@@ -953,55 +999,106 @@ export const draftEmailTool: ToolDefinition = {
       data: { draftId, to: input.to, subject: input.subject, body: input.body },
       card: {
         id: `card_${Date.now()}`,
-        type: 'APPROVAL_REQUIRED',
-        title: `Email Draft Ready: "${input.subject}"`,
+        type: 'DAILY_PLAN',
+        title: `Gmail Draft Created: "${input.subject}"`,
         subtitle: `To: ${input.to}`,
-        data: { draftId, to: input.to, subject: input.subject, body: input.body }
+        data: { draftId, to: input.to, subject: input.subject }
       },
-      message: `Email draft prepared for ${input.to} with subject "${input.subject}". You can review and approve sending.`
+      message: `Gmail draft created for ${input.to} with subject "${input.subject}". Sending remains a separate approval-gated action.`
     };
   }
 };
 
 export const sendEmailTool: ToolDefinition = {
   name: 'sendEmail',
-  description: 'Send an email to a recipient (REQUIRES EXPLICIT OPERATOR APPROVAL).',
+  description: 'Send an email through connected Gmail. Execution requires explicit operator approval.',
   permission: 'APPROVAL_REQUIRED',
   schema: z.object({
     to: z.string().email(),
-    subject: z.string().min(1),
-    body: z.string().min(1)
+    subject: z.string().min(1).max(500),
+    body: z.string().min(1).max(50000)
   }),
   execute: async (input, context) => {
-    const supabase = createClient();
+    if (!context.approved) {
+      return {
+        ok: false,
+        errorCode: 'APPROVAL_REQUIRED',
+        message: 'Operator approval is required before Gmail can send this message.'
+      };
+    }
 
-    // 1. Create Approval Request record
-    const { data: approval } = await supabase
-      .from('approval_requests')
-      .insert({
-        user_id: context.userId,
-        tool_name: 'sendEmail',
-        tool_input: input,
-        description: `Send email to ${input.to}: "${input.subject}"`,
-        status: 'PENDING'
-      })
-      .select()
-      .single();
+    const previous = await findExternalActionByIdempotency(
+      context.userId,
+      context.idempotencyKey
+    );
+
+    if (previous) {
+      return {
+        ok: true,
+        data: previous.result,
+        message: 'Email was already sent for this approved action. Duplicate send blocked.'
+      };
+    }
+
+    const result = await sendGmailMessage(
+      context.userId,
+      input.to,
+      input.subject,
+      input.body
+    );
+
+    const safePayload = {
+      to: input.to,
+      subject: input.subject,
+      bodyLength: input.body.length
+    };
+
+    if (result.error) {
+      await logExternalGoogleAction(context.userId, {
+        service: 'GMAIL',
+        actionType: 'SEND_EMAIL',
+        payload: safePayload,
+        result: { error: result.error },
+        status: 'FAILED',
+        approvalId: context.approvalId,
+        idempotencyKey: context.idempotencyKey
+      });
+
+      return {
+        ok: false,
+        errorCode: result.error,
+        message: `Gmail send failed: ${result.error}`
+      };
+    }
+
+    const auditLogged = await logExternalGoogleAction(context.userId, {
+      service: 'GMAIL',
+      actionType: 'SEND_EMAIL',
+      payload: safePayload,
+      result: {
+        messageId: result.messageId,
+        threadId: result.threadId
+      },
+      status: 'SUCCESS',
+      approvalId: context.approvalId,
+      idempotencyKey: context.idempotencyKey
+    });
 
     return {
       ok: true,
-      requiresApproval: true,
-      approvalId: approval?.id,
+      data: {
+        messageId: result.messageId,
+        threadId: result.threadId,
+        auditLogged
+      },
       card: {
         id: `card_${Date.now()}`,
-        type: 'APPROVAL_REQUIRED',
-        title: `Approval Required: Send Email`,
-        subtitle: `To: ${input.to} • Subject: ${input.subject}`,
-        data: input,
-        requiresApproval: true,
-        approvalId: approval?.id
+        type: 'DAILY_PLAN',
+        title: 'Email Sent',
+        subtitle: `To: ${input.to} • ${input.subject}`,
+        data: { messageId: result.messageId, threadId: result.threadId }
       },
-      message: `Email to ${input.to} has been prepared. Please confirm sending in the Approval Center.`
+      message: `Email sent to ${input.to} after operator approval.`
     };
   }
 };
@@ -1049,43 +1146,114 @@ export const getCalendarEventsTool: ToolDefinition = {
 
 export const createCalendarEventTool: ToolDefinition = {
   name: 'createCalendarEvent',
-  description: 'Schedule a new event or deep focus block on Google Calendar with conflict checking.',
-  permission: 'WRITE_LOW',
+  description: 'Create a Google Calendar event after conflict checking and explicit operator approval.',
+  permission: 'APPROVAL_REQUIRED',
   schema: z.object({
-    summary: z.string().min(1, 'Title required'),
-    startDateTime: z.string(), // ISO
-    endDateTime: z.string(),   // ISO
-    location: z.string().optional(),
-    description: z.string().optional(),
-    attendees: z.array(z.string()).optional()
+    summary: z.string().min(1, 'Title required').max(500),
+    startDateTime: z.string(),
+    endDateTime: z.string(),
+    location: z.string().max(1000).optional(),
+    description: z.string().max(10000).optional(),
+    attendees: z.array(z.string().email()).max(50).optional()
   }),
   execute: async (input, context) => {
-    // 1. Conflict Check
-    const conflicts = await detectCalendarConflicts(context.userId, input.startDateTime, input.endDateTime);
-    if (conflicts.hasConflict) {
+    const conflicts = await detectCalendarConflicts(
+      context.userId,
+      input.startDateTime,
+      input.endDateTime
+    );
+
+    if (conflicts.error) {
       return {
         ok: false,
-        errorCode: 'CALENDAR_CONFLICT',
-        message: `Schedule conflict detected with: "${conflicts.conflictingEvents[0].summary}" (${conflicts.conflictingEvents[0].start.slice(11, 16)}). Would you like to schedule at a nearby slot?`
+        errorCode: conflicts.error,
+        message: `Calendar conflict check failed: ${conflicts.error}`
       };
     }
 
-    const res = await createGoogleCalendarEvent(context.userId, input);
-    if (res.error) {
-      return { ok: false, errorCode: res.error, message: `Failed to create calendar event: ${res.error}` };
+    if (conflicts.hasConflict) {
+      const first = conflicts.conflictingEvents[0];
+      return {
+        ok: false,
+        errorCode: 'CALENDAR_CONFLICT',
+        data: { conflicts: conflicts.conflictingEvents },
+        message: `Schedule conflict detected with "${first.summary}" (${first.start} - ${first.end}).`
+      };
     }
+
+    if (!context.approved) {
+      return {
+        ok: false,
+        errorCode: 'APPROVAL_REQUIRED',
+        message: 'Operator approval is required before creating a Google Calendar event.'
+      };
+    }
+
+    const previous = await findExternalActionByIdempotency(
+      context.userId,
+      context.idempotencyKey
+    );
+
+    if (previous) {
+      return {
+        ok: true,
+        data: previous.result,
+        message: 'Calendar event was already created for this approved action. Duplicate creation blocked.'
+      };
+    }
+
+    const result = await createGoogleCalendarEvent(context.userId, input);
+    const safePayload = {
+      summary: input.summary,
+      startDateTime: input.startDateTime,
+      endDateTime: input.endDateTime,
+      attendeeCount: input.attendees?.length || 0,
+      location: input.location || null
+    };
+
+    if (result.error) {
+      await logExternalGoogleAction(context.userId, {
+        service: 'GOOGLE_CALENDAR',
+        actionType: 'CREATE_CALENDAR_EVENT',
+        payload: safePayload,
+        result: { error: result.error },
+        status: 'FAILED',
+        approvalId: context.approvalId,
+        idempotencyKey: context.idempotencyKey
+      });
+
+      return {
+        ok: false,
+        errorCode: result.error,
+        message: `Calendar event creation failed: ${result.error}`
+      };
+    }
+
+    const auditLogged = await logExternalGoogleAction(context.userId, {
+      service: 'GOOGLE_CALENDAR',
+      actionType: 'CREATE_CALENDAR_EVENT',
+      payload: safePayload,
+      result: { eventId: result.eventId, htmlLink: result.htmlLink },
+      status: 'SUCCESS',
+      approvalId: context.approvalId,
+      idempotencyKey: context.idempotencyKey
+    });
 
     return {
       ok: true,
-      data: res,
+      data: {
+        eventId: result.eventId,
+        htmlLink: result.htmlLink,
+        auditLogged
+      },
       card: {
         id: `card_${Date.now()}`,
         type: 'DAILY_PLAN',
         title: `Event Scheduled: "${input.summary}"`,
-        subtitle: `${input.startDateTime.slice(11, 16)} - ${input.endDateTime.slice(11, 16)} (IST)`,
-        data: input
+        subtitle: `${input.startDateTime} → ${input.endDateTime}`,
+        data: { eventId: result.eventId, htmlLink: result.htmlLink }
       },
-      message: `Calendar event "${input.summary}" scheduled for ${input.startDateTime.slice(0, 16)}.`
+      message: `Google Calendar event "${input.summary}" created after operator approval.`
     };
   }
 };
@@ -1160,41 +1328,94 @@ export const readSheetTool: ToolDefinition = {
 
 export const appendToSheetTool: ToolDefinition = {
   name: 'appendToSheet',
-  description: 'Append a row of data to a Google Sheet (Requires Approval for first-time per sheet).',
+  description: 'Append a row to a connected Google Sheet after explicit operator approval.',
   permission: 'APPROVAL_REQUIRED',
   schema: z.object({
     spreadsheetId: z.string().min(1),
     range: z.string().default('Sheet1!A:Z'),
-    values: z.array(z.union([z.string(), z.number()]))
+    values: z.array(z.union([z.string(), z.number(), z.boolean()])).min(1).max(100)
   }),
   execute: async (input, context) => {
-    const supabase = createClient();
-    const { data: approval } = await supabase
-      .from('approval_requests')
-      .insert({
-        user_id: context.userId,
-        tool_name: 'appendToSheet',
-        tool_input: input,
-        description: `Append row [${input.values.join(', ')}] to Google Sheet ${input.spreadsheetId.slice(0, 8)}...`,
-        status: 'PENDING'
-      })
-      .select()
-      .single();
+    if (!context.approved) {
+      return {
+        ok: false,
+        errorCode: 'APPROVAL_REQUIRED',
+        message: 'Operator approval is required before changing a Google Sheet.'
+      };
+    }
+
+    const previous = await findExternalActionByIdempotency(
+      context.userId,
+      context.idempotencyKey
+    );
+
+    if (previous) {
+      return {
+        ok: true,
+        data: previous.result,
+        message: 'Sheet row was already appended for this approved action. Duplicate write blocked.'
+      };
+    }
+
+    const result = await appendGoogleSheetRow(
+      context.userId,
+      input.spreadsheetId,
+      input.range,
+      input.values
+    );
+
+    const safePayload = {
+      spreadsheetId: input.spreadsheetId,
+      range: input.range,
+      valueCount: input.values.length
+    };
+
+    if (result.error) {
+      await logExternalGoogleAction(context.userId, {
+        service: 'GOOGLE_SHEETS',
+        actionType: 'APPEND_ROW',
+        payload: safePayload,
+        result: { error: result.error },
+        status: 'FAILED',
+        approvalId: context.approvalId,
+        idempotencyKey: context.idempotencyKey
+      });
+
+      return {
+        ok: false,
+        errorCode: result.error,
+        message: `Google Sheets append failed: ${result.error}`
+      };
+    }
+
+    const auditLogged = await logExternalGoogleAction(context.userId, {
+      service: 'GOOGLE_SHEETS',
+      actionType: 'APPEND_ROW',
+      payload: safePayload,
+      result: {
+        updatedRows: result.updatedRows,
+        updatedRange: result.updatedRange
+      },
+      status: 'SUCCESS',
+      approvalId: context.approvalId,
+      idempotencyKey: context.idempotencyKey
+    });
 
     return {
       ok: true,
-      requiresApproval: true,
-      approvalId: approval?.id,
+      data: {
+        updatedRows: result.updatedRows,
+        updatedRange: result.updatedRange,
+        auditLogged
+      },
       card: {
         id: `card_${Date.now()}`,
-        type: 'APPROVAL_REQUIRED',
-        title: 'Approval Required: Append to Google Sheet',
-        subtitle: `Values: ${input.values.join(', ')}`,
-        data: input,
-        requiresApproval: true,
-        approvalId: approval?.id
+        type: 'DAILY_PLAN',
+        title: 'Google Sheet Updated',
+        subtitle: result.updatedRange || input.range,
+        data: { updatedRows: result.updatedRows, updatedRange: result.updatedRange }
       },
-      message: `Sheet update prepared. Please approve in Approval Center to execute.`
+      message: `Google Sheet updated after operator approval (${result.updatedRows || 0} row).`
     };
   }
 };

@@ -165,7 +165,8 @@ export async function executeApprovalDecision(
     toolResult = await tool.execute(parsed.data, {
       userId,
       idempotencyKey: `approval_${approvalId}`,
-      approved: true
+      approved: true,
+      approvalId
     });
   } catch (error) {
     toolResult = {

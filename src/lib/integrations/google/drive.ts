@@ -1,4 +1,4 @@
-import { getValidGoogleAccessToken } from './tokens';
+import { googleApiFetch } from './tokens';
 
 export interface DriveFileSummary {
   id: string;
@@ -9,47 +9,76 @@ export interface DriveFileSummary {
   sizeBytes?: number;
 }
 
+function escapeDriveQueryLiteral(value: string): string {
+  return value
+    .slice(0, 200)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+}
+
 export async function searchGoogleDrive(
   userId: string,
-  query: string = '',
-  maxResults: number = 8
+  query = '',
+  maxResults = 8
 ): Promise<{ files: DriveFileSummary[]; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { files: [], error: error || 'CONNECTION_REQUIRED' };
+  const limit = Math.min(50, Math.max(1, Number(maxResults) || 8));
+  let q = 'trashed = false';
+
+  if (query.trim()) {
+    const safe = escapeDriveQueryLiteral(query.trim());
+    q += ` and (name contains '${safe}' or fullText contains '${safe}')`;
   }
 
-  try {
-    let q = "trashed = false";
-    if (query) {
-      const sanitized = query.replace(/'/g, '');
-      q += ` and (name contains '${sanitized}' or fullText contains '${sanitized}')`;
-    }
+  const params = new URLSearchParams({
+    q,
+    pageSize: String(limit),
+    fields: 'files(id,name,mimeType,modifiedTime,webViewLink,size)',
+    orderBy: 'modifiedTime desc'
+  });
 
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&pageSize=${maxResults}&fields=files(id,name,mimeType,modifiedTime,webViewLink,size)&orderBy=modifiedTime desc`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+  const result = await googleApiFetch(
+    userId,
+    `https://www.googleapis.com/drive/v3/files?${params.toString()}`
+  );
 
-    if (!res.ok) {
-      if (res.status === 401) return { files: [], error: 'TOKEN_EXPIRED' };
-      return { files: [], error: `DRIVE_API_ERROR_${res.status}` };
-    }
-
-    const data = await res.json();
-    const files: DriveFileSummary[] = (data.files || []).map((f: any) => ({
-      id: f.id,
-      name: f.name,
-      mimeType: f.mimeType,
-      modifiedTime: f.modifiedTime,
-      webViewLink: f.webViewLink,
-      sizeBytes: f.size ? Number(f.size) : undefined
-    }));
-
-    return { files };
-  } catch (err: any) {
-    return { files: [], error: err.message };
+  if (!result.response) return { files: [], error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { files: [], error: `DRIVE_API_ERROR_${result.response.status}` };
   }
+
+  const data = await result.response.json();
+  return {
+    files: (data.files || []).map((file: any) => ({
+      id: file.id,
+      name: file.name,
+      mimeType: file.mimeType,
+      modifiedTime: file.modifiedTime,
+      webViewLink: file.webViewLink || undefined,
+      sizeBytes: file.size ? Number(file.size) : undefined
+    }))
+  };
+}
+
+async function getDriveFileMetadata(
+  userId: string,
+  fileId: string
+): Promise<{ mimeType?: string; name?: string; size?: number; error?: string }> {
+  const result = await googleApiFetch(
+    userId,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,size`
+  );
+
+  if (!result.response) return { error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { error: `DRIVE_METADATA_ERROR_${result.response.status}` };
+  }
+
+  const data = await result.response.json();
+  return {
+    mimeType: data.mimeType,
+    name: data.name,
+    size: data.size ? Number(data.size) : undefined
+  };
 }
 
 export async function readGoogleDriveFileText(
@@ -57,38 +86,41 @@ export async function readGoogleDriveFileText(
   fileId: string,
   mimeType?: string
 ): Promise<{ text?: string; error?: string }> {
-  const { token, error } = await getValidGoogleAccessToken(userId);
-  if (!token || error) {
-    return { error: error || 'CONNECTION_REQUIRED' };
+  const metadata = mimeType
+    ? { mimeType }
+    : await getDriveFileMetadata(userId, fileId);
+
+  if ('error' in metadata && metadata.error) {
+    return { error: metadata.error };
   }
 
-  try {
-    // If it's a Google Doc, export as plain text
-    if (mimeType === 'application/vnd.google-apps.document' || !mimeType) {
-      const exportUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`;
-      const res = await fetch(exportUrl, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+  const resolvedMime = metadata.mimeType || '';
+  let url: string;
 
-      if (res.ok) {
-        const text = await res.text();
-        return { text: text.slice(0, 5000) }; // cap text
-      }
+  if (resolvedMime === 'application/vnd.google-apps.document') {
+    url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text%2Fplain`;
+  } else if (resolvedMime === 'application/vnd.google-apps.spreadsheet') {
+    url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text%2Fcsv`;
+  } else if (
+    resolvedMime.startsWith('text/') ||
+    resolvedMime === 'application/json' ||
+    resolvedMime === 'application/xml' ||
+    resolvedMime === 'application/javascript'
+  ) {
+    if (typeof metadata.size === 'number' && metadata.size > 500_000) {
+      return { error: 'DRIVE_FILE_TOO_LARGE' };
     }
-
-    // Direct download for plain text, csv, or json
-    const getUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-    const getRes = await fetch(getUrl, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (getRes.ok) {
-      const text = await getRes.text();
-      return { text: text.slice(0, 5000) };
-    }
-
+    url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`;
+  } else {
     return { error: 'UNSUPPORTED_BINARY_FORMAT' };
-  } catch (err: any) {
-    return { error: err.message };
   }
+
+  const result = await googleApiFetch(userId, url);
+  if (!result.response) return { error: result.error || 'CONNECTION_REQUIRED' };
+  if (!result.response.ok) {
+    return { error: `DRIVE_READ_FAILED_${result.response.status}` };
+  }
+
+  const text = (await result.response.text()).slice(0, 20_000);
+  return { text };
 }
