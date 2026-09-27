@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
+const DEFAULT_WORKER_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAPI3D3XPFBvaudF6GRBmJ21KsF+i2o33eG2oCAUQhfyc=
+-----END PUBLIC KEY-----`;
+
 function safeEqual(provided: string | null, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
   const a = Buffer.from(provided);
@@ -11,6 +15,35 @@ function safeEqual(provided: string | null, expected: string | undefined): boole
 
 export function verifyBrainWorkerSecret(provided: string | null): boolean {
   return safeEqual(provided, process.env.BRAIN_WORKER_SECRET);
+}
+
+export function verifyBrainWorkerSignature(
+  timestampHeader: string | null,
+  signatureHeader: string | null,
+  rawBody: string
+): boolean {
+  if (!timestampHeader || !signatureHeader) return false;
+
+  const timestamp = Number(timestampHeader);
+  if (!Number.isFinite(timestamp)) return false;
+
+  const maxSkewMs = 5 * 60 * 1000;
+  if (Math.abs(Date.now() - timestamp) > maxSkewMs) return false;
+
+  try {
+    const publicKey =
+      process.env.BRAIN_WORKER_PUBLIC_KEY?.replace(/\\n/g, '\n') ||
+      DEFAULT_WORKER_PUBLIC_KEY;
+
+    return crypto.verify(
+      null,
+      Buffer.from(`${timestampHeader}.${rawBody}`, 'utf8'),
+      crypto.createPublicKey(publicKey),
+      Buffer.from(signatureHeader, 'base64')
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function verifySupabaseUserToken(token: string): Promise<{ id: string } | null> {
