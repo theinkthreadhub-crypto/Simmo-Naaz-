@@ -50,7 +50,7 @@ export default function MobileDock() {
       {/* Top Compact Brand Bar */}
       <div className="lg:hidden fixed top-0 inset-x-0 z-40 px-3 py-3 bg-black/70 backdrop-blur-xl border-b border-white/10 flex items-center justify-between sm:px-4">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-mentra-orange animate-pulse shadow-[0_0_6px_#5b6cff]" />
+          <div className="w-2 h-2 rounded-full bg-[#d8ff63] shadow-[0_0_12px_rgba(216,255,99,0.5)]" />
           <span className="font-display font-bold tracking-wider text-sm text-white">MENTRA</span>
           <span className="text-[9px] uppercase font-mono tracking-widest text-white/40 px-1 py-0.5 rounded bg-white/5">
             OS
@@ -59,10 +59,10 @@ export default function MobileDock() {
 
         <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-1.5 px-2.5 py-1 glass-pill bg-white/5 border-white/10 text-xs">
-            <Sparkles className="w-3 h-3 text-mentra-amber" />
-            <span className="font-mono text-mentra-amber font-semibold">L{displayLevel}</span>
+            <Sparkles className="w-3 h-3 text-[#d8ff63]" />
+            <span className="font-mono text-[#d8ff63] font-semibold">L{displayLevel}</span>
             <div className="w-[1px] h-2.5 bg-white/10" />
-            <Flame className="w-3 h-3 text-mentra-orange" />
+            <Flame className="w-3 h-3 text-[#d8ff63]" />
             <span className="font-mono text-white/70 text-[10px]">{displayStreak}d</span>
           </div>
 
@@ -82,7 +82,7 @@ export default function MobileDock() {
           <Link
             href="/"
             className={`flex flex-col items-center gap-1 py-1 px-2.5 sm:px-3 rounded-full transition-all ${
-              pathname === '/' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
+              pathname === '/' ? 'text-[#d8ff63] font-medium' : 'text-white/60 hover:text-white'
             }`}
           >
             <Home className="w-4 h-4" />
@@ -93,7 +93,7 @@ export default function MobileDock() {
           <Link
             href="/quests"
             className={`flex flex-col items-center gap-1 py-1 px-2.5 sm:px-3 rounded-full transition-all ${
-              pathname === '/quests' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
+              pathname === '/quests' ? 'text-[#d8ff63] font-medium' : 'text-white/60 hover:text-white'
             }`}
           >
             <Sword className="w-4 h-4" />
@@ -103,7 +103,7 @@ export default function MobileDock() {
           {/* Center Elevated MENTRA AI Button */}
           <Link
             href="/agents"
-            className="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber text-white shadow-[0_0_20px_rgba(91,108,255,0.5)] border-2 border-black active:scale-95 transition-all"
+            className="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-[#f4f1e8] text-[#0b0c09] shadow-[0_0_24px_rgba(216,255,99,0.18)] border-2 border-[#080907] active:scale-95 transition-all"
           >
             <Bot className="w-5 h-5" />
           </Link>
@@ -112,7 +112,7 @@ export default function MobileDock() {
           <Link
             href="/skills"
             className={`flex flex-col items-center gap-1 py-1 px-2.5 sm:px-3 rounded-full transition-all ${
-              pathname === '/skills' || pathname === '/goals' ? 'text-mentra-amber font-medium' : 'text-white/60 hover:text-white'
+              pathname === '/skills' || pathname === '/goals' ? 'text-[#d8ff63] font-medium' : 'text-white/60 hover:text-white'
             }`}
           >
             <Brain className="w-4 h-4" />
@@ -136,7 +136,7 @@ export default function MobileDock() {
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-mentra-orange shadow-[0_0_8px_#5b6cff]" />
+                <div className="w-2.5 h-2.5 rounded-full bg-[#d8ff63] shadow-[0_0_14px_rgba(216,255,99,0.5)]" />
                 <span className="font-display font-bold text-white text-base">MENTRA OS</span>
               </div>
               <button
@@ -149,12 +149,12 @@ export default function MobileDock() {
 
             {/* Profile Brief in Drawer */}
             <div className="mt-4 p-3 glass-panel border-white/10 rounded-2xl flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-mentra-orange to-mentra-amber flex items-center justify-center font-bold text-white shadow-lg">
+              <div className="w-10 h-10 rounded-full bg-[#f4f1e8] flex items-center justify-center font-bold text-[#0b0c09] shadow-lg">
                 {displayName.charAt(0).toUpperCase()}
               </div>
               <div>
                 <div className="text-sm font-semibold text-white">{displayName}</div>
-                <div className="text-xs font-mono text-mentra-amber">Level {displayLevel} • {displayStreak} Day Streak</div>
+                <div className="text-xs font-mono text-[#d8ff63]">Level {displayLevel} • {displayStreak} Day Streak</div>
               </div>
             </div>
 
@@ -170,11 +170,11 @@ export default function MobileDock() {
                     onClick={() => setDrawerOpen(false)}
                     className={`flex items-center gap-2.5 p-3 rounded-xl text-xs transition-all ${
                       isActive 
-                        ? 'bg-mentra-orange/20 text-mentra-amber border border-mentra-orange/40'
+                        ? 'bg-mentra-orange/20 text-[#d8ff63] border border-mentra-orange/40'
                         : 'bg-white/5 text-white/80 border border-white/5 hover:bg-white/10'
                     }`}
                   >
-                    <Icon className="w-4 h-4 text-mentra-orange" />
+                    <Icon className="w-4 h-4 text-[#d8ff63]" />
                     <span>{item.label}</span>
                   </Link>
                 );
