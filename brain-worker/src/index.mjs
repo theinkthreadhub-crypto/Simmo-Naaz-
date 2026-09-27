@@ -15,6 +15,7 @@ import qrcode from 'qrcode-terminal';
 const baseUrl = (process.env.MENTRA_BASE_URL || '').replace(/\/$/, '');
 const userId = process.env.MENTRA_USER_ID || '';
 const privateKeyB64 = process.env.BRAIN_WORKER_PRIVATE_KEY_B64 || '';
+const workerToken = process.env.BRAIN_WORKER_TOKEN || '';
 const cronSecret = process.env.CRON_SECRET || '';
 const workerId = process.env.WORKER_ID || 'mentra-brain-01';
 const port = Number(process.env.PORT || 10000);
@@ -49,19 +50,16 @@ function assertConfig() {
   const missing = [];
   if (!baseUrl) missing.push('MENTRA_BASE_URL');
   if (!userId) missing.push('MENTRA_USER_ID');
-  if (!privateKeyB64) missing.push('BRAIN_WORKER_PRIVATE_KEY_B64');
+  if (!workerToken && !privateKeyB64) {\n    missing.push('BRAIN_WORKER_TOKEN or BRAIN_WORKER_PRIVATE_KEY_B64');\n  }
 
   if (missing.length) {
     throw new Error(`Missing worker env: ${missing.join(', ')}`);
   }
 
-  privateKey = createPrivateKey(
-    Buffer.from(privateKeyB64, 'base64').toString('utf8')
-  );
+  if (privateKeyB64) {\n    privateKey = createPrivateKey(\n      Buffer.from(privateKeyB64, 'base64').toString('utf8')\n    );\n  }
 }
 
-function signedHeaders(bodyText) {
-  const timestamp = String(Date.now());
+function signedHeaders(bodyText) {\n  if (workerToken) {\n    return {\n      'Content-Type': 'application/json',\n      'x-mentra-worker-token': workerToken\n    };\n  }\n\n  const timestamp = String(Date.now());
   const signature = signPayload(
     null,
     Buffer.from(`${timestamp}.${bodyText}`, 'utf8'),
