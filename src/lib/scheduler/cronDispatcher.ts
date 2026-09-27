@@ -730,6 +730,19 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
         .eq('id', job.id)
         .eq('claimed_by', workerId);
 
+      if (job.type === 'AGENT_SCHEDULE' && job.payload?.agent_key) {
+        await supabase
+          .from('agent_runtime_state')
+          .update({
+            status: nextRun ? 'ACTIVE' : 'COMPLETE',
+            next_run_at: nextRun,
+            last_error: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', job.user_id)
+          .eq('agent_key', job.payload.agent_key);
+      }
+
       await supabase.from('job_runs').insert({
         job_id: job.id,
         user_id: job.user_id,
@@ -771,6 +784,19 @@ export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
         })
         .eq('id', job.id)
         .eq('claimed_by', workerId);
+
+      if (job.type === 'AGENT_SCHEDULE' && job.payload?.agent_key) {
+        await supabase
+          .from('agent_runtime_state')
+          .update({
+            status: shouldRetry ? 'ACTIVE' : 'FAILED',
+            next_run_at: retryAt,
+            last_error: errorMessage,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', job.user_id)
+          .eq('agent_key', job.payload.agent_key);
+      }
 
       await supabase.from('job_runs').insert({
         job_id: job.id,

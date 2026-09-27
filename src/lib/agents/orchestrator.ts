@@ -3,7 +3,6 @@ import { executeWebResearch } from '../research/researchAgent';
 import { getUserFinance } from '../db/finance';
 import { getUserQuests } from '../db/quests';
 import { getUserGoals } from '../db/goals';
-import { searchGmail } from '../integrations/google/gmail';
 import { getGoogleCalendarEvents } from '../integrations/google/calendar';
 import { isLeadAgentEnabled, runLeadAgent } from './lead/runner';
 
@@ -87,27 +86,33 @@ export async function runMultiAgentTask(
   }
 
   const supabase = createClient();
-  const taskId = `task_${Date.now()}`;
-
-  // 1. Initialize Task in Queue
-  try {
-    await supabase.from('agent_tasks').insert({
-      user_id: userId,
-      agent_id: input.agentChain[0] || 'ag_core',
-      title: input.taskTitle,
-      task_type: 'MULTI_AGENT_CHAIN',
-      input: input as any,
-      status: 'RUNNING',
-      current_stage: 'INITIALIZING'
-    });
-  } catch (err) {
-    console.warn('[ORCHESTRATOR]: Failed to create agent task record:', err);
-  }
-
+  let taskId = '';
   const results: Record<string, any> = {};
-  let currentStage = 'PLANNING';
+  let currentStage = 'INITIALIZING';
 
   try {
+    const { data: task, error: taskError } = await supabase
+      .from('agent_tasks')
+      .insert({
+        user_id: userId,
+        agent_id: input.agentChain[0] || 'ag_core',
+        title: input.taskTitle,
+        task_type: 'MULTI_AGENT_CHAIN',
+        input: input as any,
+        status: 'RUNNING',
+        current_stage: 'INITIALIZING'
+      })
+      .select('id')
+      .single();
+
+    if (taskError || !task?.id) {
+      throw new Error(
+        taskError?.message || 'AGENT_TASK_PERSIST_FAILED'
+      );
+    }
+
+    taskId = task.id;
+    currentStage = 'PLANNING';
     // Stage 1: Market & Strategy Intelligence (Research Agent)
     if (input.agentChain.includes('ag_research') || input.query.toLowerCase().includes('trend') || input.query.toLowerCase().includes('research')) {
       currentStage = 'RESEARCHING_MARKET';
@@ -146,18 +151,18 @@ export async function runMultiAgentTask(
     const summary = `Multi-Agent Executive Plan synthesized. Market intelligence incorporated (${results.research?.sources?.length || 0} sources), monthly burn audited (₹${results.finance?.monthlyExpenses || 0}), and aligned with ${results.macroGoals?.length || 0} sovereign goals.`;
 
     // 5. Update Task Queue to COMPLETE
-    try {
-      await supabase
-        .from('agent_tasks')
-        .update({
-          status: 'COMPLETE',
-          current_stage: 'COMPLETE',
-          output: results as any,
-          completed_at: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-        .eq('title', input.taskTitle);
-    } catch {}
+    const { error: completeError } = await supabase
+      .from('agent_tasks')
+      .update({
+        status: 'COMPLETE',
+        current_stage: 'COMPLETE',
+        output: results as any,
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', taskId)
+      .eq('user_id', userId);
+
+    if (completeError) throw new Error(completeError.message);
 
     return {
       taskId,
@@ -169,25 +174,25 @@ export async function runMultiAgentTask(
 
   } catch (err: any) {
     console.error('[ORCHESTRATOR ERROR]:', err);
-    try {
+    if (taskId) {
       await supabase
         .from('agent_tasks')
         .update({
           status: 'FAILED',
           current_stage: currentStage,
-          error_message: err.message,
+          error_message: err instanceof Error ? err.message : String(err),
           completed_at: new Date().toISOString()
         })
-        .eq('user_id', userId)
-        .eq('title', input.taskTitle);
-    } catch {}
+        .eq('id', taskId)
+        .eq('user_id', userId);
+    }
 
     return {
       taskId,
       status: 'FAILED',
       currentStage,
       results,
-      summary: `Multi-agent task failed at stage ${currentStage}: ${err.message}`
+      summary: `Multi-agent task failed at stage ${currentStage}: ${err instanceof Error ? err.message : String(err)}`
     };
   }
 }
