@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, CheckCircle2, XCircle, AlertTriangle, Mail, FileSpreadsheet, Clock, ArrowRight } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, AlertTriangle, Mail, FileSpreadsheet, CalendarDays, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 interface ApprovalItem {
@@ -92,7 +92,7 @@ export default function ApprovalsPage() {
         <div className="space-y-1 text-xs sm:text-sm text-white/80 font-sans">
           <p className="font-semibold text-white">Cryptographic Human-In-The-Loop Protocol</p>
           <p className="text-white/60">
-            High-impact operations (sending live emails, mutating financial spreadsheets, deleting assets) are held in quarantine until your explicit authorization. Tokens cannot execute without your cryptographic sign-off.
+            Sensitive external actions such as sending email, creating calendar events, or writing to Google Sheets remain blocked until your explicit approval. Approval is bound to your authenticated MENTRA session and executed once with idempotency protection.
           </p>
         </div>
       </div>
@@ -119,6 +119,8 @@ export default function ApprovalsPage() {
                   <div className="flex items-center gap-2">
                     {app.tool_name === 'sendEmail' ? (
                       <Mail className="w-4 h-4 text-mentra-orange" />
+                    ) : app.tool_name === 'createCalendarEvent' ? (
+                      <CalendarDays className="w-4 h-4 text-cyan-400" />
                     ) : (
                       <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                     )}
@@ -165,7 +167,15 @@ export default function ApprovalsPage() {
                     className="px-5 py-2 rounded-xl bg-gradient-to-r from-mentra-orange to-mentra-amber text-black text-xs font-mono font-bold hover:brightness-110 shadow-lg shadow-mentra-orange/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>{actionInProgress === app.id ? 'EXECUTING...' : 'AUTHORIZE & SEND'}</span>
+                    <span>
+                      {actionInProgress === app.id
+                        ? 'EXECUTING...'
+                        : app.tool_name === 'sendEmail'
+                          ? 'AUTHORIZE & SEND'
+                          : app.tool_name === 'createCalendarEvent'
+                            ? 'AUTHORIZE & CREATE'
+                            : 'AUTHORIZE & EXECUTE'}
+                    </span>
                   </button>
                 </div>
               </div>
