@@ -1,0 +1,1 @@
+Trigger production deployment for WhatsApp self-chat worker routes.
