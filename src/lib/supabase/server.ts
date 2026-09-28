@@ -54,6 +54,23 @@ export function createClient() {
     });
   }
 
+  // When service-role is not configured, verified worker requests still need a
+  // narrowly scoped way through RLS. Forward only the already-verified worker
+  // token to PostgREST; database policies validate its SHA-256 hash.
+  if (isTrustedServerScope()) {
+    const workerToken = headerStore?.get('x-mentra-worker-token');
+    if (workerToken) {
+      return createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: {
+          headers: {
+            'x-mentra-worker-token': workerToken
+          }
+        }
+      });
+    }
+  }
+
   const bearer = headerStore?.get('authorization');
   const options: any = {
     cookies: {
