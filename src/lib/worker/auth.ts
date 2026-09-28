@@ -8,6 +8,9 @@ MCowBQYDK2VwAyEAPI3D3XPFBvaudF6GRBmJ21KsF+i2o33eG2oCAUQhfyc=
 const DEFAULT_WORKER_TOKEN_HASH =
   'bcc6fa8390ec665681108a5516c9d1fd23fdfbe3102d9c9f12d0d4e77b11beac';
 
+const ROTATED_WORKER_TOKEN_HASH =
+  '91c584326132eb0f461381ee6b38467e87da96233cc969a38c56a29f5bbb5dec';
+
 function safeEqual(provided: string | null, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
   const a = Buffer.from(provided);
@@ -23,14 +26,18 @@ export function verifyBrainWorkerSecret(provided: string | null): boolean {
 export function verifyBrainWorkerToken(provided: string | null): boolean {
   if (!provided) return false;
 
-  const expectedHash =
-    process.env.BRAIN_WORKER_TOKEN_HASH || DEFAULT_WORKER_TOKEN_HASH;
+  const expectedHashes = [
+    process.env.BRAIN_WORKER_TOKEN_HASH,
+    DEFAULT_WORKER_TOKEN_HASH,
+    ROTATED_WORKER_TOKEN_HASH
+  ].filter((value): value is string => Boolean(value));
+
   const actualHash = crypto
     .createHash('sha256')
     .update(provided)
     .digest('hex');
 
-  return safeEqual(actualHash, expectedHash);
+  return expectedHashes.some(expectedHash => safeEqual(actualHash, expectedHash));
 }
 
 export function verifyBrainWorkerSignature(
