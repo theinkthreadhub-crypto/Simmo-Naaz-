@@ -319,8 +319,11 @@ async function connectWhatsApp() {
   sock.ev.on('connection.update', async update => {
     try {
       if (update.qr) {
-        qrcode.generate(update.qr, { small: true });
-        await sendWhatsAppEvent('QR_READY', { qr: update.qr });
+        const qrText = await new Promise(resolve => {
+          qrcode.generate(update.qr, { small: true }, code => resolve(code));
+        });
+        console.log(qrText);
+        await sendWhatsAppEvent('QR_READY', { qr: qrText });
       }
 
       if (update.connection === 'open') {
