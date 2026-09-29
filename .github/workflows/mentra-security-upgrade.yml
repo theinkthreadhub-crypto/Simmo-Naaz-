@@ -27,8 +27,15 @@ jobs:
 
       - name: Upgrade supported framework line
         run: |
-          npm install --save-exact --package-lock-only next@15.5.26 react@19.2.8 react-dom@19.2.8 @react-three/fiber@9.8.1 @react-three/drei@10.7.9
-          npm install --save-exact --package-lock-only --save-dev eslint-config-next@15.5.26 @types/react@latest @types/react-dom@latest
+          npm pkg set dependencies.next="15.5.26"
+          npm pkg set dependencies.react="19.2.8"
+          npm pkg set dependencies.react-dom="19.2.8"
+          npm pkg set dependencies.@react-three/fiber="9.8.1"
+          npm pkg set dependencies.@react-three/drei="10.7.9"
+          npm pkg set devDependencies.eslint-config-next="15.5.26"
+          npm pkg set devDependencies.@types/react="19.2.18"
+          npm pkg set devDependencies.@types/react-dom="19.2.4"
+          npm install --package-lock-only
           npm ci
 
       - name: Typecheck
