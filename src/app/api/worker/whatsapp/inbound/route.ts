@@ -7,6 +7,8 @@ import {
   verifySupabaseUserToken
 } from '@/lib/worker/auth';
 import { runAsTrustedServer } from '@/lib/supabase/trustedScope';
+import { createClient } from '@/lib/supabase/server';
+import { executeApprovalDecision } from '@/lib/approvals/executor';
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -74,6 +76,43 @@ export async function POST(req: NextRequest) {
 
   if (!text) {
     return NextResponse.json({ error: 'EMPTY_MESSAGE' }, { status: 400 });
+  }
+
+  if (text === '1' || text === '3') {
+    const approvalCommand = await runAsTrustedServer(
+      'worker_whatsapp_fashion_approval',
+      async () => {
+        const supabase = createClient();
+        const { data: pendingApproval, error } = await supabase
+          .from('approval_requests')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('tool_name', 'publishFashionProduct')
+          .eq('status', 'PENDING')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error || !pendingApproval?.id) {
+          return null;
+        }
+
+        return executeApprovalDecision(
+          userId,
+          pendingApproval.id,
+          text === '1' ? 'APPROVE' : 'REJECT'
+        );
+      }
+    );
+
+    if (approvalCommand) {
+      return NextResponse.json({
+        success: approvalCommand.success,
+        status: approvalCommand.status,
+        reply: approvalCommand.message,
+        cards: []
+      });
+    }
   }
 
   const execute = () =>

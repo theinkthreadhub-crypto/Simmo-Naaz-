@@ -30,13 +30,6 @@ const heartbeatInterval = Math.max(
   Number(process.env.HEARTBEAT_INTERVAL_MS || 60_000)
 );
 
-const allowedNumbers = new Set(
-  (process.env.WHATSAPP_ALLOWED_NUMBERS || '')
-    .split(',')
-    .map(value => value.replace(/[^0-9]/g, ''))
-    .filter(Boolean)
-);
-
 const allowSelfChat =
   (process.env.WHATSAPP_SELF_CHAT || 'true').toLowerCase() !== 'false';
 
@@ -248,13 +241,10 @@ function isAllowedChat(sock, envelope) {
   const key = envelope.key || {};
   const jid = key.remoteJid || '';
 
-  // Extract all possible identifiers for the bot's own account
   const ownNumbers = new Set(
     [
       jidNumber(sock?.user?.id),
-      jidNumber(sock?.user?.lid),
-      jidNumber(sock?.authState?.creds?.me?.id),
-      jidNumber(sock?.authState?.creds?.me?.lid)
+      jidNumber(sock?.user?.lid)
     ].filter(Boolean)
   );
 
@@ -270,27 +260,13 @@ function isAllowedChat(sock, envelope) {
 
   const isSelfChat = candidates.some(number => ownNumbers.has(number));
 
-  // If it's self-chat ("Message yourself"), allow if allowSelfChat is true
-  if (isSelfChat) {
-    return allowSelfChat;
+  if (allowSelfChat && isSelfChat) {
+    return true;
   }
 
-  // Never reply to outbound messages sent to others
-  if (key.fromMe) {
-    return false;
-  }
-
-  // If allowedNumbers explicitly specifies phone numbers, only reply to those
-  if (allowedNumbers.size > 0 && !allowedNumbers.has('*')) {
-    const isAllowed = candidates.some(number => allowedNumbers.has(number));
-    if (!isAllowed) {
-      console.log(`[WhatsApp Guard] Ignored message from external contact: ${jid} (Not in allowed numbers list)`);
-    }
-    return isAllowed;
-  }
-
-  // By default, strict privacy: IGNORE all external contacts / strangers completely
-  console.log(`[WhatsApp Guard] Strict Privacy: Ignored message from external contact ${jid}. MENTRA only responds in "Message yourself"`);
+  console.log(
+    `[WhatsApp Guard] Ignored non-self message from ${jid}. MENTRA is locked to "Message yourself".`
+  );
   return false;
 }
 
@@ -415,12 +391,7 @@ async function connectWhatsApp() {
         );
         console.log(
           '[MENTRA Brain Worker] Bot replies to:',
-          [
-            allowSelfChat ? 'self chat ("Message yourself")' : null,
-            ...Array.from(allowedNumbers)
-          ]
-            .filter(Boolean)
-            .join(', ') || 'nobody'
+          allowSelfChat ? 'self chat ("Message yourself") only' : 'nobody'
         );
       }
 
