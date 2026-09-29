@@ -1,0 +1,59 @@
+name: MENTRA Security Upgrade Test
+
+on:
+  push:
+    branches:
+      - fix/mentra-production-repair-20260929
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/mentra-production-repair-20260929
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Upgrade supported framework line
+        run: |
+          npm install --save-exact --package-lock-only next@15.5.26 react@19.2.8 react-dom@19.2.8
+          npm install --save-exact --package-lock-only --save-dev eslint-config-next@15.5.26 @types/react@latest @types/react-dom@latest
+          npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder-project.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          AI_PROVIDER: fallback
+          AI_AGENT_RUNTIME_V2: "false"
+          AI_MEMORY_V2: "false"
+          AI_MEMORY_AUTO_EXTRACT: "false"
+          AI_MEMORY_DEDUP_V2: "false"
+          AI_TRACE_LEARNING: "false"
+
+      - name: Commit dependency upgrade
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes"
+          else
+            git commit -m "chore: upgrade Mentra to supported Next.js security line"
+            git push origin HEAD:fix/mentra-production-repair-20260929
+          fi
