@@ -23,6 +23,8 @@ export async function loadPersistentAgentState(
   userId: string,
   agentKey: string
 ): Promise<PersistentAgentState | null> {
+  const isPlaceholderDb = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+  if (isPlaceholderDb) return null;
   try {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -42,6 +44,8 @@ export async function loadPersistentAgentState(
 export async function checkpointPersistentAgentState(
   state: PersistentAgentState
 ): Promise<boolean> {
+  const isPlaceholderDb = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+  if (isPlaceholderDb) return true;
   try {
     const supabase = createClient();
     const now = new Date().toISOString();

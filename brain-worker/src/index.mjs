@@ -8,7 +8,9 @@ import makeWASocket, {
   BufferJSON,
   DisconnectReason,
   initAuthCreds,
-  proto
+  proto,
+  downloadMediaMessage,
+  useMultiFileAuthState
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 
@@ -265,6 +267,11 @@ function isAllowedChat(sock, envelope) {
   if (isSelfChat) return allowSelfChat;
   if (key.fromMe) return false;
 
+  // If no specific numbers are restricted or wildcard set, allow all 1-to-1 DMs
+  if (allowedNumbers.size === 0 || allowedNumbers.has('*')) {
+    return true;
+  }
+
   return candidates.some(number => allowedNumbers.has(number));
 }
 
@@ -282,30 +289,73 @@ async function handleIncoming(sock, envelope) {
 
   if (sentByBot.has(envelope.key?.id)) return;
 
-  const text = extractText(envelope.message).trim();
-  if (!text || text.startsWith(REPLY_MARK)) return;
-  if (!isAllowedChat(sock, envelope)) return;
+  let imageBase64 = null;
+  let mimeType = null;
+  const isImage = Boolean(envelope.message?.imageMessage);
 
-  const result = await postInternal(
-    '/api/worker/whatsapp/inbound',
-    {
-      jid,
-      messageId: envelope.key?.id || `wa_${Date.now()}`,
-      text,
-      pushName: envelope.pushName || ''
+  if (isImage) {
+    try {
+      const buffer = await downloadMediaMessage(envelope, 'buffer', {});
+      if (buffer) {
+        imageBase64 = buffer.toString('base64');
+        mimeType = envelope.message?.imageMessage?.mimetype || 'image/jpeg';
+      }
+    } catch (err) {
+      console.warn('[Media download failed]', err);
     }
-  );
+  }
 
-  if (result?.reply) {
-    const sent = await sock.sendMessage(jid, {
-      text: `${REPLY_MARK}\n${String(result.reply)}`.slice(0, 12000)
-    });
-    rememberBotMessage(sent?.key?.id);
+  const rawText = extractText(envelope.message).trim();
+  const text = rawText || (isImage ? '[FASHION_DESIGN_IMAGE_UPLOAD]' : '');
+  if (!text || text.startsWith(REPLY_MARK)) return;
+
+  const allowed = isAllowedChat(sock, envelope);
+  console.log(`[WhatsApp Inbound] Received from ${jid}: "${text}" (Allowed: ${allowed})`);
+  if (!allowed) return;
+
+  await sock.sendPresenceUpdate('composing', jid).catch(() => {});
+
+  try {
+    console.log(`[WhatsApp Inbound] Requesting MENTRA AI reply for "${text}"...`);
+    const result = await postInternal(
+      '/api/worker/whatsapp/inbound',
+      {
+        jid,
+        messageId: envelope.key?.id || `wa_${Date.now()}`,
+        text,
+        pushName: envelope.pushName || '',
+        media: imageBase64 ? {
+          base64: imageBase64,
+          mimeType: mimeType || 'image/jpeg',
+          caption: rawText
+        } : null
+      }
+    );
+
+    await sock.sendPresenceUpdate('paused', jid).catch(() => {});
+
+    if (result?.reply) {
+      console.log(`[WhatsApp Outbound] Sending reply to ${jid}: "${result.reply.slice(0, 100)}..."`);
+      const sent = await sock.sendMessage(jid, {
+        text: `${REPLY_MARK}\n${String(result.reply)}`.slice(0, 12000)
+      });
+      rememberBotMessage(sent?.key?.id);
+    } else {
+      console.log(`[WhatsApp Outbound] No reply returned from backend for ${jid}`);
+    }
+  } catch (error) {
+    console.error(`[WhatsApp Inbound Error] Failed to process message from ${jid}:`, error);
+    await sock.sendPresenceUpdate('paused', jid).catch(() => {});
   }
 }
 
+async function getEffectiveAuthState() {
+  const authDir = process.env.WHATSAPP_AUTH_DIR || './data/whatsapp-auth';
+  return await useMultiFileAuthState(authDir);
+}
+
 async function connectWhatsApp() {
-  const { state, saveCreds } = await useRemoteAuthState();
+  const { state, saveCreds } = await getEffectiveAuthState();
 
   const sock = makeWASocket({
     auth: state,
@@ -319,11 +369,17 @@ async function connectWhatsApp() {
   sock.ev.on('connection.update', async update => {
     try {
       if (update.qr) {
+        latestRawQr = update.qr;
+        console.log('\n======================================================');
+        console.log('📱 SCAN THIS WHATSAPP QR CODE WITH YOUR PHONE CAMERA:');
+        console.log('🌐 OR OPEN IN BROWSER: http://localhost:10000/qr');
+        console.log('======================================================\n');
+        qrcode.generate(update.qr, { small: true });
         const qrText = await new Promise(resolve => {
           qrcode.generate(update.qr, { small: true }, code => resolve(code));
-        });
-        console.log(qrText);
-        await sendWhatsAppEvent('QR_READY', { qr: qrText });
+        }).catch(() => update.qr);
+        console.log('\n======================================================\n');
+        await sendWhatsAppEvent('QR_READY', { qr: qrText }).catch(() => {});
       }
 
       if (update.connection === 'open') {
@@ -332,16 +388,16 @@ async function connectWhatsApp() {
           .split('@')[0];
 
         await saveCreds();
-        await sendWhatsAppEvent('CONNECTED', { connectedNumber });
+        await sendWhatsAppEvent('CONNECTED', { connectedNumber }).catch(() => {});
 
         console.log(
-          '[MENTRA Brain Worker] WhatsApp connected:',
+          '\n✅ [MENTRA Brain Worker] WhatsApp CONNECTED successfully to:',
           connectedNumber || 'linked device'
         );
         console.log(
-          '[MENTRA Brain Worker] Replies to:',
+          '[MENTRA Brain Worker] Bot replies to:',
           [
-            allowSelfChat ? 'self chat' : null,
+            allowSelfChat ? 'self chat ("Message yourself")' : null,
             ...Array.from(allowedNumbers)
           ]
             .filter(Boolean)
@@ -361,14 +417,12 @@ async function connectWhatsApp() {
               update.lastDisconnect?.error?.message ||
               `Socket closed (${statusCode || 'unknown'})`
           }
-        );
+        ).catch(() => {});
 
         activeSocket = null;
 
         if (loggedOut) {
-          await clearRemoteAuth().catch(error =>
-            console.warn('[WhatsApp auth clear]', error)
-          );
+          await clearRemoteAuth().catch(() => {});
           return;
         }
 
@@ -423,8 +477,71 @@ async function triggerScheduler() {
   }
 }
 
+let latestRawQr = null;
+
 function startHealthServer() {
   const server = createServer((req, res) => {
+    if (req.url === '/qr') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      if (activeSocket?.user) {
+        res.end(`<!DOCTYPE html>
+        <html>
+        <head><title>MENTRA WhatsApp Status</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+        <body style="font-family:system-ui,sans-serif;text-align:center;padding:50px;background:#090d16;color:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;">
+          <div style="background:#1e293b;padding:36px;border-radius:24px;border:1px solid #334155;max-width:440px;">
+            <div style="font-size:48px;margin-bottom:12px;">✅</div>
+            <h2 style="color:#22c55e;margin:0 0 10px 0;">WhatsApp Connected!</h2>
+            <p style="color:#94a3b8;">Linked Number: <b style="color:#f8fafc;">${String(activeSocket.user.id || '').split(':')[0]}</b></p>
+            <p style="color:#64748b;font-size:13px;">MENTRA Autonomous Brain is live and listening for messages.</p>
+          </div>
+        </body></html>`);
+        return;
+      }
+
+      if (!latestRawQr) {
+        res.end(`<!DOCTYPE html>
+        <html>
+        <head><title>MENTRA WhatsApp QR</title><meta http-equiv="refresh" content="3"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+        <body style="font-family:system-ui,sans-serif;text-align:center;padding:50px;background:#090d16;color:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;">
+          <div style="background:#1e293b;padding:36px;border-radius:24px;border:1px solid #334155;">
+            <div style="font-size:32px;animation:spin 1s linear infinite;">⏳</div>
+            <h3 style="color:#38bdf8;">Generating WhatsApp QR Code...</h3>
+            <p style="color:#94a3b8;font-size:14px;">Refreshing automatically in 3 seconds...</p>
+          </div>
+        </body></html>`);
+        return;
+      }
+
+      const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&margin=10&data=${encodeURIComponent(latestRawQr)}`;
+      res.end(`<!DOCTYPE html>
+      <html>
+      <head>
+        <title>MENTRA WhatsApp QR</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta http-equiv="refresh" content="18">
+      </head>
+      <body style="font-family:system-ui,-apple-system,sans-serif;margin:0;padding:24px;background:#090d16;color:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;">
+        <div style="background:#1e293b;padding:32px 28px;border-radius:24px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7);max-width:420px;width:100%;border:1px solid #334155;text-align:center;">
+          <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(56,189,248,0.1);padding:6px 14px;border-radius:999px;border:1px solid rgba(56,189,248,0.2);margin-bottom:16px;">
+            <span style="font-size:16px;">🧠</span>
+            <span style="color:#38bdf8;font-weight:600;font-size:13px;letter-spacing:0.5px;">MENTRA AI BRAIN</span>
+          </div>
+          <h2 style="margin:0 0 8px 0;font-size:22px;color:#ffffff;font-weight:700;">Connect WhatsApp</h2>
+          <p style="color:#94a3b8;font-size:14px;margin:0 0 24px 0;line-height:1.5;">Open WhatsApp on phone &rarr; <b>Linked Devices</b> &rarr; <b>Link a Device</b> and point camera at the QR code below:</p>
+          
+          <div style="background:#ffffff;padding:16px;border-radius:20px;display:inline-block;box-shadow:0 10px 25px rgba(0,0,0,0.3);margin-bottom:18px;">
+            <img src="${qrImgUrl}" alt="WhatsApp QR" style="width:260px;height:260px;display:block;border-radius:8px;" />
+          </div>
+
+          <div style="background:#0f172a;padding:12px;border-radius:12px;border:1px solid #334155;color:#64748b;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;">
+            <span>🔄</span> Auto-refreshes every 18 seconds
+          </div>
+        </div>
+      </body>
+      </html>`);
+      return;
+    }
+
     if (req.url === '/health' || req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(
@@ -438,6 +555,7 @@ function startHealthServer() {
           whatsappConnected: Boolean(activeSocket?.user),
           selfChat: allowSelfChat,
           workerId,
+          qrUrl: `http://localhost:${port}/qr`,
           now: new Date().toISOString()
         })
       );
@@ -450,6 +568,7 @@ function startHealthServer() {
 
   server.listen(port, '0.0.0.0', () => {
     console.log(`[MENTRA Brain Worker] Health server listening on :${port}`);
+    console.log(`[MENTRA Brain Worker] 🌐 Visual QR Web Page: http://localhost:${port}/qr`);
   });
 
   return server;
@@ -459,15 +578,20 @@ async function startBackendLoop() {
   if (activeSocket) return;
 
   try {
-    await sendHeartbeat('STARTING', { node: process.version });
-    await sendWhatsAppEvent('WAITING_QR');
+    await sendHeartbeat('STARTING', { node: process.version }).catch(() => {});
+    await sendWhatsAppEvent('WAITING_QR').catch(() => {});
     backendReady = true;
     backendError = '';
-    await connectWhatsApp();
   } catch (error) {
     backendReady = false;
     backendError = error instanceof Error ? error.message : String(error);
-    console.warn('[MENTRA Brain Worker] Backend not ready:', backendError);
+  }
+
+  // Connect WhatsApp socket
+  try {
+    await connectWhatsApp();
+  } catch (err) {
+    console.error('[MENTRA Brain Worker] connectWhatsApp error:', err);
   }
 }
 

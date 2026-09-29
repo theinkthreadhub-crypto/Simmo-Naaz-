@@ -92,3 +92,35 @@ export async function readGoogleDriveFileText(
     return { error: err.message };
   }
 }
+
+export async function downloadGoogleDriveFileBase64(
+  userId: string,
+  fileId: string
+): Promise<{ base64?: string; mimeType?: string; name?: string; error?: string }> {
+  const { token, error } = await getValidGoogleAccessToken(userId);
+  if (!token || error) {
+    return { error: error || 'CONNECTION_REQUIRED' };
+  }
+
+  try {
+    const metaUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType`;
+    const metaRes = await fetch(metaUrl, { headers: { Authorization: `Bearer ${token}` } });
+    const meta = metaRes.ok ? await metaRes.json() : {};
+
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      return { error: `DRIVE_DOWNLOAD_FAILED_${res.status}` };
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return {
+      base64: buffer.toString('base64'),
+      mimeType: meta.mimeType || 'image/jpeg',
+      name: meta.name || 'drive_design.jpg'
+    };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}

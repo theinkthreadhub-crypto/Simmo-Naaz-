@@ -53,6 +53,25 @@ export async function POST(req: NextRequest) {
   const messageId =
     typeof body.messageId === 'string' ? body.messageId : `qr_${Date.now()}`;
 
+  // Check if incoming message is a fashion design image from WhatsApp
+  if (body.media?.base64) {
+    const { processIncomingFashionDesign } = await import('@/lib/fashion/autonomousPipeline');
+    const fashionResult = await processIncomingFashionDesign({
+      userId,
+      imageBase64: body.media.base64,
+      mimeType: body.media.mimeType || 'image/jpeg',
+      caption: body.media.caption || text,
+      sourceJid: body.jid
+    });
+
+    return NextResponse.json({
+      success: fashionResult.success,
+      status: 'HANDLED',
+      reply: fashionResult.message,
+      cards: []
+    });
+  }
+
   if (!text) {
     return NextResponse.json({ error: 'EMPTY_MESSAGE' }, { status: 400 });
   }

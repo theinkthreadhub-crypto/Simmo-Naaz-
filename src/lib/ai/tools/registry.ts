@@ -1300,6 +1300,62 @@ export const getRuntimeQualityTool: ToolDefinition = {
   }
 };
 
+// ==============================================================================
+// 10. FASHION & E-COMMERCE AUTONOMOUS AGENT TOOLS
+// ==============================================================================
+import { fetchDriveDesignAndProcess, publishProductToWebsiteAndInstagram } from '@/lib/fashion/autonomousPipeline';
+
+export const fetchDriveDesignAndProcessTool: ToolDefinition = {
+  name: 'fetchDriveDesignAndProcess',
+  description: 'Fetch clothing artwork/design from Google Drive, generate UGC model mockup prompt, write SEO product copy, and prepare website drop and Instagram post.',
+  permission: 'READ',
+  schema: z.object({
+    query: z.string().default('image').describe('File name or search keyword in Google Drive')
+  }),
+  execute: async (params, context) => {
+    const result = await fetchDriveDesignAndProcess(context.userId, params.query);
+    return {
+      ok: result.success,
+      data: result,
+      card: {
+        id: `card_${Date.now()}`,
+        type: 'AGENT_WORKING',
+        title: `UGC Fashion Pipeline: ${result.productTitle || 'Design Processed'}`,
+        subtitle: `Price: ₹${result.productPrice || 999} • Website & Instagram Ready`,
+        data: result
+      },
+      message: result.message
+    };
+  }
+};
+
+export const publishFashionProductTool: ToolDefinition = {
+  name: 'publishFashionProduct',
+  description: 'Publish approved AI fashion design to InkThread Hub e-commerce store and queue Instagram drop post.',
+  permission: 'APPROVAL_REQUIRED',
+  schema: z.object({
+    title: z.string().min(1),
+    price: z.number().min(1),
+    description: z.string(),
+    category: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    mockupUrl: z.string().optional()
+  }),
+  execute: async (params, context) => {
+    const result = await publishProductToWebsiteAndInstagram(params);
+
+    return {
+      ok: true,
+      data: {
+        product: { name: params.title, price: params.price },
+        websitePublished: result.websitePublished,
+        instagramScheduled: result.instagramQueued
+      },
+      message: result.message
+    };
+  }
+};
+
 // Tool Registry Map
 export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   getPlayerProgress: getPlayerProgressTool,
@@ -1326,6 +1382,8 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   browserType: browserTypeTool,
   browserSubmit: browserSubmitTool,
   getRuntimeQuality: getRuntimeQualityTool,
+  fetchDriveDesignAndProcess: fetchDriveDesignAndProcessTool,
+  publishFashionProduct: publishFashionProductTool,
   
   // Phase 5 Google Workspace & Research Tools
   searchGmail: searchGmailTool,

@@ -127,16 +127,20 @@ export class GeminiProvider implements AIProvider {
           for (const call of m.tool_calls) {
             let args: Record<string, any> = {};
             try {
-              args = JSON.parse(call.function.arguments || '{}');
+              args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments || '{}') : (call.function.arguments || {});
             } catch {
               args = {};
             }
-            parts.push({
+            const partObj: Record<string, any> = {
               functionCall: {
                 name: call.function.name,
                 args
               }
-            });
+            };
+            if (call.thoughtSignature) {
+              partObj.thoughtSignature = call.thoughtSignature;
+            }
+            parts.push(partObj);
           }
           return { role: 'model', parts };
         }
@@ -179,11 +183,23 @@ export class GeminiProvider implements AIProvider {
       payload.tools = toolsPayload;
     }
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+
+    if (!response.ok && modelName !== 'gemini-flash-lite-latest') {
+      const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${this.apiKey}`;
+      const fallbackRes = await fetch(fallbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (fallbackRes.ok) {
+        response = fallbackRes;
+      }
+    }
 
     if (!response.ok) {
       const errText = await response.text();
@@ -192,15 +208,19 @@ export class GeminiProvider implements AIProvider {
 
     const data = await response.json();
     const candidate = data.candidates?.[0];
-    const textPart = candidate?.content?.parts?.find((p: any) => p.text)?.text || '';
+    const textPart = candidate?.content?.parts?.find((p: any) => p.text && !p.thought)?.text 
+      || candidate?.content?.parts?.find((p: any) => p.text)?.text 
+      || '';
     
     // Safely parse all function call parts returned by Gemini
     const functionCallParts = candidate?.content?.parts?.filter((p: any) => p.functionCall) || [];
+    const sharedThoughtSig = candidate?.content?.parts?.find((p: any) => p.thoughtSignature)?.thoughtSignature;
 
     const toolCalls = functionCallParts.length > 0 ? functionCallParts.map((fPart: any, index: number) => ({
       id: `call_${Date.now()}_${index}`,
       name: fPart.functionCall.name,
-      arguments: fPart.functionCall.args || {}
+      arguments: fPart.functionCall.args || {},
+      thoughtSignature: fPart.thoughtSignature || sharedThoughtSig
     })) : undefined;
 
     return {

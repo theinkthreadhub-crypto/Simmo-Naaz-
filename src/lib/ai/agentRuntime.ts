@@ -319,6 +319,7 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
       tool_calls: calls.map(call => ({
         id: call.id,
         type: 'function',
+        thoughtSignature: call.thoughtSignature,
         function: {
           name: call.name,
           arguments: JSON.stringify(call.arguments || {})
@@ -436,48 +437,56 @@ export async function runMentraAgentRuntime(options: AgentRuntimeOptions): Promi
       if (permission.requiresApproval) {
         onStatus?.('WAITING_APPROVAL');
 
+        const isPlaceholderDb =
+          process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('placeholder') ||
+          process.env.SUPABASE_SERVICE_ROLE_KEY?.includes('dummy');
+
         const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validArgs)).digest('hex');
-        const { data: approval, error: approvalError } = await supabase
-          .from('approval_requests')
-          .insert({
-            user_id: context.userId,
-            tool_name: call.name,
-            tool_input: validArgs,
-            description: permission.reason || `Approval required for ${call.name}`,
-            status: 'PENDING'
-          })
-          .select('id')
-          .single();
+        let approvalId = `appr_${Date.now()}`;
 
-        if (approvalError || !approval?.id) {
-          hadFailure = true;
-          const error =
-            approvalError?.message || 'Could not persist approval request.';
-
-          traces.push({
-            step,
-            tool: call.name,
-            callId: call.id,
-            status: 'FAILED',
-            latencyMs: Date.now() - startedAt,
-            input: redactForAudit(validArgs),
-            error
-          });
-
-          workingMessages.push({
-            role: 'tool',
-            name: call.name,
-            tool_call_id: call.id,
-            content: JSON.stringify({
-              ok: false,
-              errorCode: 'APPROVAL_PERSIST_FAILED',
-              message: error
+        if (!isPlaceholderDb) {
+          const { data: approval, error: approvalError } = await supabase
+            .from('approval_requests')
+            .insert({
+              user_id: context.userId,
+              tool_name: call.name,
+              tool_input: validArgs,
+              description: permission.reason || `Approval required for ${call.name}`,
+              status: 'PENDING'
             })
-          });
-          continue;
-        }
+            .select('id')
+            .single();
 
-        const approvalId = approval.id;
+          if (approvalError || !approval?.id) {
+            hadFailure = true;
+            const error =
+              approvalError?.message || 'Could not persist approval request.';
+
+            traces.push({
+              step,
+              tool: call.name,
+              callId: call.id,
+              status: 'FAILED',
+              latencyMs: Date.now() - startedAt,
+              input: redactForAudit(validArgs),
+              error
+            });
+
+            workingMessages.push({
+              role: 'tool',
+              name: call.name,
+              tool_call_id: call.id,
+              content: JSON.stringify({
+                ok: false,
+                errorCode: 'APPROVAL_PERSIST_FAILED',
+                message: error
+              })
+            });
+            continue;
+          }
+
+          approvalId = approval.id;
+        }
         const card: ActionCard = {
           id: approvalId,
           type: 'APPROVAL_REQUIRED',

@@ -60,10 +60,10 @@ export function selectGeminiModel(
     return { purpose, model: explicitModel, reason: 'Explicit model override' };
   }
 
-  const fast = process.env.AI_MODEL_FAST || 'gemini-3.5-flash-lite';
-  const smart = process.env.AI_MODEL_SMART || 'gemini-3.8-flash';
-  const agent = process.env.AI_MODEL_AGENT || smart;
-  const research = process.env.AI_MODEL_RESEARCH || smart;
+  const fast = process.env.AI_MODEL_FAST || 'gemini-flash-lite-latest';
+  const smart = process.env.AI_MODEL_SMART || 'gemini-flash-lite-latest';
+  const agent = process.env.AI_MODEL_AGENT || 'gemini-flash-lite-latest';
+  const research = process.env.AI_MODEL_RESEARCH || fast;
 
   switch (purpose) {
     case 'FAST':

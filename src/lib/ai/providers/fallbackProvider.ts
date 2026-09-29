@@ -253,9 +253,35 @@ export class FallbackProvider implements AIProvider {
       };
     }
 
+    // 13. Conversational Chat & Small Talk (Hindi, Hinglish, English)
+    if (clean.includes('kya kar rahi ho') || clean.includes('kya kr rhi ho') || clean.includes('kya kar rahe ho') || clean.includes('what are you doing') || clean.includes('kya chal raha')) {
+      const replies = [
+        "Main apke business, brand drops, Google Drive assets aur daily tasks ko monitor kar rahi hoon! Bataiye, aaj kis cheez par kaam karna hai? (T-shirt design, store drop, ya expense record?)",
+        "Bas apke commands ke liye ready hoon! Store ke products, WhatsApp automations aur designs dekh rahi hoon. Kuch naya launch karna hai?",
+        "Main online hoon aur apke InkThread Hub ecosystem, sales data aur tasks ko coordinate kar rahi hoon. Koi naya design create karein?"
+      ];
+      return { content: replies[Math.floor(Math.random() * replies.length)] };
+    }
+
+    if (clean.includes('kaise ho') || clean.includes('kaisi ho') || clean.includes('how are you') || clean.includes('kaisa hai')) {
+      return { content: "Main bilkul badhiya aur 100% active hoon! Aap bataiye, aaj ka din kaisa chal raha hai aur hume kya automate karna hai?" };
+    }
+
+    if (clean === 'hi' || clean === 'hello' || clean === 'hey' || clean.includes('namaste') || clean.includes('salam')) {
+      return { content: "Hey! MENTRA AI Brain active hai. Aap mujhe koi bhi design photo bhej sakte hain, store pe product publish karne bol sakte hain, ya koi bhi sawal pooch sakte hain!" };
+    }
+
+    if (clean.includes('kaun ho') || clean.includes('who are you') || clean.includes('naam kya')) {
+      return { content: "Main MENTRA hoon — aapka personal Sovereign AI OS aur Fashion Brand Growth Agent! Main WhatsApp se direct apke brand ke designs generate, Drive sync aur website store publish karti hoon." };
+    }
+
+    if (clean.includes('tshirt') || clean.includes('t-shirt') || clean.includes('hoodie') || clean.includes('design') || clean.includes('fashion') || clean.includes('drop')) {
+      return { content: "Fashion design drop ke liye: Aap WhatsApp par koi bhi reference image ya prompt bhej dijiye (e.g. 'Oversized acid-wash anime hoodie banake 1299 me publish karo'). Main instant model mockup, tech pack aur live store listing create kar doongi!" };
+    }
+
     // Default conversational response
     return {
-      content: `[MENTRA CORE]: Operational. Standing by for command. You can ask me to track expenses, generate today's plan, initialize quests, search memories, or coach your active skills.`
+      content: `Samajh gayi! MENTRA Brain active hai. Aap mujhse daily plan, expenses, website product launch, Google Drive search, ya normal chat koi bhi baat kar sakte hain. Bataiye kya karein?`
     };
   }
 

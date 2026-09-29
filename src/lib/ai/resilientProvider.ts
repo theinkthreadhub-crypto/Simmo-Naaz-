@@ -30,6 +30,7 @@ export class ResilientProvider implements AIProvider {
         this.model = provider.model;
         return result;
       } catch (error) {
+        console.error('[ResilientProvider error on provider ' + provider.name + ']:', error);
         errors.push(
           `${provider.name}: ${error instanceof Error ? error.message : String(error)}`
         );

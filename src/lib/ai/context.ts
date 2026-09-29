@@ -10,6 +10,10 @@ export async function buildMentraContext(
   currentMessage?: string,
   pageContext?: string
 ): Promise<string> {
+  const isPlaceholderDb = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+  if (isPlaceholderDb) {
+    return `- Operator: Operator\n- Mode: Sovereign AI Operating System\n- Status: Online`;
+  }
   try {
     const shouldRetrieveMemory = Boolean(
       currentMessage &&

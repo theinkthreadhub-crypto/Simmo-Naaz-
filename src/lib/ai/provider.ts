@@ -21,6 +21,7 @@ function cloudProvider(
   explicitModel?: string
 ): AIProvider | null {
   const apiKey =
+    process.env.GEMINI_API_KEY ||
     process.env.AI_API_KEY ||
     process.env.AI_PROVIDER_API_KEY;
 

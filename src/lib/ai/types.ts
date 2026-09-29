@@ -136,6 +136,7 @@ export interface ModelMessage {
   tool_calls?: Array<{
     id: string;
     type: 'function';
+    thoughtSignature?: string;
     function: {
       name: string;
       arguments: string;
@@ -157,6 +158,7 @@ export interface AIProviderResponse {
     id: string;
     name: string;
     arguments: Record<string, any>;
+    thoughtSignature?: string;
   }>;
   usage?: {
     inputTokens: number;

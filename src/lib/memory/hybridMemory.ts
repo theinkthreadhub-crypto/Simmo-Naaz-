@@ -148,21 +148,9 @@ export async function searchMemoriesHybrid(
 
   if (!cleanQuery) return [];
 
-  if (process.env.AI_MEMORY_V2 === 'false') {
-    return lexicalFallback(userId, cleanQuery, safeLimit);
-  }
-
-  const supabase = createClient();
-
-  // Backfill a small number of legacy memories on each retrieval. This keeps
-  // migration non-blocking and gradually upgrades old memory rows.
-  const [queryEmbedding] = await Promise.all([
-    generateEmbedding(cleanQuery, 'QUERY'),
-    backfillRecentMemoryEmbeddings(userId, 4)
-  ]);
-
-  if (!queryEmbedding) {
-    return lexicalFallback(userId, cleanQuery, safeLimit);
+  const isPlaceholderDb = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+  if (isPlaceholderDb || process.env.AI_MEMORY_V2 === 'false') {
+    return [];
   }
 
   const { data, error } = await supabase.rpc('search_memories_hybrid', {

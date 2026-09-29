@@ -36,6 +36,14 @@ function deferredRun(minutes: number): string {
 }
 
 export async function claimAndDispatchDueJobs(): Promise<JobExecutionResult[]> {
+  const isPlaceholderDb =
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('placeholder') ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.includes('dummy');
+
+  if (isPlaceholderDb) {
+    return [];
+  }
+
   const supabase = createClient();
 
   if (process.env.SYSTEM_AUTO_RECOVERY !== 'false') {

@@ -49,41 +49,53 @@ export async function runMentra(
     };
   }
 
+  const isPlaceholderDb = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
   // 2. Ensure Conversation Record
   let conversationId: string = incoming.conversationId || '';
   if (!conversationId) {
-    const { data: conv } = await supabase
-      .from('conversations')
-      .insert({
-        user_id: incoming.userId,
-        title: cleanText.slice(0, 40) || 'Intelligence Session',
-        channel: incoming.channel || 'WEB'
-      })
-      .select()
-      .single();
+    if (!isPlaceholderDb) {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: incoming.userId,
+          title: cleanText.slice(0, 40) || 'Intelligence Session',
+          channel: incoming.channel || 'WEB'
+        })
+        .select()
+        .single().catch(() => ({ data: null }));
 
-    conversationId = conv?.id || `conv_${Date.now()}`;
+      conversationId = conv?.id || `conv_${Date.now()}`;
+    } else {
+      conversationId = `conv_${Date.now()}`;
+    }
   }
 
   // 3. Persist Incoming User Message
-  await supabase.from('messages').insert({
-    conversation_id: conversationId,
-    user_id: incoming.userId,
-    role: 'USER',
-    content: cleanText
-  });
+  if (!isPlaceholderDb) {
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      user_id: incoming.userId,
+      role: 'USER',
+      content: cleanText
+    }).catch(() => {});
+  }
 
   // 4. Fetch Conversation History (last 8 messages)
-  const { data: history } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
-    .limit(8);
+  let history: any[] = [];
+  if (!isPlaceholderDb) {
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true })
+      .limit(8).catch(() => ({ data: [] }));
+    history = data || [];
+  }
 
   // 5. Build Context and System Prompt
   if (callbacks?.onStatus) callbacks.onStatus('GATHERING_TELEMETRY');
-  const contextData = await buildMentraContext(incoming.userId, cleanText, incoming.pageContext);
+  const contextData = await buildMentraContext(incoming.userId, cleanText, incoming.pageContext).catch(() => '');
   const systemPrompt = getMentraSystemPrompt(contextData);
 
   // 6. Build Model Messages
@@ -141,42 +153,46 @@ export async function runMentra(
         }
       }
 
-      await supabase.from('messages').insert({
-        conversation_id: conversationId,
-        user_id: incoming.userId,
-        role: 'ASSISTANT',
-        content: responseText,
-        cards: runtime.cards,
-        tool_calls: runtime.traces.map(trace => ({
-          name: trace.tool,
-          status: trace.status,
-          step: trace.step,
-          latencyMs: trace.latencyMs
-        }))
-      });
-
-      await extractDurableMemories(
-        incoming.userId,
-        cleanText,
-        responseText,
-        conversationId
-      );
-
-      const { data: aiRunRecord } = await supabase
-        .from('ai_runs')
-        .insert({
-          user_id: incoming.userId,
+      let aiRunRecord: any = null;
+      if (!isPlaceholderDb) {
+        await supabase.from('messages').insert({
           conversation_id: conversationId,
-          provider: provider.name,
-          model: provider.model || process.env.AI_MODEL_SMART || process.env.AI_MODEL_FAST || 'provider-default',
-          purpose: 'AGENT_RUNTIME_V2',
-          input_tokens: runtime.usage.inputTokens,
-          output_tokens: runtime.usage.outputTokens,
-          latency_ms: runtime.traces.reduce((sum, trace) => sum + trace.latencyMs, 0),
-          status: runtime.status === 'FAILED' ? 'FAILED' : 'SUCCESS'
-        })
-        .select('id')
-        .single();
+          user_id: incoming.userId,
+          role: 'ASSISTANT',
+          content: responseText,
+          cards: runtime.cards,
+          tool_calls: runtime.traces.map(trace => ({
+            name: trace.tool,
+            status: trace.status,
+            step: trace.step,
+            latencyMs: trace.latencyMs
+          }))
+        }).catch(() => {});
+
+        await extractDurableMemories(
+          incoming.userId,
+          cleanText,
+          responseText,
+          conversationId
+        ).catch(() => {});
+
+        const { data } = await supabase
+          .from('ai_runs')
+          .insert({
+            user_id: incoming.userId,
+            conversation_id: conversationId,
+            provider: provider.name,
+            model: provider.model || process.env.AI_MODEL_SMART || process.env.AI_MODEL_FAST || 'provider-default',
+            purpose: 'AGENT_RUNTIME_V2',
+            input_tokens: runtime.usage.inputTokens,
+            output_tokens: runtime.usage.outputTokens,
+            latency_ms: runtime.traces.reduce((sum, trace) => sum + trace.latencyMs, 0),
+            status: runtime.status === 'FAILED' ? 'FAILED' : 'SUCCESS'
+          })
+          .select('id')
+          .single().catch(() => ({ data: null }));
+        aiRunRecord = data;
+      }
 
       if (aiRunRecord?.id) {
         await evaluateRunAndPersist({
@@ -186,7 +202,7 @@ export async function runMentra(
           responseText,
           traces: runtime.traces,
           maxStepsReached: runtime.maxStepsReached
-        });
+        }).catch(() => {});
       }
 
       return {
