@@ -27,7 +27,7 @@ jobs:
 
       - name: Upgrade supported framework line
         run: |
-          npm install --save-exact --package-lock-only next@15.5.26 react@19.2.8 react-dom@19.2.8
+          npm install --save-exact --package-lock-only next@15.5.26 react@19.2.8 react-dom@19.2.8 @react-three/fiber@9.8.1 @react-three/drei@10.7.9
           npm install --save-exact --package-lock-only --save-dev eslint-config-next@15.5.26 @types/react@latest @types/react-dom@latest
           npm ci
 
