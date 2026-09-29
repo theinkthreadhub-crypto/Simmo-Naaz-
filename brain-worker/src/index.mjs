@@ -247,8 +247,16 @@ function rememberBotMessage(id) {
 function isAllowedChat(sock, envelope) {
   const key = envelope.key || {};
   const jid = key.remoteJid || '';
-  const ownNumber = jidNumber(sock.user?.id);
-  const ownLid = jidNumber(sock.user?.lid);
+
+  // Extract all possible identifiers for the bot's own account
+  const ownNumbers = new Set(
+    [
+      jidNumber(sock?.user?.id),
+      jidNumber(sock?.user?.lid),
+      jidNumber(sock?.authState?.creds?.me?.id),
+      jidNumber(sock?.authState?.creds?.me?.lid)
+    ].filter(Boolean)
+  );
 
   const candidates = [
     jid,
@@ -260,19 +268,30 @@ function isAllowedChat(sock, envelope) {
     .map(jidNumber)
     .filter(Boolean);
 
-  const isSelfChat = candidates.some(
-    number => number === ownNumber || (ownLid && number === ownLid)
-  );
+  const isSelfChat = candidates.some(number => ownNumbers.has(number));
 
-  if (isSelfChat) return allowSelfChat;
-  if (key.fromMe) return false;
-
-  // If no specific numbers are restricted or wildcard set, allow all 1-to-1 DMs
-  if (allowedNumbers.size === 0 || allowedNumbers.has('*')) {
-    return true;
+  // If it's self-chat ("Message yourself"), allow if allowSelfChat is true
+  if (isSelfChat) {
+    return allowSelfChat;
   }
 
-  return candidates.some(number => allowedNumbers.has(number));
+  // Never reply to outbound messages sent to others
+  if (key.fromMe) {
+    return false;
+  }
+
+  // If allowedNumbers explicitly specifies phone numbers, only reply to those
+  if (allowedNumbers.size > 0 && !allowedNumbers.has('*')) {
+    const isAllowed = candidates.some(number => allowedNumbers.has(number));
+    if (!isAllowed) {
+      console.log(`[WhatsApp Guard] Ignored message from external contact: ${jid} (Not in allowed numbers list)`);
+    }
+    return isAllowed;
+  }
+
+  // By default, strict privacy: IGNORE all external contacts / strangers completely
+  console.log(`[WhatsApp Guard] Strict Privacy: Ignored message from external contact ${jid}. MENTRA only responds in "Message yourself"`);
+  return false;
 }
 
 async function handleIncoming(sock, envelope) {
