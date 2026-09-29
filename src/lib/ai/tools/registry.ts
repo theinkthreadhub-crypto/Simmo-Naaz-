@@ -1339,18 +1339,21 @@ export const publishFashionProductTool: ToolDefinition = {
     description: z.string(),
     category: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    mockupUrl: z.string().optional()
+    mockupUrl: z.string().url().optional(),
+    instagramCaption: z.string().max(5000).optional()
   }),
   execute: async (params, context) => {
     const result = await publishProductToWebsiteAndInstagram(params);
 
     return {
-      ok: true,
+      ok: result.success,
       data: {
         product: { name: params.title, price: params.price },
         websitePublished: result.websitePublished,
-        instagramScheduled: result.instagramQueued
+        instagramScheduled: result.instagramQueued,
+        errors: result.errors || []
       },
+      errorCode: result.success ? undefined : 'FASHION_PUBLISH_FAILED',
       message: result.message
     };
   }

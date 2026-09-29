@@ -1,8 +1,18 @@
-import fs from 'fs';
-import path from 'path';
 import { createClient } from '@/lib/supabase/server';
 import { runAsTrustedServer } from '@/lib/supabase/trustedScope';
-import { searchGoogleDrive, downloadGoogleDriveFileBase64 } from '@/lib/integrations/google/drive';
+import {
+  searchGoogleDrive,
+  downloadGoogleDriveFileBase64
+} from '@/lib/integrations/google/drive';
+
+interface ProductMetadata {
+  title: string;
+  price: number;
+  category: string;
+  tags: string[];
+  description: string;
+  ugcModelPrompt: string;
+}
 
 export interface FashionPipelineInput {
   userId: string;
@@ -24,210 +34,351 @@ export interface FashionPipelineResult {
   message: string;
 }
 
-export async function processIncomingFashionDesign(
-  input: FashionPipelineInput
-): Promise<FashionPipelineResult> {
-  const { userId, imageBase64, mimeType, caption = '' } = input;
+export interface FashionPublishResult {
+  success: boolean;
+  websitePublished: boolean;
+  instagramQueued: boolean;
+  message: string;
+  errors?: string[];
+}
+
+function clampPrice(value: unknown, fallback = 999): number {
+  const price = Number(value);
+  if (!Number.isFinite(price)) return fallback;
+  return Math.max(799, Math.min(1499, Math.round(price)));
+}
+
+function normalizeMetadata(
+  candidate: Partial<ProductMetadata>,
+  fallback: ProductMetadata
+): ProductMetadata {
+  const allowedCategories = new Set([
+    'T-Shirts',
+    'Hoodies',
+    'Oversized',
+    'Sweatshirts'
+  ]);
+
+  const tags = Array.isArray(candidate.tags)
+    ? candidate.tags
+        .map(tag => String(tag).trim())
+        .filter(Boolean)
+        .slice(0, 8)
+    : fallback.tags;
+
+  return {
+    title:
+      typeof candidate.title === 'string' && candidate.title.trim()
+        ? candidate.title.trim().slice(0, 120)
+        : fallback.title,
+    price: clampPrice(candidate.price, fallback.price),
+    category:
+      typeof candidate.category === 'string' &&
+      allowedCategories.has(candidate.category)
+        ? candidate.category
+        : fallback.category,
+    tags: tags.length > 0 ? tags : fallback.tags,
+    description:
+      typeof candidate.description === 'string' && candidate.description.trim()
+        ? candidate.description.trim().slice(0, 1200)
+        : fallback.description,
+    ugcModelPrompt:
+      typeof candidate.ugcModelPrompt === 'string' &&
+      candidate.ugcModelPrompt.trim()
+        ? candidate.ugcModelPrompt.trim().slice(0, 2400)
+        : fallback.ugcModelPrompt
+  };
+}
+
+async function analyzeFashionDesign(
+  imageBase64: string,
+  mimeType: string,
+  caption: string
+): Promise<ProductMetadata> {
+  const fallback: ProductMetadata = {
+    title: 'Oversized Streetwear Graphic Tee',
+    price: 999,
+    category: 'Oversized',
+    tags: ['streetwear', 'oversized', 'graphic-tee', 'drop-shoulder', 'cotton'],
+    description:
+      'Premium 240 GSM combed cotton oversized tee with a bold graphic-led streetwear look. Built for a relaxed drop-shoulder fit and everyday wear.',
+    ugcModelPrompt:
+      'Photorealistic Indian streetwear model wearing an oversized heavyweight T-shirt with the uploaded artwork reproduced accurately on the garment, urban India after sunset, natural skin texture, candid smartphone-style fashion photography.'
+  };
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
+  if (!apiKey) return fallback;
 
   try {
-    // 1. Analyze Design with Gemini AI (gemini-flash-lite-latest)
-    const geminiApiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
-    let productMetadata = {
-      title: 'Oversized Streetwear Graphic Tee',
-      price: 999,
-      category: 'T-Shirts',
-      tags: ['streetwear', 'oversized', 'graphic-tee', 'drop-shoulder', 'cotton'],
-      description: 'Premium 240 GSM 100% combed cotton heavy-gauge oversized tee featuring a bold sovereign front graphic. Pre-shrunk bio-washed fabric for ultimate luxury street comfort.',
-      ugcModelPrompt: 'A stylish 22-year-old Indian streetwear model standing in an urban neon-lit street in Mumbai, wearing an oversized black acid-wash heavy-cotton t-shirt with the graphic clearly on the chest. Realistic UGC photography, 35mm lens, natural texture.'
-    };
+    const promptText = `You are the fashion merchandising assistant for InkThread Hub, an Indian streetwear brand.
+Analyze the uploaded artwork and caption "${caption}".
+Return ONLY a valid JSON object with:
+"title": commercial product title,
+"price": INR number from 799 to 1499,
+"category": one of "T-Shirts", "Hoodies", "Oversized", "Sweatshirts",
+"tags": array of 5 concise search tags,
+"description": factual 2-3 sentence product copy. Do not invent fabric facts that are not provided,
+"ugcModelPrompt": detailed photorealistic Indian streetwear UGC prompt that preserves the uploaded artwork accurately.`;
 
-    if (geminiApiKey) {
-      try {
-        const promptText = `You are the Lead Fashion Director & E-Commerce Strategist for InkThread Hub (a trendy Indian streetwear brand).
-Analyze this uploaded artwork/t-shirt design and caption "${caption}" and produce a JSON object with:
-1. "title": catchy commercial streetwear title (e.g. "Tokyo Cyber Neon Oversized Tee")
-2. "price": realistic price in INR (number between 799 and 1499)
-3. "category": one of ["T-Shirts", "Hoodies", "Oversized", "Sweatshirts"]
-4. "tags": array of 5 trending search tags
-5. "description": 2-3 sentence punchy product description highlighting 240 GSM French Terry / Cotton bio-wash.
-6. "ugcModelPrompt": highly detailed image prompt describing a realistic Indian fashion model wearing this shirt in an urban lifestyle UGC setting.
-
-Return ONLY valid JSON.`;
-
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiApiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: promptText },
                 {
-                  role: 'user',
-                  parts: [
-                    { text: promptText },
-                    {
-                      inlineData: {
-                        mimeType: mimeType || 'image/jpeg',
-                        data: imageBase64
-                      }
-                    }
-                  ]
+                  inlineData: {
+                    mimeType: mimeType || 'image/jpeg',
+                    data: imageBase64
+                  }
                 }
-              ],
-              generationConfig: {
-                responseMimeType: 'application/json'
-              }
-            })
+              ]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json'
           }
-        );
-
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          const rawResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawResponse) {
-            const parsed = JSON.parse(rawResponse);
-            productMetadata = { ...productMetadata, ...parsed };
-          }
-        }
-      } catch (err) {
-        console.warn('[Gemini Fashion Concept Analysis Warning]', err);
+        }),
+        signal: AbortSignal.timeout(30_000)
       }
+    );
+
+    if (!response.ok) {
+      console.warn(
+        '[Fashion Analysis]: Gemini request failed',
+        response.status,
+        (await response.text()).slice(0, 400)
+      );
+      return fallback;
     }
 
-    const mockupUrl = `https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=1000&q=80`;
+    const data = await response.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!raw) return fallback;
 
-    const instagramCaption = `🔥 *NEW DROP:* ${productMetadata.title}
-
-${productMetadata.description}
-
-✨ *Crafted for the Streets:*
-• 240 GSM Heavyweight Bio-Wash Cotton
-• Oversized Street Fit (Drop-Shoulder)
-• High-Definition DTF Sovereign Print
-
-💰 Price: ₹${productMetadata.price} (Sizes: S to XXL)
-🛍️ Tap link in bio to cop or comment "DROP" for direct link!
-
-${productMetadata.tags.map(t => `#${t.replace(/[^a-zA-Z0-9]/g, '')}`).join(' ')} #InkThreadHub #StreetwearIndia`;
-
-    // 2. Register a Pending Approval in MENTRA Approvals System
-    let approvalId = `appr_${Date.now()}`;
-    await runAsTrustedServer('fashion_pipeline_approval_create', async () => {
-      const supabase = createClient();
-      const { data } = await supabase.from('approvals').insert({
-        user_id: userId,
-        action_type: 'PUBLISH_FASHION_PRODUCT',
-        risk_level: 'MEDIUM',
-        status: 'PENDING',
-        summary: `Publish "${productMetadata.title}" (₹${productMetadata.price}) to InkThread Store + Instagram`,
-        payload: {
-          product: {
-            title: productMetadata.title,
-            price: productMetadata.price,
-            category: productMetadata.category,
-            tags: productMetadata.tags,
-            description: productMetadata.description,
-            mockupUrl,
-            artworkBase64Length: imageBase64.length
-          },
-          instagram: {
-            caption: instagramCaption,
-            hashtags: productMetadata.tags.map(t => `#${t.replace(/\s+/g, '')}`)
-          }
-        },
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-      }).select('id').maybeSingle();
-
-      if (data?.id) {
-        approvalId = data.id;
-      }
-    });
-
-    const replyMessage = `✨ *UGC FASHION MODEL & WEBSITE DROP READY!* ✨
-
-👕 *Title:* ${productMetadata.title}
-💰 *Price:* ₹${productMetadata.price} (${productMetadata.category})
-📝 *Description:* ${productMetadata.description}
-
-👗 *UGC Model Scene:*
-_${productMetadata.ugcModelPrompt}_
-
-📱 *Instagram Reel/Post Caption:*
-_${instagramCaption.slice(0, 180)}..._
-
----------------------------------
-👉 *Reply "1" to APPROVE & PUBLISH* (Auto-creates product on InkThread Hub + queues Instagram post)
-👉 *Reply "2" to Regenerate UGC Model*
-👉 *Reply "3" to Cancel*`;
-
-    return {
-      success: true,
-      approvalId,
-      productTitle: productMetadata.title,
-      productPrice: productMetadata.price,
-      productDescription: productMetadata.description,
-      mockupUrl,
-      ugcModelPrompt: productMetadata.ugcModelPrompt,
-      instagramCaption,
-      message: replyMessage
-    };
-  } catch (error: any) {
-    console.error('[Fashion Pipeline Error]', error);
-    return {
-      success: false,
-      message: `Failed to process fashion design: ${error?.message || 'Unknown error'}`
-    };
+    return normalizeMetadata(JSON.parse(raw), fallback);
+  } catch (error) {
+    console.warn('[Fashion Analysis]: Falling back to deterministic metadata', error);
+    return fallback;
   }
 }
 
-/**
- * Fetch image from Google Drive by name or latest in Designs folder and trigger fashion pipeline
- */
+function buildInstagramCaption(metadata: ProductMetadata): string {
+  const hashtags = metadata.tags
+    .map(tag => `#${tag.replace(/[^a-zA-Z0-9]/g, '')}`)
+    .filter(tag => tag.length > 1)
+    .join(' ');
+
+  return `NEW DROP: ${metadata.title}
+
+${metadata.description}
+
+Price: ₹${metadata.price}
+Sizes: S to XXL
+
+${hashtags} #InkThreadHub #StreetwearIndia`;
+}
+
+async function createFashionApproval(
+  userId: string,
+  metadata: ProductMetadata,
+  instagramCaption: string,
+  mockupUrl?: string
+): Promise<{ id?: string; error?: string }> {
+  return runAsTrustedServer('fashion_pipeline_approval_create', async () => {
+    const supabase = createClient();
+    const toolInput = {
+      title: metadata.title,
+      price: metadata.price,
+      category: metadata.category,
+      tags: metadata.tags,
+      description: metadata.description,
+      ...(mockupUrl ? { mockupUrl } : {}),
+      instagramCaption
+    };
+
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .insert({
+        user_id: userId,
+        tool_name: 'publishFashionProduct',
+        tool_input: toolInput,
+        description: `Publish "${metadata.title}" (₹${metadata.price}) to InkThread Hub`,
+        status: 'PENDING',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      })
+      .select('id')
+      .single();
+
+    if (error || !data?.id) {
+      console.error('[Fashion Approval]: Failed to persist approval', error);
+      return {
+        error: error?.message || 'APPROVAL_CREATE_FAILED'
+      };
+    }
+
+    return { id: data.id };
+  });
+}
+
+export async function processIncomingFashionDesign(
+  input: FashionPipelineInput
+): Promise<FashionPipelineResult> {
+  const {
+    userId,
+    imageBase64,
+    mimeType,
+    caption = ''
+  } = input;
+
+  if (!imageBase64) {
+    return {
+      success: false,
+      message: 'Design image missing. Please send the artwork image again.'
+    };
+  }
+
+  const metadata = await analyzeFashionDesign(imageBase64, mimeType, caption);
+  const instagramCaption = buildInstagramCaption(metadata);
+  const configuredMockupUrl =
+    process.env.FASHION_DEFAULT_MOCKUP_URL?.trim() || undefined;
+
+  const approval = await createFashionApproval(
+    userId,
+    metadata,
+    instagramCaption,
+    configuredMockupUrl
+  );
+
+  if (!approval.id) {
+    return {
+      success: false,
+      productTitle: metadata.title,
+      productPrice: metadata.price,
+      productDescription: metadata.description,
+      ugcModelPrompt: metadata.ugcModelPrompt,
+      instagramCaption,
+      message:
+        'Design analysis complete, but the publish approval could not be saved. Nothing has been published.'
+    };
+  }
+
+  return {
+    success: true,
+    approvalId: approval.id,
+    productTitle: metadata.title,
+    productPrice: metadata.price,
+    productDescription: metadata.description,
+    mockupUrl: configuredMockupUrl,
+    ugcModelPrompt: metadata.ugcModelPrompt,
+    instagramCaption,
+    message: `✨ *FASHION DROP DRAFT READY*
+
+👕 *Title:* ${metadata.title}
+💰 *Price:* ₹${metadata.price} (${metadata.category})
+📝 *Description:* ${metadata.description}
+
+📸 *UGC generation prompt ready:*
+_${metadata.ugcModelPrompt}_
+
+📱 *Instagram copy ready:*
+_${instagramCaption.slice(0, 220)}..._
+
+Nothing is live yet.
+👉 Reply *1* to approve website publishing.
+👉 Reply *3* to cancel.`
+  };
+}
+
 export async function fetchDriveDesignAndProcess(
   userId: string,
   query: string = ''
 ): Promise<FashionPipelineResult> {
-  // 1. Search Google Drive
   const searchResult = await searchGoogleDrive(userId, query || 'image', 5);
+
   if (searchResult.error || !searchResult.files?.length) {
     return {
       success: false,
-      message: searchResult.error === 'CONNECTION_REQUIRED'
-        ? 'Google Drive is not connected. Connect Google account at http://localhost:3010/connections'
-        : `Google Drive mein koi matching design image nahi mili "${query}".`
+      message:
+        searchResult.error === 'CONNECTION_REQUIRED'
+          ? 'Google Drive is not connected. Open /connections in MENTRA and connect Google.'
+          : `Google Drive mein koi matching design image nahi mili "${query}".`
     };
   }
 
-  // Find image file
-  const imageFile = searchResult.files.find(f => 
-    f.mimeType?.startsWith('image/') || 
-    f.name.endsWith('.jpg') || 
-    f.name.endsWith('.jpeg') || 
-    f.name.endsWith('.png') ||
-    f.name.endsWith('.webp')
-  ) || searchResult.files[0];
+  const imageFile =
+    searchResult.files.find(file => {
+      const name = file.name.toLowerCase();
+      return (
+        file.mimeType?.startsWith('image/') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png') ||
+        name.endsWith('.webp')
+      );
+    }) || searchResult.files[0];
 
-  // 2. Download Image Binary Base64
+  if (!imageFile.mimeType?.startsWith('image/')) {
+    return {
+      success: false,
+      message: `Drive file "${imageFile.name}" image file nahi hai.`
+    };
+  }
+
   const download = await downloadGoogleDriveFileBase64(userId, imageFile.id);
   if (download.error || !download.base64) {
     return {
       success: false,
-      message: `Drive image "${imageFile.name}" download nahi ho payi: ${download.error}`
+      message: `Drive image "${imageFile.name}" download nahi ho payi: ${download.error || 'UNKNOWN_ERROR'}`
     };
   }
 
-  // 3. Run Pipeline
-  return await processIncomingFashionDesign({
+  return processIncomingFashionDesign({
     userId,
     imageBase64: download.base64,
-    mimeType: download.mimeType || 'image/jpeg',
+    mimeType: download.mimeType || imageFile.mimeType || 'image/jpeg',
     caption: `Design from Google Drive: ${imageFile.name}`
   });
 }
 
-/**
- * Publish product to InkThread website data store & Instagram staging
- */
+async function postPublishingWebhook(
+  url: string,
+  secret: string | undefined,
+  payload: Record<string, unknown>
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(secret ? { 'x-mentra-publish-secret': secret } : {})
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(25_000)
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      return {
+        ok: false,
+        error: `HTTP_${response.status}: ${body.slice(0, 300)}`
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 export async function publishProductToWebsiteAndInstagram(
   product: {
     title: string;
@@ -236,80 +387,86 @@ export async function publishProductToWebsiteAndInstagram(
     description: string;
     tags?: string[];
     mockupUrl?: string;
-  },
-  instagramCaption?: string
-): Promise<{ success: boolean; websitePublished: boolean; instagramQueued: boolean; message: string }> {
+    instagramCaption?: string;
+  }
+): Promise<FashionPublishResult> {
+  const websiteWebhook = process.env.INKTHREAD_PUBLISH_WEBHOOK_URL?.trim() || '';
+  const websiteSecret =
+    process.env.INKTHREAD_PUBLISH_WEBHOOK_SECRET?.trim() || undefined;
+  const instagramWebhook =
+    process.env.INSTAGRAM_PUBLISH_WEBHOOK_URL?.trim() || '';
+  const instagramSecret =
+    process.env.INSTAGRAM_PUBLISH_WEBHOOK_SECRET?.trim() || undefined;
+
+  const errors: string[] = [];
   let websitePublished = false;
+  let instagramQueued = false;
 
-  // Persist to inkthread-hub/data/products.json
-  try {
-    const productsPath = path.resolve(process.cwd(), '../inkthread-hub/data/products.json');
-    let existingProducts: any[] = [];
-    if (fs.existsSync(productsPath)) {
-      const raw = fs.readFileSync(productsPath, 'utf8');
-      try {
-        existingProducts = JSON.parse(raw || '[]');
-      } catch {
-        existingProducts = [];
+  if (!websiteWebhook) {
+    errors.push('INKTHREAD_PUBLISH_WEBHOOK_NOT_CONFIGURED');
+  } else {
+    const websiteResult = await postPublishingWebhook(
+      websiteWebhook,
+      websiteSecret,
+      {
+        source: 'MENTRA',
+        product: {
+          title: product.title,
+          price: product.price,
+          category: product.category || 'Oversized',
+          description: product.description,
+          tags: product.tags || [],
+          sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+          ...(product.mockupUrl ? { imageUrl: product.mockupUrl } : {})
+        }
       }
+    );
+
+    websitePublished = websiteResult.ok;
+    if (!websiteResult.ok) {
+      errors.push(`WEBSITE_PUBLISH_FAILED: ${websiteResult.error || 'UNKNOWN'}`);
     }
-
-    const newProduct = {
-      id: `prod_${Date.now()}`,
-      title: product.title,
-      price: product.price,
-      compareAtPrice: Math.round(product.price * 1.4),
-      category: product.category || 'T-Shirts',
-      description: product.description,
-      tags: product.tags || ['streetwear', 'oversized'],
-      image: product.mockupUrl || '/plain_oversized_black.jpg',
-      sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      colors: ['Black', 'Vintage Acid Wash', 'Off-White'],
-      inStock: true,
-      featured: true,
-      created_at: new Date().toISOString()
-    };
-
-    existingProducts.unshift(newProduct);
-    fs.writeFileSync(productsPath, JSON.stringify(existingProducts, null, 2), 'utf8');
-    websitePublished = true;
-  } catch (err) {
-    console.warn('[Website product write warning]', err);
   }
 
-  // Also persist directly to live Supabase products table
-  try {
-    const supabase = createClient();
-    const slug = product.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const sku = `INK-${Date.now().toString().slice(-6)}`;
-    const mockupImage = product.mockupUrl || '/plain_oversized_black.jpg';
+  if (instagramWebhook && product.instagramCaption) {
+    const instagramResult = await postPublishingWebhook(
+      instagramWebhook,
+      instagramSecret,
+      {
+        source: 'MENTRA',
+        caption: product.instagramCaption,
+        ...(product.mockupUrl ? { imageUrl: product.mockupUrl } : {})
+      }
+    );
 
-    await supabase.from('products').insert({
-      name: product.title,
-      slug: `${slug}-${Math.floor(Math.random() * 1000)}`,
-      sku,
-      description: product.description,
-      product_type: product.category || 'T-Shirts',
-      price: product.price,
-      sale_price: Math.round(product.price * 0.85),
-      sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      colors: ['Onyx Black', 'Acid Wash Grey', 'Vintage Cream'],
-      thumbnail: mockupImage,
-      images: [mockupImage],
-      is_published: true,
-      is_new_arrival: true,
-      is_featured: true,
-      stock_quantity: 100
-    });
-    websitePublished = true;
-  } catch (err) {
-    console.warn('[Supabase live products insert warning]', err);
+    instagramQueued = instagramResult.ok;
+    if (!instagramResult.ok) {
+      errors.push(
+        `INSTAGRAM_QUEUE_FAILED: ${instagramResult.error || 'UNKNOWN'}`
+      );
+    }
+  }
+
+  const success = websitePublished;
+
+  if (!success) {
+    return {
+      success: false,
+      websitePublished,
+      instagramQueued,
+      errors,
+      message:
+        'Publish approval executed, but InkThread Hub did not confirm a live product. Nothing is being reported as live. Check the publishing integration configuration.'
+    };
   }
 
   return {
     success: true,
     websitePublished,
-    instagramQueued: true,
-    message: `🎉 *Product Published Successfully!* \n\n• Website Listing: "${product.title}" (₹${product.price})\n• UGC Model & Instagram Post: Queued with hashtags and drop copy.\n• Status: LIVE on InkThread Hub catalog.`
+    instagramQueued,
+    ...(errors.length > 0 ? { errors } : {}),
+    message: instagramQueued
+      ? `✅ "${product.title}" is published on InkThread Hub and the Instagram post was queued.`
+      : `✅ "${product.title}" is published on InkThread Hub. Instagram was not queued because no working Instagram publishing integration is configured.`
   };
 }

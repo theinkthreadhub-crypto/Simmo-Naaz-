@@ -148,11 +148,20 @@ export async function searchMemoriesHybrid(
 
   if (!cleanQuery) return [];
 
-  const isPlaceholderDb = !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+  const isPlaceholderDb =
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder');
+
   if (isPlaceholderDb || process.env.AI_MEMORY_V2 === 'false') {
     return [];
   }
 
+  const queryEmbedding = await generateEmbedding(cleanQuery, 'QUERY');
+  if (!queryEmbedding) {
+    return lexicalFallback(userId, cleanQuery, safeLimit);
+  }
+
+  const supabase = createClient();
   const { data, error } = await supabase.rpc('search_memories_hybrid', {
     p_query_text: cleanQuery,
     p_query_embedding: queryEmbedding.values,
@@ -160,7 +169,10 @@ export async function searchMemoriesHybrid(
   });
 
   if (error) {
-    console.warn('[MEMORY V2]: Hybrid RPC unavailable, using lexical fallback', error.message);
+    console.warn(
+      '[MEMORY V2]: Hybrid RPC unavailable, using lexical fallback',
+      error
+    );
     return lexicalFallback(userId, cleanQuery, safeLimit);
   }
 

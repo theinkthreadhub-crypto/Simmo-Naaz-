@@ -55,7 +55,7 @@ export async function runMentra(
   let conversationId: string = incoming.conversationId || '';
   if (!conversationId) {
     if (!isPlaceholderDb) {
-      const { data: conv } = await supabase
+      const { data: conv, error: conversationError } = await supabase
         .from('conversations')
         .insert({
           user_id: incoming.userId,
@@ -63,7 +63,11 @@ export async function runMentra(
           channel: incoming.channel || 'WEB'
         })
         .select()
-        .single().catch(() => ({ data: null }));
+        .single();
+
+      if (conversationError) {
+        console.warn('[MENTRA DB]: Conversation persistence failed', conversationError);
+      }
 
       conversationId = conv?.id || `conv_${Date.now()}`;
     } else {
@@ -73,23 +77,32 @@ export async function runMentra(
 
   // 3. Persist Incoming User Message
   if (!isPlaceholderDb) {
-    await supabase.from('messages').insert({
+    const { error: userMessageError } = await supabase.from('messages').insert({
       conversation_id: conversationId,
       user_id: incoming.userId,
       role: 'USER',
       content: cleanText
-    }).catch(() => {});
+    });
+
+    if (userMessageError) {
+      console.warn('[MENTRA DB]: User message persistence failed', userMessageError);
+    }
   }
 
   // 4. Fetch Conversation History (last 8 messages)
   let history: any[] = [];
   if (!isPlaceholderDb) {
-    const { data } = await supabase
+    const { data, error: historyError } = await supabase
       .from('messages')
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
-      .limit(8).catch(() => ({ data: [] }));
+      .limit(8);
+
+    if (historyError) {
+      console.warn('[MENTRA DB]: Conversation history fetch failed', historyError);
+    }
+
     history = data || [];
   }
 
@@ -155,7 +168,7 @@ export async function runMentra(
 
       let aiRunRecord: any = null;
       if (!isPlaceholderDb) {
-        await supabase.from('messages').insert({
+        const { error: assistantMessageError } = await supabase.from('messages').insert({
           conversation_id: conversationId,
           user_id: incoming.userId,
           role: 'ASSISTANT',
@@ -167,7 +180,11 @@ export async function runMentra(
             step: trace.step,
             latencyMs: trace.latencyMs
           }))
-        }).catch(() => {});
+        });
+
+        if (assistantMessageError) {
+          console.warn('[MENTRA DB]: Assistant message persistence failed', assistantMessageError);
+        }
 
         await extractDurableMemories(
           incoming.userId,
@@ -176,7 +193,7 @@ export async function runMentra(
           conversationId
         ).catch(() => {});
 
-        const { data } = await supabase
+        const { data, error: aiRunError } = await supabase
           .from('ai_runs')
           .insert({
             user_id: incoming.userId,
@@ -190,7 +207,12 @@ export async function runMentra(
             status: runtime.status === 'FAILED' ? 'FAILED' : 'SUCCESS'
           })
           .select('id')
-          .single().catch(() => ({ data: null }));
+          .single();
+
+        if (aiRunError) {
+          console.warn('[MENTRA DB]: AI run persistence failed', aiRunError);
+        }
+
         aiRunRecord = data;
       }
 
