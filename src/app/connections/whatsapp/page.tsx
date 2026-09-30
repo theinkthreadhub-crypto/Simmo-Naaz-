@@ -164,12 +164,13 @@ export default function WhatsAppConnectionPage() {
 
   // Countdown timer for 6-Digit Link Code
   useEffect(() => {
-    if (!codeExpiresAt) {
+    const expiresAt = codeExpiresAt;
+    if (!expiresAt) {
       setCodeSecondsLeft(0);
       return;
     }
     const update = () => {
-      const diff = Math.max(0, Math.ceil((new Date(codeExpiresAt).getTime() - Date.now()) / 1000));
+      const diff = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000));
       setCodeSecondsLeft(diff);
       if (diff === 0) {
         setLinkCode(null);
@@ -182,12 +183,13 @@ export default function WhatsAppConnectionPage() {
 
   // Countdown timer for QR code
   useEffect(() => {
-    if (!session.qrExpiresAt) {
+    const expiresAt = session.qrExpiresAt;
+    if (!expiresAt) {
       setQrSecondsLeft(0);
       return;
     }
     const update = () => {
-      const diff = Math.max(0, Math.ceil((new Date(session.qrExpiresAt).getTime() - Date.now()) / 1000));
+      const diff = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000));
       setQrSecondsLeft(diff);
     };
     update();
