@@ -78,6 +78,7 @@ export default function WhatsAppConnectionPage() {
   const [copiedCode, setCopiedCode] = useState(false);
   const [cloudConfigured, setCloudConfigured] = useState(false);
   const [botPhoneNumber, setBotPhoneNumber] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // QR Session state
   const [session, setSession] = useState<QrSession>(initialSession);
@@ -107,6 +108,9 @@ export default function WhatsAppConnectionPage() {
       if (res.ok && data.success) {
         setCloudConfigured(Boolean(data.cloudConfigured));
         setBotPhoneNumber(data.botPhoneNumber || null);
+        if (data.userId) {
+          setCurrentUserId(data.userId);
+        }
         if (data.connection) {
           setCloudConnection(data.connection);
         }
@@ -777,10 +781,51 @@ export default function WhatsAppConnectionPage() {
                     </button>
                   </div>
 
-                  <div className="mt-8 text-left p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 max-w-md w-full">
+                  <div className="mt-8 text-left p-4 rounded-xl bg-slate-950 border border-emerald-500/30 text-xs text-slate-300 max-w-md w-full space-y-3">
+                    <div className="font-semibold text-white flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <span>☁️</span> Run 24/7 on Render (Free Cloud Worker)
+                      </span>
+                      <a
+                        href="https://render.com/deploy?repo=https://github.com/theinkthreadhub-crypto/Simmo-Naaz-"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] transition-all flex items-center gap-1"
+                      >
+                        <span>Deploy to Render</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Render runs the worker in the cloud so WhatsApp stays connected 24/7 without keeping your computer on.
+                    </p>
+
+                    <div className="pt-2 border-t border-slate-800 space-y-1.5 text-[11px] font-mono">
+                      <div className="text-slate-500 uppercase tracking-wider text-[10px]">
+                        Render Environment Variables:
+                      </div>
+                      <div className="p-2 rounded bg-slate-900 border border-slate-800 space-y-1">
+                        <div><span className="text-slate-400">MENTRA_BASE_URL:</span> <span className="text-cyan-300">https://mentra.inkthreadhub.in</span></div>
+                        {currentUserId && (
+                          <div className="flex items-center justify-between">
+                            <div><span className="text-slate-400">MENTRA_USER_ID:</span> <span className="text-emerald-400">{currentUserId}</span></div>
+                            <button
+                              onClick={() => handleCopyCode(currentUserId)}
+                              className="text-[10px] text-slate-400 hover:text-white underline"
+                            >
+                              Copy ID
+                            </button>
+                          </div>
+                        )}
+                        <div><span className="text-slate-400">BRAIN_WORKER_SECRET:</span> <span className="text-amber-300">Your secret</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 text-left p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 max-w-md w-full">
                     <div className="font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                       <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                      To run worker locally:
+                      Or run worker locally:
                     </div>
                     <code className="text-cyan-300 font-mono text-[11px] block bg-slate-900 p-2 rounded mt-1">
                       cd brain-worker && npm install && npm start

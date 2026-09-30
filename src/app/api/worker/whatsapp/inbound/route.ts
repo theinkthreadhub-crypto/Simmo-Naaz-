@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   let userId: string | null = null;
 
-  if (signedWorker || tokenWorker) {
+  if (signedWorker || tokenWorker || legacyWorker) {
     userId = typeof body.userId === 'string' ? body.userId : null;
   } else {
     const auth = req.headers.get('authorization') || '';

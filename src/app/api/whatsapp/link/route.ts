@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
+    userId: user.id,
     cloudConfigured: isConfigured,
     botPhoneNumber: botNumber,
     connection: conn || {

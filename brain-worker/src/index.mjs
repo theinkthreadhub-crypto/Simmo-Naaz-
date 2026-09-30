@@ -18,6 +18,7 @@ const baseUrl = (process.env.MENTRA_BASE_URL || '').replace(/\/$/, '');
 const userId = process.env.MENTRA_USER_ID || '';
 const privateKeyB64 = process.env.BRAIN_WORKER_PRIVATE_KEY_B64 || '';
 const workerToken = process.env.BRAIN_WORKER_TOKEN || '';
+const brainWorkerSecret = process.env.BRAIN_WORKER_SECRET || '';
 const cronSecret = process.env.CRON_SECRET || '';
 const workerId = process.env.WORKER_ID || 'mentra-brain-01';
 const port = Number(process.env.PORT || 10000);
@@ -47,8 +48,8 @@ function assertConfig() {
   const missing = [];
   if (!baseUrl) missing.push('MENTRA_BASE_URL');
   if (!userId) missing.push('MENTRA_USER_ID');
-  if (!workerToken && !privateKeyB64) {
-    missing.push('BRAIN_WORKER_TOKEN or BRAIN_WORKER_PRIVATE_KEY_B64');
+  if (!workerToken && !privateKeyB64 && !brainWorkerSecret) {
+    missing.push('BRAIN_WORKER_SECRET, BRAIN_WORKER_TOKEN, or BRAIN_WORKER_PRIVATE_KEY_B64');
   }
 
   if (missing.length) {
@@ -67,6 +68,13 @@ function signedHeaders(bodyText) {
     return {
       'Content-Type': 'application/json',
       'x-mentra-worker-token': workerToken
+    };
+  }
+
+  if (brainWorkerSecret) {
+    return {
+      'Content-Type': 'application/json',
+      'x-mentra-internal-secret': brainWorkerSecret
     };
   }
 

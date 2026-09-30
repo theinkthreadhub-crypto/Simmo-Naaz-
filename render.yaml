@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: mentra-brain-worker
+    runtime: node
+    rootDir: brain-worker
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.17.0
+      - key: MENTRA_BASE_URL
+        value: https://mentra.inkthreadhub.in
+      - key: BRAIN_WORKER_SECRET
+        generateValue: true
+      - key: MENTRA_USER_ID
+        sync: false
+      - key: WHATSAPP_SELF_CHAT
+        value: "true"
+      - key: PORT
+        value: 10000
