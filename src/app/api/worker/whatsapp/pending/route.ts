@@ -68,18 +68,42 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      // Fallback: check recent whatsapp_connections
-      const { data: conn } = await supabase
-        .from('whatsapp_connections')
-        .select('user_id, status, updated_at')
+      if (conn?.user_id) {
+        return NextResponse.json({
+          success: true,
+          userId: conn.user_id,
+          status: conn.status || 'IDLE'
+        });
+      }
+
+      // Fallback: check profiles
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('user_id')
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
+      if (profile?.user_id) {
+        return NextResponse.json({
+          success: true,
+          userId: profile.user_id,
+          status: 'IDLE'
+        });
+      }
+
+      // Fallback: check conversations
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('user_id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       return NextResponse.json({
-        success: Boolean(conn?.user_id),
-        userId: conn?.user_id || null,
-        status: conn?.status || 'IDLE'
+        success: Boolean(conv?.user_id),
+        userId: conv?.user_id || null,
+        status: 'IDLE'
       });
     });
   } catch (error: any) {

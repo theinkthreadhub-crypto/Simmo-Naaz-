@@ -105,6 +105,32 @@ export async function POST(req: NextRequest) {
 
       if (latestConn?.user_id) {
         userId = latestConn.user_id;
+        return;
+      }
+
+      // Fallback: profiles table
+      const { data: latestProfile } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestProfile?.user_id) {
+        userId = latestProfile.user_id;
+        return;
+      }
+
+      // Fallback: conversations table
+      const { data: latestConv } = await supabase
+        .from('conversations')
+        .select('user_id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestConv?.user_id) {
+        userId = latestConv.user_id;
       }
     });
   }
