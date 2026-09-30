@@ -68,6 +68,14 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      // Fallback: check recent whatsapp_connections
+      const { data: conn } = await supabase
+        .from('whatsapp_connections')
+        .select('user_id, status, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       if (conn?.user_id) {
         return NextResponse.json({
           success: true,
