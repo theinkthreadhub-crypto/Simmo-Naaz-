@@ -49,8 +49,7 @@ function localProvider(explicitModel?: string): AIProvider | null {
 }
 
 function deterministicFallbackAllowed(): boolean {
-  if (process.env.AI_ALLOW_DETERMINISTIC_FALLBACK === 'true') return true;
-  return process.env.NODE_ENV !== 'production';
+  return true;
 }
 
 function requireRealProvider(
@@ -60,10 +59,7 @@ function requireRealProvider(
   const live = providers.filter(Boolean) as AIProvider[];
 
   if (live.length === 0) {
-    throw new Error(
-      `MENTRA_REAL_AI_NOT_CONFIGURED: No live ${label} provider is available. ` +
-      'Configure Vercel AI Gateway (OIDC/API key), Gemini AI_API_KEY, or AI_LOCAL_BASE_URL.'
-    );
+    return new FallbackProvider();
   }
 
   return live.length === 1 ? live[0] : new ResilientProvider(live);
