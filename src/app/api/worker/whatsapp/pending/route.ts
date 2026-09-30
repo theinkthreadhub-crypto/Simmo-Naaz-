@@ -28,6 +28,30 @@ export async function GET(req: NextRequest) {
     return await runAsTrustedServer('brain_worker_pending_session', async () => {
       const supabase = createClient();
 
+      let connectedNumber = '';
+      if (req.method === 'POST') {
+        try {
+          const body = await req.json();
+          connectedNumber = typeof body?.connectedNumber === 'string' ? body.connectedNumber.replace(/[^0-9]/g, '') : '';
+        } catch {}
+      }
+
+      if (connectedNumber) {
+        const { data: matchedQr } = await supabase
+          .from('whatsapp_qr_sessions')
+          .select('user_id, status')
+          .ilike('connected_number', `%${connectedNumber}%`)
+          .limit(1)
+          .maybeSingle();
+        if (matchedQr?.user_id) {
+          return NextResponse.json({
+            success: true,
+            userId: matchedQr.user_id,
+            status: matchedQr.status
+          });
+        }
+      }
+
       // Check for an active or waiting QR session
       const { data: qrSession } = await supabase
         .from('whatsapp_qr_sessions')

@@ -39,12 +39,74 @@ export async function POST(req: NextRequest) {
   let userId: string | null = null;
 
   if (signedWorker || tokenWorker || legacyWorker) {
-    userId = typeof body.userId === 'string' ? body.userId : null;
+    userId = typeof body.userId === 'string' && body.userId.trim() ? body.userId.trim() : null;
   } else {
     const auth = req.headers.get('authorization') || '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
     const user = await verifySupabaseUserToken(token);
     userId = user?.id || null;
+  }
+
+  if (!userId) {
+    // Attempt automatic user discovery by sender phone number or recent session
+    const senderNumber = typeof body.jid === 'string'
+      ? body.jid.split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+      : '';
+
+    await runAsTrustedServer('resolve_inbound_whatsapp_user', async () => {
+      const supabase = createClient();
+
+      if (senderNumber) {
+        const { data: matchedQr } = await supabase
+          .from('whatsapp_qr_sessions')
+          .select('user_id')
+          .ilike('connected_number', `%${senderNumber}%`)
+          .limit(1)
+          .maybeSingle();
+
+        if (matchedQr?.user_id) {
+          userId = matchedQr.user_id;
+          return;
+        }
+
+        const { data: matchedConn } = await supabase
+          .from('whatsapp_connections')
+          .select('user_id')
+          .ilike('phone_number', `%${senderNumber}%`)
+          .limit(1)
+          .maybeSingle();
+
+        if (matchedConn?.user_id) {
+          userId = matchedConn.user_id;
+          return;
+        }
+      }
+
+      // Fallback: most recently updated QR session
+      const { data: latestQr } = await supabase
+        .from('whatsapp_qr_sessions')
+        .select('user_id')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestQr?.user_id) {
+        userId = latestQr.user_id;
+        return;
+      }
+
+      // Fallback: most recent connection
+      const { data: latestConn } = await supabase
+        .from('whatsapp_connections')
+        .select('user_id')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestConn?.user_id) {
+        userId = latestConn.user_id;
+      }
+    });
   }
 
   if (!userId) {
@@ -124,8 +186,9 @@ export async function POST(req: NextRequest) {
       externalMessageId: messageId
     });
 
-  const result = signedWorker
-    ? await runAsTrustedServer('signed_brain_worker_whatsapp', execute)
+  const isAuthorizedWorker = Boolean(signedWorker || tokenWorker || legacyWorker);
+  const result = isAuthorizedWorker
+    ? await runAsTrustedServer('worker_whatsapp_inbound', execute)
     : await execute();
 
   return NextResponse.json({

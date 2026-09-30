@@ -93,7 +93,7 @@ function signedHeaders(bodyText) {
 
 async function postInternal(endpoint, body = {}) {
   const payload = {
-    userId,
+    ...(userId ? { userId } : {}),
     ...body
   };
   const bodyText = JSON.stringify(payload);
@@ -271,9 +271,11 @@ function isAllowedChat(sock, envelope) {
     return true;
   }
 
-  console.log(
-    `[WhatsApp Guard] Ignored non-self message from ${jid}. MENTRA is locked to "Message yourself".`
-  );
+  // Also allow incoming direct 1-to-1 messages
+  if (!key.fromMe) {
+    return true;
+  }
+
   return false;
 }
 
@@ -390,6 +392,19 @@ async function connectWhatsApp() {
           .split('@')[0];
 
         await saveCreds();
+
+        if (!userId) {
+          try {
+            const pending = await postInternal('/api/worker/whatsapp/pending', { connectedNumber });
+            if (pending?.userId) {
+              userId = pending.userId;
+              console.log(`[MENTRA Brain Worker] ✅ Bound session to user: ${userId}`);
+            }
+          } catch (e) {
+            console.warn('[Session binding]', e?.message || e);
+          }
+        }
+
         await sendWhatsAppEvent('CONNECTED', { connectedNumber }).catch(() => {});
 
         console.log(
@@ -397,8 +412,7 @@ async function connectWhatsApp() {
           connectedNumber || 'linked device'
         );
         console.log(
-          '[MENTRA Brain Worker] Bot replies to:',
-          allowSelfChat ? 'self chat ("Message yourself") only' : 'nobody'
+          '[MENTRA Brain Worker] Bot replies to: self chat ("Message yourself") and direct messages'
         );
       }
 

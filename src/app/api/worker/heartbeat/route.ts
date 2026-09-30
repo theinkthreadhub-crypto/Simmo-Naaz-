@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   const workerId = typeof body.workerId === 'string' ? body.workerId : 'brain-worker';
-  const userId = typeof body.userId === 'string' ? body.userId : null;
+  const userId = typeof body.userId === 'string' && body.userId.trim() ? body.userId.trim() : null;
   const status = typeof body.status === 'string' ? body.status.slice(0, 40) : 'ONLINE';
 
   const writeHeartbeat = async () => {
