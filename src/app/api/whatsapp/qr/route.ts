@@ -16,6 +16,25 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Check worker heartbeat to report whether brain-worker is actively running
+  let workerOnline = false;
+  let workerLastSeen: string | null = null;
+  try {
+    const { data: hb } = await supabase
+      .from('brain_worker_heartbeats')
+      .select('worker_id, status, last_seen_at')
+      .order('last_seen_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (hb?.last_seen_at) {
+      workerLastSeen = hb.last_seen_at;
+      workerOnline = (Date.now() - new Date(hb.last_seen_at).getTime()) < 120_000;
+    }
+  } catch {
+    // Non-critical if table query fails
+  }
+
   const expired = data?.qr_expires_at
     ? new Date(data.qr_expires_at).getTime() <= Date.now()
     : false;
@@ -27,6 +46,35 @@ export async function GET() {
     connectedNumber: data?.connected_number || null,
     connectedAt: data?.connected_at || null,
     lastError: data?.last_error || null,
-    updatedAt: data?.updated_at || null
+    updatedAt: data?.updated_at || null,
+    workerOnline,
+    workerLastSeen
   });
 }
+
+export async function POST() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+
+  try {
+    const { error } = await supabase
+      .from('whatsapp_qr_sessions')
+      .upsert({
+        user_id: user.id,
+        worker_id: 'brain-worker',
+        status: 'WAITING_QR',
+        qr_code: null,
+        qr_expires_at: null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, status: 'WAITING_QR' });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}
+

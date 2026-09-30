@@ -89,6 +89,20 @@ async function saveConnection(userId: string, cleanPhone: string): Promise<void>
   if (error) throw new Error(error.message);
 }
 
+export async function linkUserDirectly(userId: string, phoneNumber: string): Promise<{ success: boolean; message: string }> {
+  const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+  if (!cleanPhone || cleanPhone.length < 8) {
+    return { success: false, message: 'Please provide a valid phone number with country code (e.g., 919876543210).' };
+  }
+  try {
+    await saveConnection(userId, cleanPhone);
+    memConnections.set(cleanPhone, { userId, phoneNumber: cleanPhone, status: 'CONNECTED' });
+    return { success: true, message: 'WhatsApp number linked successfully.' };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export async function linkUserByCode(phoneNumber: string, submittedCode: string): Promise<{ success: boolean; message: string; userId?: string }> {
   const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
   const cleanCode = submittedCode.trim().replace(/[^0-9]/g, '');

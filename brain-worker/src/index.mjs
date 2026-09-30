@@ -374,7 +374,7 @@ async function connectWhatsApp() {
           qrcode.generate(update.qr, { small: true }, code => resolve(code));
         }).catch(() => update.qr);
         console.log('\n======================================================\n');
-        await sendWhatsAppEvent('QR_READY', { qr: qrText }).catch(() => {});
+        await sendWhatsAppEvent('QR_READY', { qr: update.qr, rawQr: update.qr, asciiQr: qrText }).catch(() => {});
       }
 
       if (update.connection === 'open') {
