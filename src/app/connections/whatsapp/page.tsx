@@ -76,6 +76,8 @@ export default function WhatsAppConnectionPage() {
   const [linkingDirect, setLinkingDirect] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [cloudConfigured, setCloudConfigured] = useState(false);
+  const [botPhoneNumber, setBotPhoneNumber] = useState<string | null>(null);
 
   // QR Session state
   const [session, setSession] = useState<QrSession>(initialSession);
@@ -103,6 +105,8 @@ export default function WhatsAppConnectionPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        setCloudConfigured(Boolean(data.cloudConfigured));
+        setBotPhoneNumber(data.botPhoneNumber || null);
         if (data.connection) {
           setCloudConnection(data.connection);
         }
@@ -457,10 +461,44 @@ export default function WhatsAppConnectionPage() {
                   <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-5 text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.2)]">
                     <CheckCircle2 className="w-8 h-8" />
                   </div>
-                  <h2 className="text-xl font-bold text-white">WhatsApp Verified & Connected</h2>
+                  <h2 className="text-xl font-bold text-white">WhatsApp Number Registered</h2>
                   <p className="text-sm text-slate-400 mt-2 max-w-md leading-relaxed">
-                    Your WhatsApp number <span className="text-emerald-400 font-mono">+{cloudConnection.phone_number}</span> is linked to MENTRA. You can send questions, log habits, create fashion designs, or get daily briefs.
+                    Your number <span className="text-emerald-400 font-mono">+{cloudConnection.phone_number}</span> is saved to your MENTRA profile.
                   </p>
+
+                  {!cloudConfigured && (
+                    <div className="mt-5 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 text-left max-w-md">
+                      <div className="font-semibold text-amber-300 flex items-center gap-1.5 mb-1.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        Meta Cloud API Credentials Missing in Hosting
+                      </div>
+                      <p className="text-slate-300 leading-relaxed">
+                        To exchange live messages via WhatsApp Cloud API, you need to configure <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded font-mono">WHATSAPP_PHONE_NUMBER_ID</code> and <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded font-mono">WHATSAPP_ACCESS_TOKEN</code> in your Vercel project settings.
+                      </p>
+                      <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex items-center justify-between">
+                        <span className="text-slate-400 text-[11px]">Want instant chat without Meta?</span>
+                        <button
+                          onClick={() => setActiveTab('qr')}
+                          className="text-emerald-400 hover:text-emerald-300 underline font-semibold text-xs"
+                        >
+                          Switch to QR Scanner →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {botPhoneNumber && (
+                    <a
+                      href={`https://wa.me/${botPhoneNumber.replace(/[^0-9]/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 text-black font-bold text-xs shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-all"
+                    >
+                      <Smartphone className="w-4 h-4" />
+                      <span>Chat with MENTRA (+{botPhoneNumber})</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -473,6 +511,18 @@ export default function WhatsAppConnectionPage() {
                       Generate a single-use verification code to connect your WhatsApp directly.
                     </p>
                   </div>
+
+                  {!cloudConfigured && (
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
+                      <div className="font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        Meta WhatsApp Cloud API Status: Config Required
+                      </div>
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        The live site does not have Meta Cloud credentials configured yet (<code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded font-mono">WHATSAPP_PHONE_NUMBER_ID</code>). To connect your personal WhatsApp directly without Meta, use the <b>QR Scanner</b> tab.
+                      </p>
+                    </div>
+                  )}
 
                   {!linkCode ? (
                     <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800 text-center">

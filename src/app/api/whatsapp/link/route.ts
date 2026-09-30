@@ -5,6 +5,7 @@ import {
   linkUserByCode,
   linkUserDirectly
 } from '@/lib/integrations/whatsapp/linking';
+import { whatsappClient } from '@/lib/integrations/whatsapp/client';
 
 export async function GET(req: NextRequest) {
   const supabase = createClient();
@@ -35,8 +36,13 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .maybeSingle();
 
+  const isConfigured = whatsappClient.isConfigured();
+  const botNumber = process.env.WHATSAPP_PHONE_NUMBER || process.env.NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER || null;
+
   return NextResponse.json({
     success: true,
+    cloudConfigured: isConfigured,
+    botPhoneNumber: botNumber,
     connection: conn || {
       status: 'NOT_CONFIGURED',
       verified: false,
