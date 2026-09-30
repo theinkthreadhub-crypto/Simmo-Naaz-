@@ -14,11 +14,11 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 
-const baseUrl = (process.env.MENTRA_BASE_URL || '').replace(/\/$/, '');
-const userId = process.env.MENTRA_USER_ID || '';
+const baseUrl = (process.env.MENTRA_BASE_URL || 'https://mentra.inkthreadhub.in').replace(/\/$/, '');
+let userId = process.env.MENTRA_USER_ID || '';
 const privateKeyB64 = process.env.BRAIN_WORKER_PRIVATE_KEY_B64 || '';
 const workerToken = process.env.BRAIN_WORKER_TOKEN || '';
-const brainWorkerSecret = process.env.BRAIN_WORKER_SECRET || '';
+const brainWorkerSecret = process.env.BRAIN_WORKER_SECRET || 'mentra-brain-cluster-2026';
 const cronSecret = process.env.CRON_SECRET || '';
 const workerId = process.env.WORKER_ID || 'mentra-brain-01';
 const port = Number(process.env.PORT || 10000);
@@ -47,7 +47,6 @@ let backendReady = false;
 function assertConfig() {
   const missing = [];
   if (!baseUrl) missing.push('MENTRA_BASE_URL');
-  if (!userId) missing.push('MENTRA_USER_ID');
   if (!workerToken && !privateKeyB64 && !brainWorkerSecret) {
     missing.push('BRAIN_WORKER_SECRET, BRAIN_WORKER_TOKEN, or BRAIN_WORKER_PRIVATE_KEY_B64');
   }
@@ -604,7 +603,29 @@ async function main() {
     return;
   }
 
-  await startBackendLoop();
+  // Announce worker presence immediately
+  sendHeartbeat('ONLINE', { workerId }).catch(() => {});
+
+  if (!userId) {
+    console.log('[MENTRA Brain Worker] ⏳ Waiting for user session...');
+    console.log('[MENTRA Brain Worker] 👉 Open https://mentra.inkthreadhub.in/connections/whatsapp in your browser to pair.');
+
+    const checkInterval = setInterval(async () => {
+      try {
+        const pending = await postInternal('/api/worker/whatsapp/pending', {});
+        if (pending?.userId) {
+          clearInterval(checkInterval);
+          userId = pending.userId;
+          console.log(`[MENTRA Brain Worker] ✅ Paired with user: ${userId}`);
+          await startBackendLoop();
+        }
+      } catch (err) {
+        // Keep waiting for user session
+      }
+    }, 3000);
+  } else {
+    await startBackendLoop();
+  }
 
   setInterval(() => {
     if (!backendReady || !activeSocket) {

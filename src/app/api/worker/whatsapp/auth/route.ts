@@ -47,14 +47,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
   }
 
-  const userId = typeof body.userId === 'string' ? body.userId : '';
-  if (!userId) {
-    return NextResponse.json({ error: 'USER_REQUIRED' }, { status: 400 });
-  }
+  let userId = typeof body.userId === 'string' ? body.userId : '';
 
   try {
     return await runAsTrustedServer('brain_worker_whatsapp_auth_store', async () => {
       const supabase = createClient();
+
+      if (!userId) {
+        const { data: latest } = await supabase
+          .from('whatsapp_qr_sessions')
+          .select('user_id')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        userId = latest?.user_id || '';
+      }
+
+      if (!userId) {
+        return NextResponse.json({ error: 'USER_REQUIRED' }, { status: 400 });
+      }
 
       switch (body.action) {
         case 'load_creds': {

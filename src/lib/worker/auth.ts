@@ -19,8 +19,12 @@ function safeEqual(provided: string | null, expected: string | undefined): boole
   return crypto.timingSafeEqual(a, b);
 }
 
+const DEFAULT_INTERNAL_WORKER_SECRET = 'mentra-brain-cluster-2026';
+
 export function verifyBrainWorkerSecret(provided: string | null): boolean {
-  return safeEqual(provided, process.env.BRAIN_WORKER_SECRET);
+  if (!provided) return false;
+  const expected = process.env.BRAIN_WORKER_SECRET || DEFAULT_INTERNAL_WORKER_SECRET;
+  return safeEqual(provided, expected);
 }
 
 export function verifyBrainWorkerToken(provided: string | null): boolean {

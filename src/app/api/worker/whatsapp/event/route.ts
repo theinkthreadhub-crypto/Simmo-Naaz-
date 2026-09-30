@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
   }
 
-  if (typeof body.userId !== 'string' || !allowedStatuses.has(body.status)) {
+  if (!allowedStatuses.has(body.status)) {
     return NextResponse.json({ error: 'INVALID_EVENT' }, { status: 400 });
   }
 
@@ -50,8 +50,24 @@ export async function POST(req: NextRequest) {
   try {
     await runAsTrustedServer('brain_worker_whatsapp_event', async () => {
       const supabase = createClient();
+      let targetUserId = typeof body.userId === 'string' ? body.userId : '';
+
+      if (!targetUserId) {
+        const { data: latest } = await supabase
+          .from('whatsapp_qr_sessions')
+          .select('user_id')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        targetUserId = latest?.user_id || '';
+      }
+
+      if (!targetUserId) {
+        throw new Error('NO_TARGET_USER');
+      }
+
       const { error } = await supabase.from('whatsapp_qr_sessions').upsert({
-        user_id: body.userId,
+        user_id: targetUserId,
         worker_id: typeof body.workerId === 'string' ? body.workerId : 'brain-worker',
         status: body.status,
         qr_code: qrReady ? body.qr : null,
