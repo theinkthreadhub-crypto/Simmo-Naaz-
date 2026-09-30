@@ -109,7 +109,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (!userId) {
+  const resolvedUserId = userId;
+  if (!resolvedUserId) {
     return NextResponse.json({ error: 'USER_REQUIRED' }, { status: 401 });
   }
 
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
   if (body.media?.base64) {
     const { processIncomingFashionDesign } = await import('@/lib/fashion/autonomousPipeline');
     const fashionResult = await processIncomingFashionDesign({
-      userId,
+      userId: resolvedUserId,
       imageBase64: body.media.base64,
       mimeType: body.media.mimeType || 'image/jpeg',
       caption: body.media.caption || text,
@@ -148,7 +149,7 @@ export async function POST(req: NextRequest) {
         const { data: pendingApproval, error } = await supabase
           .from('approval_requests')
           .select('id')
-          .eq('user_id', userId)
+          .eq('user_id', resolvedUserId)
           .eq('tool_name', 'publishFashionProduct')
           .eq('status', 'PENDING')
           .order('created_at', { ascending: false })
@@ -160,7 +161,7 @@ export async function POST(req: NextRequest) {
         }
 
         return executeApprovalDecision(
-          userId,
+          resolvedUserId,
           pendingApproval.id,
           text === '1' ? 'APPROVE' : 'REJECT'
         );
@@ -179,7 +180,7 @@ export async function POST(req: NextRequest) {
 
   const execute = () =>
     runMentra({
-      userId,
+      userId: resolvedUserId,
       channel: 'WHATSAPP',
       text,
       timestamp: new Date().toISOString(),

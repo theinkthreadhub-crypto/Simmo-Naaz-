@@ -359,6 +359,16 @@ async function getEffectiveAuthState() {
 }
 
 async function connectWhatsApp() {
+  if (activeSocket) {
+    try {
+      activeSocket.ev.removeAllListeners('connection.update');
+      activeSocket.ev.removeAllListeners('creds.update');
+      activeSocket.ev.removeAllListeners('messages.upsert');
+      activeSocket.end(new Error('Reconnecting'));
+    } catch {}
+    activeSocket = null;
+  }
+
   const { state, saveCreds } = await getEffectiveAuthState();
 
   const sock = makeWASocket({
