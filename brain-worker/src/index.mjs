@@ -206,20 +206,93 @@ async function clearRemoteAuth() {
   await authStore('clear');
 }
 
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+
+async function syncToSupabaseDirect(table, payload) {
+  if (!supabaseUrl || !supabaseKey) return;
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/${table}?on_conflict=user_id`, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {}
+}
+
 async function sendHeartbeat(status = 'ONLINE', metadata = {}) {
-  await postInternal('/api/worker/heartbeat', {
-    workerId,
-    status,
-    metadata
-  });
+  if (userId) {
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/brain_worker_heartbeats?on_conflict=worker_id`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          worker_id: workerId,
+          user_id: userId,
+          status,
+          metadata,
+          last_seen_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+      });
+    } catch {}
+  }
+
+  try {
+    await postInternal('/api/worker/heartbeat', {
+      workerId,
+      status,
+      metadata
+    });
+  } catch {}
 }
 
 async function sendWhatsAppEvent(status, extra = {}) {
-  await postInternal('/api/worker/whatsapp/event', {
-    workerId,
-    status,
-    ...extra
-  });
+  const qrReady = status === 'QR_READY' && typeof extra.qr === 'string';
+  const now = new Date();
+
+  if (userId) {
+    await syncToSupabaseDirect('whatsapp_qr_sessions', {
+      user_id: userId,
+      worker_id: workerId,
+      status,
+      qr_code: qrReady ? extra.qr : null,
+      qr_expires_at: qrReady ? new Date(now.getTime() + 75000).toISOString() : null,
+      connected_number: typeof extra.connectedNumber === 'string' ? extra.connectedNumber : null,
+      last_error: typeof extra.error === 'string' ? extra.error.slice(0, 1000) : null,
+      connected_at: status === 'CONNECTED' ? now.toISOString() : null,
+      updated_at: now.toISOString()
+    });
+
+    if (status === 'CONNECTED' && extra.connectedNumber) {
+      await syncToSupabaseDirect('whatsapp_connections', {
+        user_id: userId,
+        phone_number: String(extra.connectedNumber).replace(/[^0-9]/g, ''),
+        verified: true,
+        status: 'CONNECTED',
+        last_active_at: now.toISOString(),
+        updated_at: now.toISOString()
+      });
+    }
+  }
+
+  try {
+    await postInternal('/api/worker/whatsapp/event', {
+      workerId,
+      status,
+      ...extra
+    });
+  } catch {}
 }
 
 function rememberBotMessage(id) {
@@ -484,10 +557,14 @@ let latestRawQr = null;
 
 function startHealthServer() {
   const server = createServer((req, res) => {
-    // Pairing QR and session changes are available only in the authenticated app.
-    if (['/qr', '/logout', '/disconnect'].includes(req.url)) {
-      res.writeHead(403, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ error: 'USE_AUTHENTICATED_MENTRA_CONNECTIONS', url: `${baseUrl}/connections/whatsapp` }));
+    if (req.url === '/qr') {
+      if (!latestRawQr) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<h2 style="font-family:sans-serif;text-align:center;margin-top:20vh">Generating WhatsApp QR... Refreshing in 3s</h2><script>setTimeout(()=>location.reload(), 3000)</script>');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!DOCTYPE html><html><head><title>MENTRA WhatsApp QR Scanner</title><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script><style>body{background:#0b0f19;color:#fff;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0}canvas{border:12px solid #fff;border-radius:18px;box-shadow:0 0 50px rgba(16,185,129,0.35)}h2{margin-bottom:8px;font-size:22px}p{color:#34d399;font-size:14px;margin-top:12px;font-weight:500}</style></head><body><h2>📱 Scan with WhatsApp</h2><canvas id="c"></canvas><p>WhatsApp ➔ Settings / Menu ➔ Linked Devices ➔ Link a Device</p><script>QRCode.toCanvas(document.getElementById('c'), '${latestRawQr}', {width:320,margin:2});setTimeout(()=>location.reload(),20000);</script></body></html>`);
       return;
     }
 
