@@ -69,14 +69,20 @@ function assertConfig() {
 }
 
 function signedHeaders(bodyText) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'x-mentra-service-key': supabaseKey,
-    'x-mentra-internal-secret': brainWorkerSecret || 'mentra_brain_worker_secret_2026_production_key_32'
-  };
-
+  // Preserve the credential priority that is already provisioned in Render/Vercel.
+  // Sending only the active credential avoids auth mismatches between worker versions.
   if (workerToken) {
-    headers['x-mentra-worker-token'] = workerToken;
+    return {
+      'Content-Type': 'application/json',
+      'x-mentra-worker-token': workerToken
+    };
+  }
+
+  if (brainWorkerSecret) {
+    return {
+      'Content-Type': 'application/json',
+      'x-mentra-internal-secret': brainWorkerSecret
+    };
   }
 
   if (privateKey) {
@@ -86,11 +92,15 @@ function signedHeaders(bodyText) {
       Buffer.from(`${timestamp}.${bodyText}`, 'utf8'),
       privateKey
     ).toString('base64');
-    headers['x-mentra-worker-timestamp'] = timestamp;
-    headers['x-mentra-worker-signature'] = signature;
+
+    return {
+      'Content-Type': 'application/json',
+      'x-mentra-worker-timestamp': timestamp,
+      'x-mentra-worker-signature': signature
+    };
   }
 
-  return headers;
+  throw new Error('WORKER_AUTH_NOT_CONFIGURED');
 }
 
 async function postInternal(endpoint, body = {}) {
