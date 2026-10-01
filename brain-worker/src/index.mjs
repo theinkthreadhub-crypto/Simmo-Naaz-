@@ -346,8 +346,8 @@ async function connectWhatsApp() {
       if (update.qr) {
         latestRawQr = update.qr;
         console.log('\n======================================================');
-        console.log('ðŸ“± SCAN THIS WHATSAPP QR CODE WITH YOUR PHONE CAMERA:');
-        console.log('ðŸŒ OR OPEN IN BROWSER: http://localhost:10000/qr');
+        console.log('📱 SCAN THIS WHATSAPP QR CODE WITH YOUR PHONE CAMERA:');
+        console.log('🌐 OR OPEN IN BROWSER: http://localhost:10000/qr');
         console.log('======================================================\n');
         qrcode.generate(update.qr, { small: true });
         const qrText = await new Promise(resolve => {
@@ -370,7 +370,7 @@ async function connectWhatsApp() {
             const pending = await postInternal('/api/worker/whatsapp/pending', { connectedNumber });
             if (pending?.userId) {
               userId = pending.userId;
-              console.log(`[MENTRA Brain Worker] âœ… Bound session to user: ${userId}`);
+              console.log(`[MENTRA Brain Worker] ✅ Bound session to user: ${userId}`);
             }
           } catch (e) {
             console.warn('[Session binding]', e?.message || e);
@@ -380,7 +380,7 @@ async function connectWhatsApp() {
         await sendWhatsAppEvent('CONNECTED', { connectedNumber }).catch(() => {});
 
         console.log(
-          '\nâœ… [MENTRA Brain Worker] WhatsApp CONNECTED successfully to:',
+          '\n✅ [MENTRA Brain Worker] WhatsApp CONNECTED successfully to:',
           connectedNumber || 'linked device'
         );
         console.log(
@@ -517,7 +517,7 @@ function startHealthServer() {
 
   server.listen(port, '0.0.0.0', () => {
     console.log(`[MENTRA Brain Worker] Health server listening on :${port}`);
-    console.log(`[MENTRA Brain Worker] ðŸŒ Visual QR Web Page: http://localhost:${port}/qr`);
+    console.log(`[MENTRA Brain Worker] 🌐 Visual QR Web Page: http://localhost:${port}/qr`);
   });
 
   return server;
@@ -613,4 +613,3 @@ main().catch(error => {
   backendError = error instanceof Error ? error.message : String(error);
   console.error('[MENTRA Brain Worker] Startup error:', error);
 });
-

@@ -13,9 +13,9 @@ export class FallbackProvider implements AIProvider {
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
     const clean = lastUserMsg.trim().toLowerCase();
 
-    // 1. Finance: Expense detection (e.g., "â‚¹450 Meta Ads expense add karo" or "add 500 expense for software")
-    const expenseMatch = lastUserMsg.match(/(?:â‚¹\s*|\b(?:rs|inr)\s*)?(\d+(?:\.\d{1,2})?)\s*(?:(?:rupaye|rupees)?\s*)?(.*?)(?:expense|kharcha|spent|spend)/i) ||
-      lastUserMsg.match(/(?:add|record|log)?\s*(?:expense|kharcha)\s*(?:of)?\s*(?:â‚¹\s*|\b(?:rs|inr)\s*)?(\d+(?:\.\d{1,2})?)\s*(?:for|on)?\s*(.*)/i);
+    // 1. Finance: Expense detection (e.g., "₹450 Meta Ads expense add karo" or "add 500 expense for software")
+    const expenseMatch = lastUserMsg.match(/(?:₹\s*|\b(?:rs|inr)\s*)?(\d+(?:\.\d{1,2})?)\s*(?:(?:rupaye|rupees)?\s*)?(.*?)(?:expense|kharcha|spent|spend)/i) ||
+      lastUserMsg.match(/(?:add|record|log)?\s*(?:expense|kharcha)\s*(?:of)?\s*(?:₹\s*|\b(?:rs|inr)\s*)?(\d+(?:\.\d{1,2})?)\s*(?:for|on)?\s*(.*)/i);
 
     if (expenseMatch && (clean.includes('expense') || clean.includes('kharcha') || clean.includes('add karo'))) {
       const amount = parseFloat(expenseMatch[1]);
@@ -32,7 +32,7 @@ export class FallbackProvider implements AIProvider {
       }
 
       return {
-        content: `Executing financial ledger transaction: Recording â‚¹${amount} for "${desc}".`,
+        content: `Executing financial ledger transaction: Recording ₹${amount} for "${desc}".`,
         toolCalls: [
           {
             id: `call_${Date.now()}`,
@@ -273,7 +273,7 @@ export class FallbackProvider implements AIProvider {
     }
 
     if (clean.includes('kaun ho') || clean.includes('who are you') || clean.includes('naam kya')) {
-      return { content: "Main MENTRA hoon â€” aapka personal Sovereign AI OS aur Fashion Brand Growth Agent! Main WhatsApp se direct apke brand ke designs generate, Drive sync aur website store publish karti hoon." };
+      return { content: "Main MENTRA hoon — aapka personal Sovereign AI OS aur Fashion Brand Growth Agent! Main WhatsApp se direct apke brand ke designs generate, Drive sync aur website store publish karti hoon." };
     }
 
     if (clean.includes('tshirt') || clean.includes('t-shirt') || clean.includes('hoodie') || clean.includes('design') || clean.includes('fashion') || clean.includes('drop')) {
@@ -304,4 +304,3 @@ export class FallbackProvider implements AIProvider {
     return res;
   }
 }
-

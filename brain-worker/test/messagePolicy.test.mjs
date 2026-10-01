@@ -35,4 +35,3 @@ test('Duplicate notify/append events are claimed once per chat', () => {
   dedup.claim('self','b');
   assert.equal(dedup.claim('self','a'), true);
 });
-

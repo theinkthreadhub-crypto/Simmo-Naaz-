@@ -72,4 +72,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'HEARTBEAT_PERSISTENCE_FAILED', databaseCredentialConfigured: Boolean(credential), databaseCredentialRole: credentialRole }, { status: 503 });
   }
 }
-

@@ -109,4 +109,3 @@ test('Pending-session POST verifies the actual signed body before database acces
     await new Promise<void>((resolve, reject) => database.close(error => error ? reject(error) : resolve()));
   }
 });
-
