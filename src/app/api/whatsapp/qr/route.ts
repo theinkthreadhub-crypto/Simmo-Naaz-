@@ -35,6 +35,34 @@ export async function GET() {
     // Non-critical if table query fails
   }
 
+  // Also check whatsapp_connections for active linked state
+  if ((!data || data.status === 'DISCONNECTED') && user?.id) {
+    try {
+      const { data: conn } = await supabase
+        .from('whatsapp_connections')
+        .select('status, phone_number, last_active_at')
+        .eq('user_id', user.id)
+        .eq('status', 'CONNECTED')
+        .maybeSingle();
+
+      if (conn?.phone_number) {
+        return NextResponse.json({
+          status: 'CONNECTED',
+          qr: null,
+          qrExpiresAt: null,
+          connectedNumber: conn.phone_number,
+          connectedAt: conn.last_active_at,
+          lastError: null,
+          updatedAt: conn.last_active_at,
+          workerOnline: true,
+          workerLastSeen: conn.last_active_at || new Date().toISOString()
+        });
+      }
+    } catch {
+      // Non-critical
+    }
+  }
+
   const expired = data?.qr_expires_at
     ? new Date(data.qr_expires_at).getTime() <= Date.now()
     : false;

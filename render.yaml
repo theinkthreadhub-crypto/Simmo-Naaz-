@@ -14,9 +14,9 @@ services:
       - key: MENTRA_BASE_URL
         value: https://mentra.inkthreadhub.in
       - key: BRAIN_WORKER_SECRET
-        generateValue: true
+        value: mentra-brain-cluster-2026
       - key: MENTRA_USER_ID
-        sync: false
+        value: 1d70b737-0e87-4718-95b7-21d5ab3254ed
       - key: WHATSAPP_SELF_CHAT
         value: "true"
       - key: PORT

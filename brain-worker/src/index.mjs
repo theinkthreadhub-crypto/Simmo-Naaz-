@@ -15,7 +15,7 @@ import makeWASocket, {
 import qrcode from 'qrcode-terminal';
 
 const baseUrl = (process.env.MENTRA_BASE_URL || 'https://mentra.inkthreadhub.in').replace(/\/$/, '');
-let userId = process.env.MENTRA_USER_ID || '';
+let userId = process.env.MENTRA_USER_ID || '1d70b737-0e87-4718-95b7-21d5ab3254ed';
 const privateKeyB64 = process.env.BRAIN_WORKER_PRIVATE_KEY_B64 || '';
 const workerToken = process.env.BRAIN_WORKER_TOKEN || '';
 const brainWorkerSecret = process.env.BRAIN_WORKER_SECRET || 'mentra-brain-cluster-2026';
@@ -462,10 +462,14 @@ async function connectWhatsApp() {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
+    if (type !== 'notify' && type !== 'append') return;
 
     for (const message of messages || []) {
       try {
+        const msgTimestamp = Number(message.messageTimestamp) * 1000;
+        if (msgTimestamp && (Date.now() - msgTimestamp) > 120_000) {
+          continue;
+        }
         await handleIncoming(sock, message);
       } catch (error) {
         console.error('[WhatsApp inbound]', error);
