@@ -34,38 +34,36 @@ export function extractText(message) {
     '';
 }
 
-export function isAllowedChat(sock, envelope, { allowSelfChat = true, allowedNumbers = [] } = {}) {
+export function isAllowedChat(sock, envelope, { allowSelfChat = true, allowedNumbers = [], selfOnly = true } = {}) {
   const key = envelope.key || {};
   const jid = key.remoteJid || '';
   if (!jid || !/@(s\.whatsapp\.net|lid)$/.test(jid)) return false;
   if (jid.endsWith('@g.us') || jid.endsWith('@newsletter') || jid === 'status@broadcast') return false;
 
-  // 1. If self-chat is allowed and user is chatting with themselves (or LID device)
-  if (allowSelfChat) {
-    const ownIds = [sock?.user?.id, sock?.user?.lid, sock?.user?.jid]
-      .filter(Boolean)
-      .map(value => String(value).replace(/:\d+(?=@)/, ''));
+  const normalizeJid = value =>
+    String(value || '').replace(/:\d+(?=@)/, '');
 
-    const destinations = [jid, key.remoteJidAlt]
-      .filter(Boolean)
-      .map(value => String(value).replace(/:\d+(?=@)/, ''));
+  const ownIds = [sock?.user?.id, sock?.user?.lid, sock?.user?.jid]
+    .filter(Boolean)
+    .map(normalizeJid);
 
-    if (destinations.some(value => ownIds.some(own => value.includes(own) || own.includes(value)))) {
-      return true;
-    }
+  const destinations = [jid, key.remoteJidAlt]
+    .filter(Boolean)
+    .map(normalizeJid);
 
-    // In WhatsApp Web, messaging yourself often targets the LID remoteJid
-    if (jid.endsWith('@lid')) {
-      return true;
-    }
-  }
+  // Self-chat is ONLY a message sent by the owner to the owner's exact PN/LID.
+  // Never treat an arbitrary @lid address as the owner.
+  const isExactSelf =
+    allowSelfChat &&
+    key.fromMe === true &&
+    destinations.some(destination => ownIds.includes(destination));
 
-  // 2. If all numbers are allowed (*)
-  if (allowedNumbers.includes('*')) {
-    return true;
-  }
+  if (selfOnly) return isExactSelf;
+  if (isExactSelf) return true;
 
-  // 3. Match against allowed phone numbers
+  // Optional non-self allowlist mode. Incoming messages only.
+  if (key.fromMe === true) return false;
+
   const num = jidNumber(jid);
   const altNum = key.remoteJidAlt ? jidNumber(key.remoteJidAlt) : '';
   const participantNum = key.participant ? jidNumber(key.participant) : '';

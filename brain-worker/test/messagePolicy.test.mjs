@@ -12,13 +12,14 @@ test('Message yourself is accepted for phone and LID destinations', () => {
 test('Owner sender fields do not make messages to another contact self-chat', () => {
   assert.equal(isAllowedChat(sock, { key: { remoteJid: '919999999999@s.whatsapp.net', fromMe: true, senderPn: sock.user.id } }), false);
 });
-test('Strangers and groups cannot access the owner assistant', () => {
-  for (const remoteJid of ['919999999999@s.whatsapp.net','911234567890@g.us','status@broadcast']) {
+test('Strangers, arbitrary LIDs, and groups cannot access the owner assistant', () => {
+  for (const remoteJid of ['919999999999@s.whatsapp.net','999888777@lid','911234567890@g.us','status@broadcast']) {
     assert.equal(isAllowedChat(sock, { key: { remoteJid, fromMe: false } }), false);
   }
+  assert.equal(isAllowedChat(sock, { key: { remoteJid: '999888777@lid', fromMe: true } }), false);
 });
 test('Explicit allowlist admits incoming messages only', () => {
-  const options = { allowSelfChat: false, allowedNumbers: ['919999999999'] };
+  const options = { allowSelfChat: false, allowedNumbers: ['919999999999'], selfOnly: false };
   assert.equal(isAllowedChat(sock, { key: { remoteJid: '919999999999@s.whatsapp.net', fromMe: false } }, options), true);
   assert.equal(isAllowedChat(sock, { key: { remoteJid: '919999999999@s.whatsapp.net', fromMe: true } }, options), false);
 });
