@@ -25,12 +25,12 @@ export function isAllowedChat(sock, envelope, { allowSelfChat = true, allowedNum
   const jid = key.remoteJid || '';
   if (!jid || !/@(s\.whatsapp\.net|lid)$/.test(jid)) return false;
   // Only the destination identifies a self-chat. Sender fields identify the
-  // owner on ALL outgoing messages, including messages sent to other contacts.
   const ownIds = new Set([sock?.user?.id, sock?.user?.lid].filter(Boolean)
     .map(value => String(value).replace(/:\d+(?=@)/, '')));
   const destinations = [jid, key.remoteJidAlt].filter(Boolean)
     .map(value => String(value).replace(/:\d+(?=@)/, ''));
   if (allowSelfChat && destinations.some(value => ownIds.has(value))) return true;
+  if (allowedNumbers.includes('*')) return !key.fromMe;
   return !key.fromMe && destinations.some(value => value.endsWith('@s.whatsapp.net') && allowedNumbers.includes(jidNumber(value)));
 }
 

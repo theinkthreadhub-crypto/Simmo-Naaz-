@@ -34,7 +34,7 @@ export function auditEnvironment(): EnvironmentAudit {
 
   const aiProvider = (env.AI_PROVIDER || 'auto').toLowerCase();
   const gatewayAuthReady = Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN);
-  const geminiAuthReady = Boolean(env.AI_API_KEY || env.AI_PROVIDER_API_KEY);
+  const geminiAuthReady = Boolean(env.GEMINI_API_KEY || env.AI_API_KEY || env.AI_PROVIDER_API_KEY);
   const localAiReady = Boolean(env.AI_LOCAL_BASE_URL);
 
   let aiRequiredEnv: string[] = [];

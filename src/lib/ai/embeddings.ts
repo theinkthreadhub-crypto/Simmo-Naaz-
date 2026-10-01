@@ -14,6 +14,7 @@ function getEmbeddingModel(): string {
 
 function getEmbeddingApiKey(): string {
   return process.env.AI_EMBEDDING_API_KEY
+    || process.env.GEMINI_API_KEY
     || process.env.AI_API_KEY
     || process.env.AI_PROVIDER_API_KEY
     || '';
