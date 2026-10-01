@@ -14,6 +14,7 @@ import makeWASocket, {
   useMultiFileAuthState
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import { REPLY_MARK, extractText, isAllowedChat, unwrapMessage, createMessageDeduplicator } from './messagePolicy.mjs';
 
 const baseUrl = (process.env.MENTRA_BASE_URL || 'https://mentra.inkthreadhub.in').replace(/\/$/, '');
@@ -557,14 +558,140 @@ let latestRawQr = null;
 
 function startHealthServer() {
   const server = createServer((req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     if (req.url === '/qr') {
       if (!latestRawQr) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<h2 style="font-family:sans-serif;text-align:center;margin-top:20vh">Generating WhatsApp QR... Refreshing in 3s</h2><script>setTimeout(()=>location.reload(), 3000)</script>');
+        res.end(`<!DOCTYPE html>
+<html>
+<head>
+  <title>MENTRA WhatsApp QR</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="refresh" content="2">
+  <style>
+    body { background: #07090e; color: #fff; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { background: #0f172a; border: 1px solid #1e293b; padding: 32px; border-radius: 24px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); max-width: 420px; }
+    .spinner { border: 3px solid rgba(16,185,129,0.2); border-top: 3px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h2 style="margin:0 0 8px; font-size:18px;">Connecting to WhatsApp…</h2>
+    <p style="color:#94a3b8; font-size:13px; margin:0;">Generating fresh QR code session. Page refreshes every 2s.</p>
+  </div>
+</body>
+</html>`);
         return;
       }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(`<!DOCTYPE html><html><head><title>MENTRA WhatsApp QR Scanner</title><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script><style>body{background:#0b0f19;color:#fff;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0}canvas{border:12px solid #fff;border-radius:18px;box-shadow:0 0 50px rgba(16,185,129,0.35)}h2{margin-bottom:8px;font-size:22px}p{color:#34d399;font-size:14px;margin-top:12px;font-weight:500}</style></head><body><h2>📱 Scan with WhatsApp</h2><canvas id="c"></canvas><p>WhatsApp ➔ Settings / Menu ➔ Linked Devices ➔ Link a Device</p><script>QRCode.toCanvas(document.getElementById('c'), '${latestRawQr}', {width:320,margin:2});setTimeout(()=>location.reload(),20000);</script></body></html>`);
+
+      QRCode.toDataURL(latestRawQr, {
+        width: 320,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' }
+      })
+        .then(dataUrl => {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(`<!DOCTYPE html>
+<html>
+<head>
+  <title>MENTRA WhatsApp QR Scanner</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="refresh" content="20">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: #07090e;
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 28px;
+      padding: 32px 28px;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(16,185,129,0.15);
+      max-width: 440px;
+      width: 100%;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: #34d399;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .qr-box {
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 20px;
+      display: inline-block;
+      margin: 16px 0;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .qr-box img {
+      display: block;
+      width: 280px;
+      height: 280px;
+    }
+    .instructions {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 14px;
+      font-size: 13px;
+      color: #cbd5e1;
+      text-align: left;
+      line-height: 1.6;
+      margin-top: 14px;
+    }
+    .step { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .num { background: #10b981; color: #000; font-weight: bold; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">● LIVE QR SCANNER</div>
+    <h1 style="margin:0; font-size:22px; font-weight:700;">Scan with WhatsApp</h1>
+    <p style="color:#94a3b8; font-size:13px; margin:6px 0 0;">Connect your personal WhatsApp to MENTRA AI</p>
+    
+    <div class="qr-box">
+      <img src="${dataUrl}" alt="WhatsApp QR Code" />
+    </div>
+
+    <div class="instructions">
+      <div class="step"><span class="num">1</span> Open <b>WhatsApp</b> on your phone</div>
+      <div class="step"><span class="num">2</span> Tap <b>Settings / ⋮ Menu</b> ➔ <b>Linked Devices</b></div>
+      <div class="step"><span class="num">3</span> Tap <b>Link a Device</b> and point camera here</div>
+    </div>
+    
+    <p style="color:#64748b; font-size:11px; margin:14px 0 0;">Auto-refreshes every 20 seconds</p>
+  </div>
+</body>
+</html>`);
+        })
+        .catch(err => {
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end(String(err));
+        });
       return;
     }
 
