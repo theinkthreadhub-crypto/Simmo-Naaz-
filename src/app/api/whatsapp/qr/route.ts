@@ -6,13 +6,27 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('whatsapp_qr_sessions')
     .select(
       'status, qr_code, qr_expires_at, connected_number, connected_at, last_error, updated_at'
     )
     .eq('user_id', user.id)
     .maybeSingle();
+
+  if (!data && !error) {
+    const fallback = await supabase
+      .from('whatsapp_qr_sessions')
+      .select(
+        'status, qr_code, qr_expires_at, connected_number, connected_at, last_error, updated_at'
+      )
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (fallback.data) {
+      data = fallback.data;
+    }
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
