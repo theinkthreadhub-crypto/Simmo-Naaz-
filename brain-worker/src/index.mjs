@@ -225,10 +225,10 @@ function targetUserIds() {
   return userId ? [userId] : [];
 }
 
-async function syncToSupabaseDirect(table, payload) {
+async function syncToSupabaseDirect(table, payload, conflictKey = 'user_id') {
   if (!supabaseUrl || !supabaseKey) return false;
   try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?on_conflict=user_id`, {
+    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?on_conflict=${encodeURIComponent(conflictKey)}`, {
       method: 'POST',
       headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify(payload),
@@ -258,7 +258,7 @@ async function sendHeartbeat(status = 'ONLINE', metadata = {}) {
   catch (error) { console.warn('[Heartbeat API fallback]', error?.message || error); }
   const now = new Date().toISOString();
   for (const uid of targetUserIds()) {
-    await syncToSupabaseDirect('brain_worker_heartbeats', { worker_id: workerId, user_id: uid, status, metadata, last_seen_at: now, updated_at: now });
+    await syncToSupabaseDirect('brain_worker_heartbeats', { worker_id: workerId, user_id: uid, status, metadata, last_seen_at: now, updated_at: now }, 'worker_id');
   }
 }
 
