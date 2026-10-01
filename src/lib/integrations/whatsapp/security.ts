@@ -55,8 +55,9 @@ export function normalizeWhatsAppNumber(phone: string): string {
 
 /**
  * WHATSAPP_ALLOWED_NUMBERS: comma-separated owner numbers with country code,
- * e.g. "916392995127". When set, MENTRA only talks to these numbers and
- * silently ignores everyone else. When empty, the 6-digit link flow decides.
+ * e.g. "916392995127". Cloud inbound is fail-closed: when this list is
+ * empty, no sender is allowed. The primary QR/self-chat worker does not use
+ * this Cloud API allowlist.
  */
 export function getAllowedWhatsAppNumbers(): string[] {
   return (process.env.WHATSAPP_ALLOWED_NUMBERS || '')
@@ -67,7 +68,7 @@ export function getAllowedWhatsAppNumbers(): string[] {
 
 export function isAllowedWhatsAppSender(phone: string): boolean {
   const allowed = getAllowedWhatsAppNumbers();
-  if (allowed.length === 0) return true;
+  if (allowed.length === 0) return false;
   return allowed.includes(normalizeWhatsAppNumber(phone));
 }
 

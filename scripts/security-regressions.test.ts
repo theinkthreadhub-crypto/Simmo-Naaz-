@@ -9,6 +9,8 @@ import { encryptToken as encryptEnvelope, decryptToken as decryptEnvelope } from
 import { createGoogleOAuthState, validateGoogleOAuthState } from '../src/lib/integrations/google/oauthState';
 import { verifyBrainWorkerSecret, verifyBrainWorkerSignature, verifyBrainWorkerToken } from '../src/lib/worker/auth';
 import { FallbackProvider } from '../src/lib/ai/providers/fallbackProvider';
+import { isAllowedWhatsAppSender } from '../src/lib/integrations/whatsapp/security';
+import { POST as legacyWhatsAppLinkHandler } from '../src/app/api/whatsapp/link/route';
 
 test('Normal replies do not draft email or invent a recipient', async () => {
   const provider = new FallbackProvider();
@@ -107,5 +109,26 @@ test('Pending-session POST verifies the actual signed body before database acces
   } finally {
     process.env = previous;
     await new Promise<void>((resolve, reject) => database.close(error => error ? reject(error) : resolve()));
+  }
+});
+
+
+test('Cloud WhatsApp allowlist fails closed and legacy pairing stays disabled', async () => {
+  const previous = process.env.WHATSAPP_ALLOWED_NUMBERS;
+  try {
+    delete process.env.WHATSAPP_ALLOWED_NUMBERS;
+    assert.equal(isAllowedWhatsAppSender('919999999999'), false);
+
+    process.env.WHATSAPP_ALLOWED_NUMBERS = '911234567890';
+    assert.equal(isAllowedWhatsAppSender('911234567890'), true);
+    assert.equal(isAllowedWhatsAppSender('919999999999'), false);
+
+    const response = await legacyWhatsAppLinkHandler();
+    assert.equal(response.status, 410);
+    const payload = await response.json();
+    assert.equal(payload.error, 'WHATSAPP_QR_ONLY');
+  } finally {
+    if (previous === undefined) delete process.env.WHATSAPP_ALLOWED_NUMBERS;
+    else process.env.WHATSAPP_ALLOWED_NUMBERS = previous;
   }
 });

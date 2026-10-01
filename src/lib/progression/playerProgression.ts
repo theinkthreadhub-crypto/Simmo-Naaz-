@@ -68,71 +68,108 @@ export async function addXPServer(
     };
   }
 
-  // 1. Check for duplicate idempotent reward if sourceId is provided
+  const { data: currentProg, error: progressReadError } = await supabase
+    .from('player_progress')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (progressReadError) {
+    return {
+      success: false,
+      leveledUp: false,
+      previousLevel: 1,
+      newLevel: 1,
+      currentXp: 0,
+      nextLevelXp: 1000,
+      totalXp: 0,
+      xpAwarded: 0,
+      error: 'Unable to read player progression.'
+    };
+  }
+
+  const prevTotalXp = currentProg?.total_xp || 0;
+  const previousCalc = calculateLevel(prevTotalXp);
+
+  const failure = (error: string): AddXPResult => ({
+    success: false,
+    leveledUp: false,
+    previousLevel: previousCalc.level,
+    newLevel: previousCalc.level,
+    currentXp: previousCalc.currentXp,
+    nextLevelXp: previousCalc.nextLevelXp,
+    totalXp: prevTotalXp,
+    xpAwarded: 0,
+    error
+  });
+
   if (sourceId) {
-    const { data: existingTx } = await supabase
+    const { data: existingTx, error: duplicateCheckError } = await supabase
       .from('xp_transactions')
       .select('id')
       .eq('user_id', userId)
       .eq('source_type', sourceType)
       .eq('source_id', sourceId)
-      .limit(1)
-      .single();
+      .maybeSingle();
 
+    if (duplicateCheckError) {
+      return failure('Unable to verify XP idempotency.');
+    }
     if (existingTx) {
-      return {
-        success: false,
-        leveledUp: false,
-        previousLevel: 1,
-        newLevel: 1,
-        currentXp: 0,
-        nextLevelXp: 1000,
-        totalXp: 0,
-        xpAwarded: 0,
-        error: 'Reward already awarded for this action.'
-      };
+      return failure('Reward already awarded for this action.');
     }
   }
 
-  // 2. Insert into permanent XP ledger
-  const { error: txErr } = await supabase.from('xp_transactions').insert({
-    user_id: userId,
-    amount,
-    source_type: sourceType,
-    source_id: sourceId || null,
-    skill_id: skillId || null,
-    description: description || `Awarded +${amount} XP from ${sourceType}`
-  });
-
-  if (txErr) {
-    console.error('[XP LEDGER ERROR]:', txErr);
-  }
-
-  // 3. Fetch current player progression
-  const { data: currentProg } = await supabase
-    .from('player_progress')
-    .select('*')
-    .eq('user_id', userId)
+  const { data: ledgerTx, error: txErr } = await supabase
+    .from('xp_transactions')
+    .insert({
+      user_id: userId,
+      amount,
+      source_type: sourceType,
+      source_id: sourceId || null,
+      skill_id: skillId || null,
+      description: description || `Awarded +${amount} XP from ${sourceType}`
+    })
+    .select('id')
     .single();
 
-  const prevTotalXp = currentProg?.total_xp || 0;
-  const newTotalXp = prevTotalXp + amount;
+  if (txErr || !ledgerTx) {
+    const duplicate = txErr?.code === '23505';
+    if (!duplicate) console.error('[XP LEDGER ERROR]:', txErr?.code || 'UNKNOWN');
+    return failure(
+      duplicate
+        ? 'Reward already awarded for this action.'
+        : 'XP ledger write failed; progression was not changed.'
+    );
+  }
 
-  const previousCalc = calculateLevel(prevTotalXp);
+  const newTotalXp = prevTotalXp + amount;
   const newCalc = calculateLevel(newTotalXp);
   const leveledUp = newCalc.level > previousCalc.level;
 
-  // 4. Update player_progress in database
-  await supabase.from('player_progress').upsert({
-    user_id: userId,
-    level: newCalc.level,
-    current_xp: newCalc.currentXp,
-    total_xp: newTotalXp,
-    last_active_date: new Date().toISOString().split('T')[0],
-    updated_at: new Date().toISOString()
-  });
+  const { error: progressWriteError } = await supabase
+    .from('player_progress')
+    .upsert({
+      user_id: userId,
+      level: newCalc.level,
+      current_xp: newCalc.currentXp,
+      total_xp: newTotalXp,
+      last_active_date: new Date().toISOString().split('T')[0],
+      updated_at: new Date().toISOString()
+    });
 
-  // 5. If leveled up, log activity and create notification
+  if (progressWriteError) {
+    const { error: rollbackError } = await supabase
+      .from('xp_transactions')
+      .delete()
+      .eq('id', ledgerTx.id);
+
+    if (rollbackError) {
+      console.error('[XP LEDGER ROLLBACK ERROR]:', rollbackError.code || 'UNKNOWN');
+    }
+    return failure('Player progression update failed.');
+  }
+
   if (leveledUp) {
     await supabase.from('notifications').insert({
       user_id: userId,

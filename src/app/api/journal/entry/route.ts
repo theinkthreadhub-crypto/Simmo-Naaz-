@@ -128,7 +128,7 @@ export async function POST(request: Request) {
       module: 'JOURNAL',
       details: {
         entry_id: entry.id,
-        xp_awarded: 60,
+        xp_awarded: xpResult.success ? xpResult.xpAwarded : 0,
         mood: entry.mood
       }
     });

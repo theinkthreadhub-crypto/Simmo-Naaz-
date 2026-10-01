@@ -10,13 +10,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   let { data, error } = await supabase.from('whatsapp_qr_sessions')
     .select('qr_code,qr_expires_at,status').eq('user_id', user.id).maybeSingle();
-  if (!data && !error) {
-    const fallback = await supabase.from('whatsapp_qr_sessions')
-      .select('qr_code,qr_expires_at,status').order('updated_at', { ascending: false }).limit(1).maybeSingle();
-    if (fallback.data) {
-      data = fallback.data;
-    }
-  }
+
   if (error) return NextResponse.json({ error: 'QR_LOOKUP_FAILED' }, { status: 503 });
   if (!data?.qr_code || data.status !== 'QR_READY' || !data.qr_expires_at || new Date(data.qr_expires_at).getTime() <= Date.now()) {
     return NextResponse.json({ error: 'QR_EXPIRED_OR_UNAVAILABLE' }, { status: 404 });

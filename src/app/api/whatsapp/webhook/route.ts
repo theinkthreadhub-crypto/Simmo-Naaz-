@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   filterAllowedSenders,
+  getAllowedWhatsAppNumbers,
   verifyWebhookChallenge,
   verifyWebhookSignature
 } from '@/lib/integrations/whatsapp/security';
@@ -35,6 +36,15 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    if (process.env.WHATSAPP_CLOUD_WEBHOOK_ENABLED !== 'true') {
+      return NextResponse.json({
+        success: true,
+        processed: 0,
+        disabled: true,
+        mode: 'QR_SELF_CHAT_ONLY'
+      });
+    }
+
     const rawBody = await req.text();
     const signature = req.headers.get('x-hub-signature-256');
 
@@ -48,7 +58,12 @@ export async function POST(req: NextRequest) {
     // 2. Parse Payload
     const parsedPayload: WhatsAppInboundPayload = JSON.parse(rawBody);
 
-    // Only the owner numbers in WHATSAPP_ALLOWED_NUMBERS may talk to MENTRA.
+    const allowedNumbers = getAllowedWhatsAppNumbers();
+    if (allowedNumbers.length === 0) {
+      console.warn('[WhatsAppWebhook] Cloud inbound ignored because WHATSAPP_ALLOWED_NUMBERS is empty.');
+      return NextResponse.json({ success: true, processed: 0, ignored: true });
+    }
+
     const { payload, ignored } = filterAllowedSenders(parsedPayload);
     if (ignored > 0) {
       console.warn(`[WhatsAppWebhook] Ignored ${ignored} message(s) from numbers outside WHATSAPP_ALLOWED_NUMBERS.`);

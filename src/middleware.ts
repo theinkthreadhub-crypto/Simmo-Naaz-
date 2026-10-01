@@ -83,8 +83,13 @@ export async function middleware(request: NextRequest) {
 
   // If unauthenticated accessing protected route, redirect to root login screen
   if (isProtectedRoute && !user) {
-    // Check if client has demo session cookie
-    const hasDemoCookie = request.cookies.get('mentra_demo_active');
+    const demoBypassAllowed =
+      process.env.NODE_ENV !== 'production' &&
+      (process.env.MENTRA_DEMO_MODE === 'true' ||
+        process.env.NEXT_PUBLIC_MENTRA_DEMO_MODE === 'true');
+    const hasDemoCookie =
+      demoBypassAllowed && Boolean(request.cookies.get('mentra_demo_active'));
+
     if (!hasDemoCookie) {
       const redirectUrl = new URL('/', request.url);
       return NextResponse.redirect(redirectUrl);

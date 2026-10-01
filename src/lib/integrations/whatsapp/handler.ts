@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { resolveUserByPhone, linkUserByCode } from './linking';
+import { resolveUserByPhone } from './linking';
 import { whatsappClient } from './client';
 import { runMentra } from '@/lib/ai/core';
 import { MentraIncomingMessage } from '@/lib/ai/types';
@@ -102,34 +102,12 @@ export async function processWhatsAppInboundWebhook(payload: WhatsAppInboundPayl
           created_at: new Date().toISOString()
         });
 
-        // 5. Handle Unlinked User / Linking Codes
+        // 5. QR-only mode: an unlinked sender is never auto-enrolled and
+        // receives no bot response. The authenticated dashboard QR binds the
+        // owner connection through the brain worker.
         if (!userId) {
-          const cleanCodeMatch = incomingText.replace(/[^0-9]/g, '');
-          if (cleanCodeMatch.length === 6) {
-            const linkRes = await linkUserByCode(fromPhone, cleanCodeMatch);
-            if (linkRes.success && linkRes.userId) {
-              await whatsappClient.sendTextMessage(
-                fromPhone,
-                `⚡ *MENTRA ONLINE*\n\nYour WhatsApp has been verified and securely linked to your MENTRA Sovereign Intelligence session.\n\nType *"Aaj kya karna hai?"* or *"Mera status"* to begin.`
-              );
-              processedCount++;
-              continue;
-            } else {
-              await whatsappClient.sendTextMessage(
-                fromPhone,
-                `⚠️ ${linkRes.message}`
-              );
-              processedCount++;
-              continue;
-            }
-          } else {
-            await whatsappClient.sendTextMessage(
-              fromPhone,
-              `🔒 *MENTRA SOVEREIGN INTELLIGENCE*\n\nThis phone number is not linked to any active MENTRA account.\n\nTo link:\n1. Open your MENTRA Web App\n2. Navigate to *Settings > Connections > WhatsApp*\n3. Click *Connect* to generate your 6-digit link code\n4. Reply here with that 6-digit code.`
-            );
-            processedCount++;
-            continue;
-          }
+          errors.push('UNLINKED_ALLOWED_SENDER');
+          continue;
         }
 
         // 6. Linked User - Handle Quick Shortcuts
