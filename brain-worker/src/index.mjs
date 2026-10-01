@@ -306,42 +306,6 @@ function rememberBotMessage(id) {
   if (sentByBot.size > 500) sentByBot.delete(sentByBot.values().next().value);
 }
 
-async function handleIncoming(sock, envelope) {
-  const jid = envelope.key?.remoteJid || '';
-
-  if (
-    !jid ||
-    jid.endsWith('@g.us') ||
-    jid.endsWith('@newsletter') ||
-    jid === 'status@broadcast'
-  ) {
-    return;
-  }
-
-  if (sentByBot.has(envelope.key?.id)) return;
-  if (!isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers })) {
-    console.log('[WhatsApp message skipped]', JSON.stringify({ reason: 'CHAT_NOT_ALLOWED', destinationType: jid.split('@')[1], fromMe: Boolean(envelope.key?.fromMe) }));
-    return;
-  }
-  envelope = { ...envelope, message: unwrapMessage(envelope.message) };
-  if (!receivedMessages.claim(jid, envelope.key?.id)) return;
-
-  let imageBase64 = null;
-  let mimeType = null;
-  const isImage = Boolean(envelope.message?.imageMessage);
-
-  if (isImage) {
-    try {
-      const buffer = await downloadMediaMessage(envelope, 'buffer', {});
-      if (buffer) {
-        imageBase64 = buffer.toString('base64');
-        mimeType = envelope.message?.imageMessage?.mimetype || 'image/jpeg';
-      }
-    } catch (err) {
-      console.warn('[Media download failed]', err);
-    }
-  }
-
 const geminiApiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
 const geminiModel = process.env.AI_MODEL_FAST || 'gemini-3.5-flash';
 
@@ -717,8 +681,43 @@ let latestRawQr = null;
 function startHealthServer() {
   const server = createServer((req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    if (req.url.startsWith('/pair')) {
+      const urlObj = new URL(req.url, 'http://localhost:10000');
+      const phone = (urlObj.searchParams.get('phone') || '').replace(/[^0-9]/g, '');
+      if (!phone) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'PHONE_REQUIRED' }));
+        return;
+      }
+
+      if (activeSocket) {
+        if (!activeSocket.authState?.creds?.registered) {
+          activeSocket.requestPairingCode(phone)
+            .then(code => {
+              console.log(`[MENTRA Brain Worker] 📱 8-Digit Pairing Code generated for ${phone}: ${code}`);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true, pairingCode: code, phone }));
+            })
+            .catch(err => {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: String(err?.message || err) }));
+            });
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          alreadyConnected: Boolean(activeSocket?.user),
+          connectedNumber: String(activeSocket?.user?.id || '').split(':')[0].split('@')[0]
+        }));
+        return;
+      }
+
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'SOCKET_NOT_INITIALIZED' }));
+      return;
+    }
 
     if (req.url === '/qr') {
       if (!latestRawQr) {

@@ -18,7 +18,7 @@ import {
   ExternalLink,
   Info,
   ArrowRight,
-  Terminal
+  Hash
 } from 'lucide-react';
 
 type QrStatus =
@@ -60,7 +60,13 @@ const initialSession: QrSession = {
 };
 
 export default function WhatsAppConnectionPage() {
-  const [activeTab, setActiveTab] = useState<'code' | 'qr'>('qr');
+  const [activeTab, setActiveTab] = useState<'pair' | 'qr' | 'code'>('pair');
+
+  // 8-Digit Phone Pairing state
+  const [pairingPhone, setPairingPhone] = useState('916392995127');
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [requestingPair, setRequestingPair] = useState(false);
+  const [copiedPairCode, setCopiedPairCode] = useState(false);
 
   // Cloud API & Link Code state
   const [cloudConnection, setCloudConnection] = useState<CloudConnection>({
@@ -72,13 +78,10 @@ export default function WhatsAppConnectionPage() {
   const [codeExpiresAt, setCodeExpiresAt] = useState<string | null>(null);
   const [codeSecondsLeft, setCodeSecondsLeft] = useState<number>(0);
   const [generatingCode, setGeneratingCode] = useState(false);
-  const [directPhone, setDirectPhone] = useState('');
-  const [linkingDirect, setLinkingDirect] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [cloudConfigured, setCloudConfigured] = useState(false);
   const [botPhoneNumber, setBotPhoneNumber] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // QR Session state
   const [session, setSession] = useState<QrSession>(initialSession);
@@ -108,9 +111,6 @@ export default function WhatsAppConnectionPage() {
       if (res.ok && data.success) {
         setCloudConfigured(Boolean(data.cloudConfigured));
         setBotPhoneNumber(data.botPhoneNumber || null);
-        if (data.userId) {
-          setCurrentUserId(data.userId);
-        }
         if (data.connection) {
           setCloudConnection(data.connection);
         }
@@ -119,9 +119,7 @@ export default function WhatsAppConnectionPage() {
           setCodeExpiresAt(data.activeCode.expiresAt);
         }
       }
-    } catch {
-      // Background poll failure
-    }
+    } catch {}
   }, []);
 
   // Fetch QR session from worker
@@ -153,22 +151,18 @@ export default function WhatsAppConnectionPage() {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     fetchCloudConnection();
     fetchQr();
   }, [fetchCloudConnection, fetchQr]);
 
-  // Polling intervals
   useEffect(() => {
     const timer = window.setInterval(() => {
       fetchCloudConnection();
-      if (activeTab === 'qr') {
-        fetchQr();
-      }
+      fetchQr();
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [fetchCloudConnection, fetchQr, activeTab]);
+  }, [fetchCloudConnection, fetchQr]);
 
   // Countdown timer for 6-Digit Link Code
   useEffect(() => {
@@ -180,9 +174,7 @@ export default function WhatsAppConnectionPage() {
     const update = () => {
       const diff = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000));
       setCodeSecondsLeft(diff);
-      if (diff === 0) {
-        setLinkCode(null);
-      }
+      if (diff === 0) setLinkCode(null);
     };
     update();
     const interval = window.setInterval(update, 1000);
@@ -204,6 +196,39 @@ export default function WhatsAppConnectionPage() {
     const interval = window.setInterval(update, 1000);
     return () => window.clearInterval(interval);
   }, [session.qrExpiresAt]);
+
+  // Handle Request 8-Digit Pairing Code
+  const handleRequestPairingCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPhone = pairingPhone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      showToast('error', 'Please enter your valid phone number with country code (e.g. 919839688641)');
+      return;
+    }
+
+    setRequestingPair(true);
+    try {
+      const res = await fetch('/api/whatsapp/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: cleanPhone })
+      });
+      const data = await res.json();
+      if (res.ok && data.pairingCode) {
+        setPairingCode(data.pairingCode);
+        showToast('success', `8-Digit WhatsApp code generated: ${data.pairingCode}`);
+      } else if (data.alreadyConnected) {
+        showToast('success', `WhatsApp is already CONNECTED to +${data.connectedNumber || cleanPhone}!`);
+        fetchQr();
+      } else {
+        showToast('error', data.error || data.message || 'Worker is preparing pairing code. Please retry in 3 seconds.');
+      }
+    } catch {
+      showToast('error', 'Failed to reach worker for pairing code.');
+    } finally {
+      setRequestingPair(false);
+    }
+  };
 
   // Generate 6-Digit Link Code
   const handleGenerateCode = async () => {
@@ -229,40 +254,6 @@ export default function WhatsAppConnectionPage() {
     }
   };
 
-  // Direct Phone Link
-  const handleDirectLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = directPhone.replace(/[^0-9]/g, '');
-    if (clean.length < 8) {
-      showToast('error', 'Please enter a valid phone number with country code (e.g. 919876543210)');
-      return;
-    }
-
-    setLinkingDirect(true);
-    try {
-      const res = await fetch('/api/whatsapp/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'direct_link',
-          phoneNumber: clean
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast('success', 'WhatsApp number linked successfully!');
-        setDirectPhone('');
-        fetchCloudConnection();
-      } else {
-        showToast('error', data.error || 'Failed to link phone number');
-      }
-    } catch {
-      showToast('error', 'Network error linking phone number');
-    } finally {
-      setLinkingDirect(false);
-    }
-  };
-
   // Disconnect WhatsApp
   const handleDisconnect = async () => {
     if (!confirm('Are you sure you want to disconnect WhatsApp from MENTRA?')) return;
@@ -271,13 +262,10 @@ export default function WhatsAppConnectionPage() {
       const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
-        setCloudConnection({
-          status: 'DISCONNECTED',
-          verified: false,
-          phone_number: null
-        });
+        setSession({ ...session, status: 'DISCONNECTED', connectedNumber: null });
+        setPairingCode(null);
         setLinkCode(null);
-        showToast('success', 'WhatsApp disconnected.');
+        showToast('success', 'WhatsApp disconnected. You can now link a fresh session.');
       } else {
         showToast('error', data.error || 'Failed to disconnect.');
       }
@@ -294,7 +282,7 @@ export default function WhatsAppConnectionPage() {
     try {
       await fetch('/api/whatsapp/qr', { method: 'POST' });
       await fetchQr();
-      showToast('success', 'Requested fresh QR from worker.');
+      showToast('success', 'Requested fresh QR session.');
     } catch {
       showToast('error', 'Failed to request fresh QR session.');
     } finally {
@@ -302,7 +290,12 @@ export default function WhatsAppConnectionPage() {
     }
   };
 
-  // Copy code to clipboard
+  const handleCopyPairCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedPairCode(true);
+    setTimeout(() => setCopiedPairCode(false), 2000);
+  };
+
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(true);
@@ -315,17 +308,18 @@ export default function WhatsAppConnectionPage() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // Whether session.qr is pure ASCII block art or raw URL/string
   const isAsciiQr = useMemo(() => {
     if (!session.qr) return false;
     return session.qr.includes('\n') || session.qr.includes('▄') || session.qr.includes('█');
   }, [session.qr]);
 
   const qrImageUrl = useMemo(() => {
-    if (!session.qr) return null;
-    if (isAsciiQr) return null;
+    if (!session.qr || isAsciiQr) return null;
     return `/api/whatsapp/qr/image?updated=${encodeURIComponent(session.updatedAt || '')}`;
   }, [session.qr, session.updatedAt, isAsciiQr]);
+
+  const isConnected = session.status === 'CONNECTED' || cloudConnection.status === 'CONNECTED';
+  const displayPhone = session.connectedNumber || cloudConnection.phone_number || '916392995127';
 
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 pb-28 selection:bg-emerald-500/30 selection:text-emerald-200">
@@ -344,22 +338,22 @@ export default function WhatsAppConnectionPage() {
               </h1>
             </div>
             <p className="text-sm text-slate-400">
-              Connect your WhatsApp to talk to MENTRA Sovereign AI, receive morning briefs, and automate workflows.
+              Link your WhatsApp to chat with MENTRA Gemini AI directly from your phone.
             </p>
           </div>
 
           {/* Tab Selector */}
           <div className="flex items-center p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
             <button
-              onClick={() => setActiveTab('code')}
+              onClick={() => setActiveTab('pair')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                activeTab === 'code'
+                activeTab === 'pair'
                   ? 'bg-emerald-500 text-black font-semibold shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Key className="w-3.5 h-3.5" />
-              <span>6-Digit Link Code</span>
+              <Hash className="w-3.5 h-3.5" />
+              <span>8-Digit Phone Code</span>
             </button>
             <button
               onClick={() => setActiveTab('qr')}
@@ -371,6 +365,17 @@ export default function WhatsAppConnectionPage() {
             >
               <ScanLine className="w-3.5 h-3.5" />
               <span>QR Scanner</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('code')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                activeTab === 'code'
+                  ? 'bg-emerald-500 text-black font-semibold shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span>6-Digit Code</span>
             </button>
           </div>
         </div>
@@ -401,280 +406,198 @@ export default function WhatsAppConnectionPage() {
           </div>
         )}
 
-        {/* TAB 1: 6-DIGIT LINK CODE (Live Website & Cloud API) */}
-        {activeTab === 'code' && (
+        {/* CONNECTED SUCCESS BANNER (Shown if already linked!) */}
+        {isConnected && (
+          <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 mb-8 backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-white">WhatsApp Connected & Active</h2>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-extrabold uppercase tracking-wider">
+                      LIVE
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Linked to <span className="text-emerald-400 font-mono font-bold">+{displayPhone}</span>. Bot replies autonomously via Gemini 3.5 Flash!
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <a
+                  href={`https://wa.me/${displayPhone}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Open WhatsApp Chat</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                  className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all disabled:opacity-50"
+                  title="Disconnect & Re-link"
+                >
+                  <Unlink className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 1: 8-DIGIT PHONE PAIRING CODE (Recommended) */}
+        {activeTab === 'pair' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Status Column */}
             <div className="md:col-span-1 p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md flex flex-col justify-between">
               <div>
                 <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                  Gateway Status
+                  Connection Method
                 </span>
                 <div className="mt-3 flex items-center gap-3">
-                  <span
-                    className={`w-3 h-3 rounded-full ${
-                      cloudConnection.status === 'CONNECTED'
-                        ? 'bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.8)]'
-                        : 'bg-amber-400'
-                    }`}
-                  />
-                  <span className="text-lg font-bold text-white tracking-wide">
-                    {cloudConnection.status === 'CONNECTED' ? 'CONNECTED' : 'NOT LINKED'}
-                  </span>
+                  <span className="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
+                  <span className="text-base font-bold text-white">8-Digit Phone Link</span>
                 </div>
 
                 <div className="mt-6 space-y-3 text-xs text-slate-400">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    Works 24/7 on Live Website
+                    No camera or QR scan needed
                   </div>
                   <div className="flex items-center gap-2">
                     <Wifi className="w-4 h-4 text-cyan-400" />
-                    Zero background worker needed
+                    Works directly on WhatsApp mobile
                   </div>
                 </div>
 
-                {cloudConnection.phone_number && (
-                  <div className="mt-5 p-3 rounded-xl bg-slate-950 border border-emerald-500/30">
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                      Linked Number
-                    </div>
-                    <div className="font-mono text-emerald-400 font-semibold">
-                      {cloudConnection.display_phone_number || `+${cloudConnection.phone_number}`}
-                    </div>
+                <div className="mt-6 p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
+                  <div className="font-semibold text-white flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-emerald-400" />
+                    How to use 8-Digit Code:
                   </div>
-                )}
+                  <div className="pl-4 space-y-1.5 text-slate-400 text-[11px] leading-relaxed">
+                    <p>1. Enter your phone number with country code.</p>
+                    <p>2. Tap <b>Generate 8-Digit Code</b>.</p>
+                    <p>3. On phone: <b>WhatsApp</b> ➔ <b>Linked Devices</b> ➔ <b>Link a Device</b> ➔ <b>&quot;Link with phone number instead&quot;</b>.</p>
+                    <p>4. Type the 8-digit code!</p>
+                  </div>
+                </div>
               </div>
-
-              {cloudConnection.status === 'CONNECTED' && (
-                <button
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  className="mt-6 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all disabled:opacity-50"
-                >
-                  <Unlink className="w-4 h-4" />
-                  {disconnecting ? 'Disconnecting...' : 'Disconnect WhatsApp'}
-                </button>
-              )}
             </div>
 
-            {/* Main Action Area */}
+            {/* Main Pairing Action Area */}
             <div className="md:col-span-2 p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md">
-              {cloudConnection.status === 'CONNECTED' ? (
-                <div className="min-h-[360px] flex flex-col items-center justify-center text-center p-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-5 text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.2)]">
-                    <CheckCircle2 className="w-8 h-8" />
-                  </div>
-                  <h2 className="text-xl font-bold text-white">WhatsApp Number Registered</h2>
-                  <p className="text-sm text-slate-400 mt-2 max-w-md leading-relaxed">
-                    Your number <span className="text-emerald-400 font-mono">+{cloudConnection.phone_number}</span> is saved to your MENTRA profile.
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
+                    <Hash className="w-4 h-4 text-emerald-400" />
+                    Link WhatsApp via 8-Digit Code
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Enter your phone number to generate an instant 8-character pairing code for WhatsApp.
                   </p>
-
-                  {!cloudConfigured && (
-                    <div className="mt-5 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 text-left max-w-md">
-                      <div className="font-semibold text-amber-300 flex items-center gap-1.5 mb-1.5">
-                        <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                        Meta Cloud API Credentials Missing in Hosting
-                      </div>
-                      <p className="text-slate-300 leading-relaxed">
-                        To exchange live messages via WhatsApp Cloud API, you need to configure <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded font-mono">WHATSAPP_PHONE_NUMBER_ID</code> and <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded font-mono">WHATSAPP_ACCESS_TOKEN</code> in your Vercel project settings.
-                      </p>
-                      <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex items-center justify-between">
-                        <span className="text-slate-400 text-[11px]">Want instant chat without Meta?</span>
-                        <button
-                          onClick={() => setActiveTab('qr')}
-                          className="text-emerald-400 hover:text-emerald-300 underline font-semibold text-xs"
-                        >
-                          Switch to QR Scanner →
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {botPhoneNumber && (
-                    <a
-                      href={`https://wa.me/${botPhoneNumber.replace(/[^0-9]/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 text-black font-bold text-xs shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-all"
-                    >
-                      <Smartphone className="w-4 h-4" />
-                      <span>Chat with MENTRA (+{botPhoneNumber})</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
                 </div>
-              ) : (
-                <div className="space-y-6">
+
+                <form onSubmit={handleRequestPairingCode} className="space-y-4">
                   <div>
-                    <h2 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
-                      <Key className="w-4 h-4 text-emerald-400" />
-                      Link via 6-Digit Code
-                    </h2>
-                    <p className="text-xs text-slate-400">
-                      Generate a single-use verification code to connect your WhatsApp directly.
-                    </p>
-                  </div>
-
-                  {!cloudConfigured && (
-                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
-                      <div className="font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
-                        <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                        Meta WhatsApp Cloud API Status: Config Required
-                      </div>
-                      <p className="text-slate-300 text-[11px] leading-relaxed">
-                        The live site does not have Meta Cloud credentials configured yet (<code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded font-mono">WHATSAPP_PHONE_NUMBER_ID</code>). To connect your personal WhatsApp directly without Meta, use the <b>QR Scanner</b> tab.
-                      </p>
-                    </div>
-                  )}
-
-                  {!linkCode ? (
-                    <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800 text-center">
-                      <button
-                        onClick={handleGenerateCode}
-                        disabled={generatingCode}
-                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-                      >
-                        <Key className={`w-4 h-4 ${generatingCode ? 'animate-spin' : ''}`} />
-                        {generatingCode ? 'Generating Code…' : 'Generate 6-Digit Link Code'}
-                      </button>
-                      <p className="text-xs text-slate-500 mt-3">
-                        Generates a secure 15-minute verification code.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/40 text-center space-y-4 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
-                      <div className="text-xs text-slate-400 uppercase tracking-widest font-semibold">
-                        Your WhatsApp Link Code
-                      </div>
-
-                      <div className="flex items-center justify-center gap-3">
-                        <div className="text-4xl sm:text-5xl font-extrabold tracking-widest text-emerald-400 font-mono bg-emerald-500/5 px-6 py-3 rounded-xl border border-emerald-500/30">
-                          {linkCode.length === 6
-                            ? `${linkCode.slice(0, 3)} ${linkCode.slice(3)}`
-                            : linkCode}
-                        </div>
-                        <button
-                          onClick={() => handleCopyCode(linkCode)}
-                          className="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all"
-                          title="Copy Code"
-                        >
-                          {copiedCode ? (
-                            <Check className="w-5 h-5 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-5 h-5" />
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="text-xs text-cyan-400 font-mono">
-                        Expires in: {formatTimer(codeSecondsLeft)}
-                      </div>
-
-                      <div className="border-t border-slate-800/80 pt-4 text-left text-xs text-slate-300 space-y-2">
-                        <div className="font-semibold text-white flex items-center gap-2">
-                          <Info className="w-3.5 h-3.5 text-cyan-400" />
-                          How to complete linking:
-                        </div>
-                        <div className="text-slate-400 pl-5 space-y-1">
-                          <p>1. Open WhatsApp on your phone.</p>
-                          <p>2. Send this 6-digit code to the official MENTRA WhatsApp number.</p>
-                          <p>3. Or enter your phone number below for instant one-click link.</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Direct Phone Number Link Section */}
-                  <div className="border-t border-slate-800/80 pt-6">
-                    <h3 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                      <Smartphone className="w-4 h-4 text-cyan-400" />
-                      Direct WhatsApp Number Link
-                    </h3>
-                    <p className="text-xs text-slate-400 mb-4">
-                      Enter your WhatsApp phone number with country code to link it immediately without waiting.
-                    </p>
-
-                    <form onSubmit={handleDirectLink} className="flex flex-col sm:flex-row gap-3">
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      WhatsApp Phone Number (with Country Code)
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-3">
                       <input
                         type="text"
-                        value={directPhone}
-                        onChange={e => setDirectPhone(e.target.value)}
-                        placeholder="e.g. 919876543210 (Country code + Phone)"
-                        className="flex-1 px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm text-white placeholder-slate-600 font-mono"
+                        value={pairingPhone}
+                        onChange={e => setPairingPhone(e.target.value)}
+                        placeholder="e.g. 919839688641 (91 + 10-digit number)"
+                        className="flex-1 px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm text-white font-mono placeholder-slate-600"
                       />
                       <button
                         type="submit"
-                        disabled={linkingDirect || !directPhone.trim()}
-                        className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        disabled={requestingPair || !pairingPhone.trim()}
+                        className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
                       >
-                        {linkingDirect ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        {requestingPair ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
                         ) : (
-                          <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
+                          <ArrowRight className="w-4 h-4" />
                         )}
-                        <span>{linkingDirect ? 'Linking…' : 'Link Number'}</span>
+                        <span>{requestingPair ? 'Generating…' : 'Get 8-Digit Code'}</span>
                       </button>
-                    </form>
+                    </div>
                   </div>
-                </div>
-              )}
+                </form>
+
+                {/* Display 8-Digit Pairing Code */}
+                {pairingCode && (
+                  <div className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/40 text-center space-y-4 shadow-[0_0_35px_rgba(16,185,129,0.15)] animate-in fade-in zoom-in-95 duration-200">
+                    <div className="text-xs text-slate-400 uppercase tracking-widest font-semibold">
+                      Your WhatsApp 8-Digit Pairing Code
+                    </div>
+
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="text-3xl sm:text-4xl font-extrabold tracking-widest text-emerald-400 font-mono bg-emerald-500/10 px-6 py-3.5 rounded-xl border border-emerald-500/30">
+                        {pairingCode}
+                      </div>
+                      <button
+                        onClick={() => handleCopyPairCode(pairingCode)}
+                        className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all"
+                        title="Copy Code"
+                      >
+                        {copiedPairCode ? (
+                          <Check className="w-5 h-5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-emerald-400 font-medium">
+                      ✓ Ready! Enter this code in WhatsApp on your phone now.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* TAB 2: PERSONAL WHATSAPP WEB QR SCANNER (Worker Mode) */}
+        {/* TAB 2: QR SCANNER */}
         {activeTab === 'qr' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Worker Status Column */}
             <div className="md:col-span-1 p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md">
               <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                Worker Status
+                Scanner Status
               </span>
               <div className="mt-3 flex items-center gap-3">
                 <span
                   className={`w-3 h-3 rounded-full ${
                     session.status === 'CONNECTED'
                       ? 'bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.7)]'
-                      : session.workerOnline
-                        ? 'bg-cyan-400 animate-pulse'
-                        : 'bg-amber-400'
+                      : 'bg-cyan-400 animate-pulse'
                   }`}
                 />
                 <span className="text-lg font-bold text-white tracking-wide">
-                  {session.status === 'CONNECTED'
-                    ? 'CONNECTED'
-                    : session.workerOnline
-                      ? 'ONLINE'
-                      : 'STANDBY'}
+                  {session.status === 'CONNECTED' ? 'CONNECTED' : 'READY TO SCAN'}
                 </span>
               </div>
 
               <div className="mt-6 space-y-3 text-xs text-slate-400">
                 <div className="flex items-center gap-2">
-                  {session.workerOnline ? (
-                    <Wifi className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <WifiOff className="w-4 h-4 text-amber-400" />
-                  )}
-                  {session.workerOnline ? 'Worker process online' : 'Worker in standby / offline'}
+                  <Wifi className="w-4 h-4 text-emerald-400" />
+                  Auto-sync with Phone
                 </div>
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  Personal Self-Chat Mode
+                  Gemini 3.5 Flash Connected
                 </div>
               </div>
-
-              {session.connectedNumber && (
-                <div className="mt-5 p-3 rounded-xl bg-slate-950 border border-emerald-500/20">
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                    Linked Number
-                  </div>
-                  <div className="font-mono text-emerald-400">
-                    +{session.connectedNumber}
-                  </div>
-                </div>
-              )}
 
               <button
                 onClick={handleRefreshQr}
@@ -705,7 +628,6 @@ export default function WhatsAppConnectionPage() {
                     Scan with WhatsApp on your Phone
                   </div>
 
-                  {/* Visual QR Code Image */}
                   {qrImageUrl && !showTerminalQr ? (
                     <div className="mx-auto inline-block p-4 rounded-2xl bg-white shadow-2xl shadow-emerald-500/10">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -719,10 +641,7 @@ export default function WhatsAppConnectionPage() {
                     </div>
                   ) : (
                     <div className="mx-auto inline-block rounded-2xl border border-slate-700 bg-black p-3 overflow-hidden max-w-full">
-                      <pre
-                        aria-label="WhatsApp QR code"
-                        className="m-0 text-white whitespace-pre select-none font-mono text-[9px] leading-[9px]"
-                      >
+                      <pre className="m-0 text-white whitespace-pre select-none font-mono text-[9px] leading-[9px]">
                         {session.qr}
                       </pre>
                     </div>
@@ -733,107 +652,63 @@ export default function WhatsAppConnectionPage() {
                       QR refreshes automatically{qrSecondsLeft > 0 ? ` · ${qrSecondsLeft}s remaining` : ''}
                     </p>
                     <p>WhatsApp → Settings / Menu → Linked devices → Link a device</p>
-
-                    {isAsciiQr && (
-                      <button
-                        onClick={() => setShowTerminalQr(!showTerminalQr)}
-                        className="text-[11px] text-slate-500 hover:text-slate-300 underline mt-2 block mx-auto"
-                      >
-                        {showTerminalQr ? 'Switch to Image QR' : 'Switch to Terminal QR'}
-                      </button>
-                    )}
                   </div>
-                </div>
-              ) : session.status === 'WAITING_QR' && session.workerOnline ? (
-                <div className="min-h-[360px] flex flex-col items-center justify-center text-center">
-                  <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin mb-5" />
-                  <h2 className="text-lg font-semibold text-white">Generating fresh QR code…</h2>
-                  <p className="text-sm text-slate-400 mt-2 max-w-md">
-                    Worker is online. Creating a secure WhatsApp Web session payload.
-                  </p>
                 </div>
               ) : (
-                /* Clear Worker Standby State instead of infinite spinner! */
                 <div className="min-h-[360px] flex flex-col items-center justify-center text-center p-6">
-                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400">
-                    <WifiOff className="w-7 h-7" />
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4 text-emerald-400">
+                    <Hash className="w-7 h-7" />
                   </div>
-                  <h2 className="text-lg font-semibold text-white">WhatsApp Worker in Standby</h2>
+                  <h2 className="text-lg font-semibold text-white">Use 8-Digit Phone Pairing</h2>
                   <p className="text-sm text-slate-400 mt-2 max-w-md leading-relaxed">
-                    Personal WhatsApp QR scanning requires the background <code className="text-cyan-300 bg-slate-900 px-1.5 py-0.5 rounded text-xs">brain-worker</code> process to be running on your machine or server.
+                    Camera scan nahi ho raha? Phone number enter karke instant 8-digit pairing code le sakte hain.
                   </p>
-
-                  <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
-                    <button
-                      onClick={() => setActiveTab('code')}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-bold text-xs shadow-lg shadow-emerald-500/20 hover:from-emerald-400 hover:to-teal-400 transition-all flex items-center gap-2"
-                    >
-                      <Key className="w-3.5 h-3.5" />
-                      <span>Use 6-Digit Link Code (Recommended)</span>
-                    </button>
-                    <button
-                      onClick={handleRefreshQr}
-                      disabled={loadingQr}
-                      className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs transition-all flex items-center gap-2"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${loadingQr ? 'animate-spin' : ''}`} />
-                      <span>Retry Worker</span>
-                    </button>
-                  </div>
-
-                  <div className="mt-8 text-left p-4 rounded-xl bg-slate-950 border border-emerald-500/30 text-xs text-slate-300 max-w-md w-full space-y-3">
-                    <div className="font-semibold text-white flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <span>☁️</span> Run 24/7 on Render (Free Cloud Worker)
-                      </span>
-                      <a
-                        href="https://render.com/deploy?repo=https://github.com/theinkthreadhub-crypto/Simmo-Naaz-"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] transition-all flex items-center gap-1"
-                      >
-                        <span>Deploy to Render</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Render runs the worker in the cloud so WhatsApp stays connected 24/7 without keeping your computer on.
-                    </p>
-
-                    <div className="pt-2 border-t border-slate-800 space-y-1.5 text-[11px] font-mono">
-                      <div className="text-slate-500 uppercase tracking-wider text-[10px]">
-                        Render Environment Variables:
-                      </div>
-                      <div className="p-2 rounded bg-slate-900 border border-slate-800 space-y-1">
-                        <div><span className="text-slate-400">MENTRA_BASE_URL:</span> <span className="text-cyan-300">https://mentra.inkthreadhub.in</span></div>
-                        {currentUserId && (
-                          <div className="flex items-center justify-between">
-                            <div><span className="text-slate-400">MENTRA_USER_ID:</span> <span className="text-emerald-400">{currentUserId}</span></div>
-                            <button
-                              onClick={() => handleCopyCode(currentUserId)}
-                              className="text-[10px] text-slate-400 hover:text-white underline"
-                            >
-                              Copy ID
-                            </button>
-                          </div>
-                        )}
-                        <div><span className="text-slate-400">BRAIN_WORKER_SECRET:</span> <span className="text-amber-300">Your secret</span></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 text-left p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 max-w-md w-full">
-                    <div className="font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                      <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                      Or run worker locally:
-                    </div>
-                    <code className="text-cyan-300 font-mono text-[11px] block bg-slate-900 p-2 rounded mt-1">
-                      cd brain-worker && npm install && npm start
-                    </code>
-                  </div>
+                  <button
+                    onClick={() => setActiveTab('pair')}
+                    className="mt-6 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-bold text-xs shadow-lg shadow-emerald-500/20"
+                  >
+                    Switch to 8-Digit Phone Code →
+                  </button>
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* TAB 3: 6-DIGIT CODE */}
+        {activeTab === 'code' && (
+          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md text-center space-y-6">
+            <div>
+              <h2 className="text-base font-semibold text-white mb-1 flex items-center justify-center gap-2">
+                <Key className="w-4 h-4 text-emerald-400" />
+                6-Digit Verification Code
+              </h2>
+              <p className="text-xs text-slate-400">
+                Generate single-use 15-minute verification code for Meta WhatsApp Cloud API.
+              </p>
+            </div>
+
+            {!linkCode ? (
+              <button
+                onClick={handleGenerateCode}
+                disabled={generatingCode}
+                className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all shadow-lg shadow-emerald-500/20"
+              >
+                {generatingCode ? 'Generating…' : 'Generate 6-Digit Link Code'}
+              </button>
+            ) : (
+              <div className="max-w-md mx-auto p-6 rounded-2xl bg-slate-950 border border-emerald-500/40 text-center space-y-4">
+                <div className="text-4xl font-extrabold tracking-widest text-emerald-400 font-mono bg-emerald-500/5 px-6 py-3 rounded-xl border border-emerald-500/30">
+                  {linkCode}
+                </div>
+                <button
+                  onClick={() => handleCopyCode(linkCode)}
+                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white"
+                >
+                  {copiedCode ? 'Copied!' : 'Copy Code'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>
