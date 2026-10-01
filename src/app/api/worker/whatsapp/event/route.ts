@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
               status: 'CONNECTED',
               last_active_at: now.toISOString(),
               updated_at: now.toISOString()
-            }, { onConflict: 'user_id' }).catch(() => {});
+            }, { onConflict: 'user_id' });
           }
         }
       } catch (dbErr: any) {
