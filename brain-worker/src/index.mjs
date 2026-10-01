@@ -532,6 +532,7 @@ async function connectWhatsApp() {
       activeSocket.ev.removeAllListeners('creds.update');
       activeSocket.ev.removeAllListeners('messages.upsert');
       activeSocket.ev.removeAllListeners('messages.update');
+      activeSocket.ev.removeAllListeners('messaging-history.set');
       activeSocket.end(new Error('Reconnecting'));
     } catch {}
     activeSocket = null;
@@ -547,6 +548,7 @@ async function connectWhatsApp() {
   });
 
   activeSocket = sock;
+  let connectionOpenedAtMs = Date.now();
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async update => {
@@ -566,6 +568,7 @@ async function connectWhatsApp() {
       }
 
       if (update.connection === 'open') {
+        connectionOpenedAtMs = Date.now();
         latestRawQr = null;
         const connectedNumber = String(sock.user?.id || '')
           .split(':')[0]
@@ -667,6 +670,56 @@ async function connectWhatsApp() {
 
   // Baileys v7 can surface self-chat/business payloads as message updates
   // (for example editedMessage/protocol wrappers) instead of a fresh upsert.
+  // WhatsApp Business / self-chat messages sent from the primary phone can
+  // arrive through history sync instead of messages.upsert. Only process very
+  // recent messages created after this socket opened so old chat history never
+  // triggers replies.
+  sock.ev.on('messaging-history.set', async event => {
+    const historyMessages = Array.isArray(event?.messages) ? event.messages : [];
+    if (historyMessages.length === 0) return;
+
+    let eligible = 0;
+    for (const message of historyMessages) {
+      try {
+        const rawTs = message?.messageTimestamp;
+        const seconds =
+          typeof rawTs === 'number'
+            ? rawTs
+            : Number(rawTs?.low ?? rawTs?.toString?.() ?? 0);
+        const msgTimestamp = seconds * 1000;
+
+        if (!msgTimestamp) continue;
+        if (msgTimestamp < connectionOpenedAtMs - 5000) continue;
+        if ((Date.now() - msgTimestamp) > 120_000) continue;
+        if (!message?.key?.remoteJid) continue;
+        if (!extractText(message.message).trim()) continue;
+        if (!isAllowedChat(sock, message, { allowSelfChat, allowedNumbers })) continue;
+
+        eligible += 1;
+        console.log(
+          '[WhatsApp history message]',
+          JSON.stringify({
+            id: message.key?.id || null,
+            remoteJid: message.key?.remoteJid || null,
+            fromMe: Boolean(message.key?.fromMe),
+            syncType: event?.syncType ?? null
+          })
+        );
+
+        messageQueue = messageQueue
+          .then(() => handleIncoming(sock, message))
+          .catch(error => console.error('[WhatsApp inbound history]', error));
+        await messageQueue;
+      } catch (error) {
+        console.error('[WhatsApp inbound history]', error);
+      }
+    }
+
+    if (eligible > 0) {
+      console.log('[WhatsApp history fallback] processed recent messages:', eligible);
+    }
+  });
+
   sock.ev.on('messages.update', async updates => {
     for (const entry of updates || []) {
       try {
