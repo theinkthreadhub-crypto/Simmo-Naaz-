@@ -76,7 +76,26 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
   try {
-    await runAsTrustedServer('whatsapp_qr_fresh_pairing', async () => {
+    const { data: currentSession } = await supabase
+      .from('whatsapp_qr_sessions')
+      .select('status, qr_code, qr_expires_at, updated_at')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const now = Date.now();
+    const qrStillValid =
+      currentSession?.status === 'QR_READY' &&
+      Boolean(currentSession?.qr_code) &&
+      Boolean(currentSession?.qr_expires_at) &&
+      new Date(currentSession.qr_expires_at).getTime() > now;
+
+    const recentlyWaiting =
+      currentSession?.status === 'WAITING_QR' &&
+      Boolean(currentSession?.updated_at) &&
+      now - new Date(currentSession.updated_at).getTime() < 90_000;
+
+    if (!qrStillValid && !recentlyWaiting) {
+      await runAsTrustedServer('whatsapp_qr_fresh_pairing', async () => {
       const admin = createClient();
 
       const { error: signalError } = await admin
@@ -116,7 +135,8 @@ export async function POST() {
         }, { onConflict: 'user_id' });
 
       if (qrError) throw qrError;
-    });
+      });
+    }
 
     // Render free services can sleep. A QR request must also wake the brain-worker,
     // otherwise the UI can remain stuck on WAITING_QR with no QR payload.
