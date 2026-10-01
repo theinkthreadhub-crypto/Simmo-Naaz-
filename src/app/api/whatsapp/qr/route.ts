@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { runAsTrustedServer } from '@/lib/supabase/trustedScope';
 
 export async function GET() {
   const supabase = createClient();
@@ -67,26 +68,82 @@ export async function GET() {
   });
 }
 
+export const maxDuration = 30;
+
 export async function POST() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
   try {
-    const { error } = await supabase
-      .from('whatsapp_qr_sessions')
-      .upsert({
-        user_id: user.id,
-        worker_id: 'mentra-brain-01',
-        status: 'WAITING_QR',
-        qr_code: null,
-        qr_expires_at: null,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
+    await runAsTrustedServer('whatsapp_qr_fresh_pairing', async () => {
+      const admin = createClient();
 
-    if (error) throw error;
+      const { error: signalError } = await admin
+        .from('whatsapp_worker_signal_keys')
+        .delete()
+        .eq('user_id', user.id);
+      if (signalError) throw signalError;
 
-    return NextResponse.json({ success: true, status: 'WAITING_QR' });
+      const { error: authError } = await admin
+        .from('whatsapp_worker_auth')
+        .delete()
+        .eq('user_id', user.id);
+      if (authError) throw authError;
+
+      const { error: connectionError } = await admin
+        .from('whatsapp_connections')
+        .update({
+          status: 'DISCONNECTED',
+          verified: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+      if (connectionError) throw connectionError;
+
+      const { error: qrError } = await admin
+        .from('whatsapp_qr_sessions')
+        .upsert({
+          user_id: user.id,
+          worker_id: 'mentra-brain-01',
+          status: 'WAITING_QR',
+          qr_code: null,
+          qr_expires_at: null,
+          connected_number: null,
+          connected_at: null,
+          last_error: null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+
+      if (qrError) throw qrError;
+    });
+
+    // Render free services can sleep. A QR request must also wake the brain-worker,
+    // otherwise the UI can remain stuck on WAITING_QR with no QR payload.
+    const workerUrl = (
+      process.env.BRAIN_WORKER_URL ||
+      process.env.NEXT_PUBLIC_BRAIN_WORKER_URL ||
+      'https://mentra-brain-worker.onrender.com'
+    ).replace(/\/$/, '');
+
+    let workerAwake = false;
+    try {
+      const wake = await fetch(`${workerUrl}/health`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(15000)
+      });
+      workerAwake = wake.ok;
+    } catch {
+      // The request itself wakes a sleeping Render service. QR polling will
+      // pick up QR_READY once the worker finishes booting.
+    }
+
+    return NextResponse.json({
+      success: true,
+      status: 'WAITING_QR',
+      workerWakeRequested: true,
+      workerAwake
+    });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: errorMsg }, { status: 500 });
