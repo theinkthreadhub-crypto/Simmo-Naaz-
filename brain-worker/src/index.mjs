@@ -433,11 +433,26 @@ async function handleIncoming(sock, envelope) {
     return;
   }
   envelope = { ...envelope, message: unwrapMessage(envelope.message) };
-  if (!receivedMessages.claim(jid, envelope.key?.id)) return;
+
+  const isImage = Boolean(envelope.message?.imageMessage);
+  const rawText = extractText(envelope.message).trim();
+  const text = rawText || (isImage ? '[FASHION_DESIGN_IMAGE_UPLOAD]' : '');
+
+  // Do not claim/deduplicate placeholder protocol events. WhatsApp can send an
+  // empty protocolMessage first and deliver the readable self-chat payload
+  // later via messages.update/history sync with the same message ID.
+  if (!text || text.startsWith(REPLY_MARK)) {
+    console.log('[WhatsApp message skipped]', JSON.stringify({ reason: text ? 'BOT_REPLY' : 'NO_TEXT', contentTypes: Object.keys(envelope.message || {}) }));
+    return;
+  }
+
+  if (!receivedMessages.claim(jid, envelope.key?.id)) {
+    console.log('[WhatsApp message skipped]', JSON.stringify({ reason: 'DUPLICATE_TEXT', fromMe: Boolean(envelope.key?.fromMe) }));
+    return;
+  }
 
   let imageBase64 = null;
   let mimeType = null;
-  const isImage = Boolean(envelope.message?.imageMessage);
 
   if (isImage) {
     try {
@@ -449,13 +464,6 @@ async function handleIncoming(sock, envelope) {
     } catch (err) {
       console.warn('[Media download failed]', err);
     }
-  }
-
-  const rawText = extractText(envelope.message).trim();
-  const text = rawText || (isImage ? '[FASHION_DESIGN_IMAGE_UPLOAD]' : '');
-  if (!text || text.startsWith(REPLY_MARK)) {
-    console.log('[WhatsApp message skipped]', JSON.stringify({ reason: text ? 'BOT_REPLY' : 'NO_TEXT', contentTypes: Object.keys(envelope.message || {}) }));
-    return;
   }
 
   const allowed = isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers });
