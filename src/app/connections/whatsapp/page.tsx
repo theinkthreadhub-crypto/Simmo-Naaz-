@@ -287,9 +287,10 @@ export default function WhatsAppConnectionPage() {
                       <img
                         src={qrImageUrl}
                         alt="WhatsApp QR Code"
-                        width={280}
-                        height={280}
-                        className="rounded-lg block"
+                        width={340}
+                        height={340}
+                        className="block max-w-[82vw]"
+                        style={{ imageRendering: 'pixelated' }}
                       />
                     </div>
                   ) : (
