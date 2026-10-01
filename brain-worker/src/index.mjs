@@ -534,10 +534,10 @@ async function startBackendLoop() {
   } catch (error) {
     backendReady = false;
     backendError = error instanceof Error ? error.message : String(error);
-    return;
+    console.warn('[Backend Notice]', backendError);
   }
 
-  // Connect WhatsApp socket
+  // Always Connect WhatsApp socket
   try {
     await connectWhatsApp();
   } catch (err) {
