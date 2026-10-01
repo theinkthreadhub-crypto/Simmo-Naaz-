@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { claimAndDispatchDueJobs } from '@/lib/scheduler/cronDispatcher';
+import { runAsTrustedServer } from '@/lib/supabase/trustedScope';
 
 export async function GET(req: NextRequest) {
   return handleDispatch(req);
@@ -28,7 +29,7 @@ async function handleDispatch(req: NextRequest) {
   }
 
   try {
-    const executedJobs = await claimAndDispatchDueJobs();
+    const executedJobs = await runAsTrustedServer('verified_cron_dispatch', claimAndDispatchDueJobs);
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),

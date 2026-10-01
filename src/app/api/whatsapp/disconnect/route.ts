@@ -12,6 +12,10 @@ export async function POST(req: NextRequest) {
 
   try {
     await unlinkWhatsApp(user.id);
+    const { error: qrError } = await supabase.from('whatsapp_qr_sessions')
+      .update({ status: 'DISCONNECTED', qr_code: null, qr_expires_at: null, connected_number: null, updated_at: new Date().toISOString() })
+      .eq('user_id', user.id);
+    if (qrError) throw qrError;
     return NextResponse.json({
       success: true,
       message: 'WhatsApp connection disconnected.'

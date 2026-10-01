@@ -1,30 +1,18 @@
-# MENTRA Brain Worker
+# MENTRA WhatsApp worker
 
-Persistent Node.js worker for capabilities that do not fit Vercel serverless execution:
+Runs a persistent Baileys socket for your personal WhatsApp account. Default access is only your linked account's **Message yourself** chat. Other contacts require an explicit WHATSAPP_ALLOWED_NUMBERS allowlist.
 
-- personal WhatsApp QR connection
-- long-lived Baileys WebSocket
-- MENTRA inbound command bridge
-- scheduler tick trigger
-- worker heartbeat
+## Setup
 
-## WhatsApp mode
+1. Set MENTRA_BASE_URL to your deployed MENTRA URL and MENTRA_USER_ID to the owner Supabase user UUID.
+2. Configure BRAIN_WORKER_PRIVATE_KEY_B64 in Render. Its public key must match the provisioned key in src/lib/worker/trustedPublicKey.ts, or BRAIN_WORKER_PUBLIC_KEY on the application. Never commit the private key.
+3. Alternatively configure a random secret of at least 32 characters on both services. Public/default credentials are rejected.
+4. The application requires SUPABASE_SERVICE_ROLE_KEY for verified worker operations. Normal browser requests keep RLS active.
+5. Set WHATSAPP_SELF_CHAT=true and WHATSAPP_AUTH_STORE=remote. Remote auth persists linked-device credentials across worker restarts. Local mode requires persistent storage.
+6. Run npm ci then npm start. For local development use npm run start:local with an untracked .env.
+7. Sign into MENTRA and open /connections/whatsapp. Scan the QR using WhatsApp > Linked devices > Link a device.
+8. Open **Message yourself**, send a message, and wait for the reply prefixed with MENTRA.
 
-The QR mode uses **Baileys**, an unofficial WhatsApp Web library. It is not the Meta WhatsApp Cloud API and is not affiliated with WhatsApp. MENTRA keeps the existing official Cloud API integration as a separate mode.
+QR images are generated inside MENTRA. The worker's public /qr and /logout endpoints reject requests. Relinking/disconnecting is done in the authenticated application. Bot replies and repeated notify/append events are ignored to prevent loops and double replies. Messages are queued so follow-up questions use the same conversation.
 
-## Run
-
-1. Copy `.env.example` to `.env`.
-2. Set the same long random `BRAIN_WORKER_SECRET` in MENTRA and this worker.
-3. Add the MENTRA Supabase project URL/publishable key.
-4. Add the MENTRA user's Supabase refresh token.
-5. Set `CRON_SECRET` to the same server-side value used by MENTRA.
-6. Run `npm install`.
-7. Run `npm start`.
-8. Scan the terminal QR, or display the current QR from authenticated MENTRA UI using `/api/whatsapp/qr`.
-
-Never commit `data/`. It stores the WhatsApp linked-device credentials and the rotated Supabase session.
-
-## Deployment
-
-Run this worker on a persistent Node host/container, not inside a Vercel serverless function. It needs a long-lived WebSocket and local/persistent credential storage.
+A real AI provider must be configured for general AI reasoning. A configured deterministic fallback supports only its implemented commands. A free Render service can sleep; continuous availability requires a persistent host/plan.

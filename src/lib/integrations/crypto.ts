@@ -5,11 +5,13 @@ const ALGORITHM = 'aes-256-gcm';
 function getEncryptionKey(): Buffer {
   const envKey = process.env.TOKEN_ENCRYPTION_KEY || process.env.ENCRYPTION_SECRET;
   if (!envKey) {
+    if (process.env.NODE_ENV === 'production') throw new Error('TOKEN_ENCRYPTION_KEY_REQUIRED');
     // Deterministic fallback for local development if not yet set
     return crypto.scryptSync('mentra_local_dev_token_salt_2026', 'mentra_salt', 32);
   }
 
   if (envKey.length === 64) {
+    if (!/^[a-f0-9]{64}$/i.test(envKey)) throw new Error('TOKEN_ENCRYPTION_KEY_INVALID');
     return Buffer.from(envKey, 'hex');
   }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getGoogleOAuthUrl } from '@/lib/integrations/google/client';
+import { createGoogleOAuthState, GOOGLE_STATE_COOKIE, GOOGLE_STATE_TTL_SECONDS } from '@/lib/integrations/google/oauthState';
 
 export async function GET(req: NextRequest) {
   const supabase = createClient();
@@ -11,11 +12,13 @@ export async function GET(req: NextRequest) {
   }
 
   // Create state token binding user_id to prevent CSRF
-  const statePayload = Buffer.from(JSON.stringify({
-    userId: user.id,
-    timestamp: Date.now()
-  })).toString('base64url');
+  const statePayload = createGoogleOAuthState(user.id);
 
   const authUrl = getGoogleOAuthUrl(statePayload);
-  return NextResponse.redirect(authUrl);
+  const response = NextResponse.redirect(new URL(authUrl, req.url));
+  response.cookies.set(GOOGLE_STATE_COOKIE, statePayload, {
+    httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax',
+    path: '/api/integrations/google', maxAge: GOOGLE_STATE_TTL_SECONDS
+  });
+  return response;
 }

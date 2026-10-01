@@ -13,6 +13,11 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder-project.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      AI_PROVIDER: fallback
+      SYSTEM_AUTO_RECOVERY: "false"
 
     steps:
       - name: Checkout
@@ -29,6 +34,15 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Regression tests
+        run: npm run test:regression
+
+      - name: Existing evaluations
+        run: npm run test:all
+
+      - name: Worker syntax and self-chat tests
+        run: node --check brain-worker/src/index.mjs && node --test brain-worker/test/*.test.mjs
 
       - name: Build
         run: npm run build

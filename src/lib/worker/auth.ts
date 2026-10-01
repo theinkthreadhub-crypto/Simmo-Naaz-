@@ -1,15 +1,6 @@
 import crypto from 'crypto';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-
-const DEFAULT_WORKER_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAPI3D3XPFBvaudF6GRBmJ21KsF+i2o33eG2oCAUQhfyc=
------END PUBLIC KEY-----`;
-
-const DEFAULT_WORKER_TOKEN_HASH =
-  'bcc6fa8390ec665681108a5516c9d1fd23fdfbe3102d9c9f12d0d4e77b11beac';
-
-const ROTATED_WORKER_TOKEN_HASH =
-  '91c584326132eb0f461381ee6b38467e87da96233cc969a38c56a29f5bbb5dec';
+import { PROVISIONED_WORKER_PUBLIC_KEY } from './trustedPublicKey';
 
 function safeEqual(provided: string | null, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
@@ -19,21 +10,17 @@ function safeEqual(provided: string | null, expected: string | undefined): boole
   return crypto.timingSafeEqual(a, b);
 }
 
-const DEFAULT_INTERNAL_WORKER_SECRET = 'mentra-brain-cluster-2026';
-
 export function verifyBrainWorkerSecret(provided: string | null): boolean {
   if (!provided) return false;
-  const expected = process.env.BRAIN_WORKER_SECRET || DEFAULT_INTERNAL_WORKER_SECRET;
-  return safeEqual(provided, expected);
+  const expected = process.env.BRAIN_WORKER_SECRET;
+  return Boolean(expected && expected.length >= 32 && safeEqual(provided, expected));
 }
 
 export function verifyBrainWorkerToken(provided: string | null): boolean {
   if (!provided) return false;
 
   const expectedHashes = [
-    process.env.BRAIN_WORKER_TOKEN_HASH,
-    DEFAULT_WORKER_TOKEN_HASH,
-    ROTATED_WORKER_TOKEN_HASH
+    process.env.BRAIN_WORKER_TOKEN_HASH
   ].filter((value): value is string => Boolean(value));
 
   const actualHash = crypto
@@ -58,16 +45,19 @@ export function verifyBrainWorkerSignature(
   if (Math.abs(Date.now() - timestamp) > maxSkewMs) return false;
 
   try {
-    const publicKey =
-      process.env.BRAIN_WORKER_PUBLIC_KEY?.replace(/\\n/g, '\n') ||
-      DEFAULT_WORKER_PUBLIC_KEY;
-
-    return crypto.verify(
-      null,
-      Buffer.from(`${timestampHeader}.${rawBody}`, 'utf8'),
-      crypto.createPublicKey(publicKey),
-      Buffer.from(signatureHeader, 'base64')
-    );
+    const publicKeys = [process.env.BRAIN_WORKER_PUBLIC_KEY?.replace(/\\n/g, '\n'), PROVISIONED_WORKER_PUBLIC_KEY].filter(Boolean) as string[];
+    return publicKeys.some(publicKey => {
+      try {
+        return crypto.verify(
+          null,
+          Buffer.from(`${timestampHeader}.${rawBody}`, 'utf8'),
+          crypto.createPublicKey(publicKey),
+          Buffer.from(signatureHeader, 'base64')
+        );
+      } catch {
+        return false;
+      }
+    });
   } catch {
     return false;
   }

@@ -11,11 +11,14 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const rawBody = req.method === 'POST' ? await req.text() : '';
+  let body: { userId?: string; connectedNumber?: string; workerId?: string } = {};
+  try { body = rawBody ? JSON.parse(rawBody) : {}; } catch { return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 }); }
   const verified =
     verifyBrainWorkerSignature(
       req.headers.get('x-mentra-worker-timestamp'),
       req.headers.get('x-mentra-worker-signature'),
-      ''
+      rawBody
     ) ||
     verifyBrainWorkerToken(req.headers.get('x-mentra-worker-token')) ||
     verifyBrainWorkerSecret(req.headers.get('x-mentra-internal-secret'));
@@ -28,37 +31,23 @@ export async function GET(req: NextRequest) {
     return await runAsTrustedServer('brain_worker_pending_session', async () => {
       const supabase = createClient();
 
-      let connectedNumber = '';
-      if (req.method === 'POST') {
-        try {
-          const body = await req.json();
-          connectedNumber = typeof body?.connectedNumber === 'string' ? body.connectedNumber.replace(/[^0-9]/g, '') : '';
-        } catch {}
-      }
-
-      if (connectedNumber) {
-        const { data: matchedQr } = await supabase
-          .from('whatsapp_qr_sessions')
-          .select('user_id, status')
-          .ilike('connected_number', `%${connectedNumber}%`)
-          .limit(1)
-          .maybeSingle();
-        if (matchedQr?.user_id) {
-          return NextResponse.json({
-            success: true,
-            userId: matchedQr.user_id,
-            status: matchedQr.status
-          });
-        }
+      if (body.userId) {
+        const { data, error } = await supabase.from('whatsapp_qr_sessions')
+          .select('user_id,status').eq('user_id', body.userId).maybeSingle();
+        if (error) throw error;
+        return NextResponse.json({ success: Boolean(data), userId: data?.user_id || null, status: data?.status || 'IDLE' });
       }
 
       // Check for an active or waiting QR session
-      const { data: qrSession } = await supabase
+      const { data: sessions, error: pendingError } = await supabase
         .from('whatsapp_qr_sessions')
         .select('user_id, status, updated_at')
+        .eq('status', 'WAITING_QR')
+        .eq('worker_id', body.workerId || 'mentra-brain-01')
         .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(2);
+      if (pendingError) throw pendingError;
+      const qrSession = sessions?.length === 1 ? sessions[0] : null;
 
       if (qrSession?.user_id) {
         return NextResponse.json({
@@ -68,51 +57,7 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      // Fallback: check recent whatsapp_connections
-      const { data: conn } = await supabase
-        .from('whatsapp_connections')
-        .select('user_id, status, updated_at')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (conn?.user_id) {
-        return NextResponse.json({
-          success: true,
-          userId: conn.user_id,
-          status: conn.status || 'IDLE'
-        });
-      }
-
-      // Fallback: check profiles
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('user_id')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (profile?.user_id) {
-        return NextResponse.json({
-          success: true,
-          userId: profile.user_id,
-          status: 'IDLE'
-        });
-      }
-
-      // Fallback: check conversations
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('user_id')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      return NextResponse.json({
-        success: Boolean(conv?.user_id),
-        userId: conv?.user_id || null,
-        status: 'IDLE'
-      });
+      return NextResponse.json({ success: false, userId: null, status: 'IDLE' });
     });
   } catch (error: any) {
     return NextResponse.json(

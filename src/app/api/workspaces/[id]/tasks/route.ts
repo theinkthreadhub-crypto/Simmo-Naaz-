@@ -6,10 +6,8 @@ import {
   can 
 } from '@/lib/db/workspace';
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const workspaceId = params.id;
     const tasks = await getWorkspaceTasks(workspaceId);
@@ -19,10 +17,8 @@ export async function GET(
   }
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const workspaceId = params.id;
     const body = await req.json();
@@ -55,10 +51,8 @@ export async function POST(
   }
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const _workspaceId = params.id;
     const body = await req.json();

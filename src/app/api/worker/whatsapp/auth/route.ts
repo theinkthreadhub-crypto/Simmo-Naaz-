@@ -54,13 +54,7 @@ export async function POST(req: NextRequest) {
       const supabase = createClient();
 
       if (!userId) {
-        const { data: latest } = await supabase
-          .from('whatsapp_qr_sessions')
-          .select('user_id')
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        userId = latest?.user_id || '';
+        return NextResponse.json({ error: 'USER_REQUIRED' }, { status: 400 });
       }
 
       if (!userId) {

@@ -96,14 +96,15 @@ export async function runMentra(
       .from('messages')
       .select('*')
       .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
+      .eq('user_id', incoming.userId)
+      .order('created_at', { ascending: false })
       .limit(8);
 
     if (historyError) {
       console.warn('[MENTRA DB]: Conversation history fetch failed', historyError);
     }
 
-    history = data || [];
+    history = (data || []).reverse();
   }
 
   // 5. Build Context and System Prompt
@@ -123,7 +124,8 @@ export async function runMentra(
         content: h.content
       });
     }
-  } else {
+  }
+  if (!history.length || history[history.length - 1]?.role !== 'USER' || history[history.length - 1]?.content !== cleanText) {
     modelMessages.push({ role: 'user', content: cleanText });
   }
 

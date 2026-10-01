@@ -22,45 +22,18 @@ export async function GET() {
   try {
     const { data: hb } = await supabase
       .from('brain_worker_heartbeats')
-      .select('worker_id, status, last_seen_at')
+.select('worker_id, status, last_seen_at, metadata')
+      .eq('user_id', user.id)
       .order('last_seen_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (hb?.last_seen_at) {
       workerLastSeen = hb.last_seen_at;
-      workerOnline = (Date.now() - new Date(hb.last_seen_at).getTime()) < 120_000;
+      workerOnline = hb.status === 'ONLINE' && (Date.now() - new Date(hb.last_seen_at).getTime()) < 120_000;
     }
   } catch {
     // Non-critical if table query fails
-  }
-
-  // Also check whatsapp_connections for active linked state
-  if ((!data || data.status === 'DISCONNECTED') && user?.id) {
-    try {
-      const { data: conn } = await supabase
-        .from('whatsapp_connections')
-        .select('status, phone_number, last_active_at')
-        .eq('user_id', user.id)
-        .eq('status', 'CONNECTED')
-        .maybeSingle();
-
-      if (conn?.phone_number) {
-        return NextResponse.json({
-          status: 'CONNECTED',
-          qr: null,
-          qrExpiresAt: null,
-          connectedNumber: conn.phone_number,
-          connectedAt: conn.last_active_at,
-          lastError: null,
-          updatedAt: conn.last_active_at,
-          workerOnline: true,
-          workerLastSeen: conn.last_active_at || new Date().toISOString()
-        });
-      }
-    } catch {
-      // Non-critical
-    }
   }
 
   const expired = data?.qr_expires_at
@@ -90,7 +63,7 @@ export async function POST() {
       .from('whatsapp_qr_sessions')
       .upsert({
         user_id: user.id,
-        worker_id: 'brain-worker',
+        worker_id: 'mentra-brain-01',
         status: 'WAITING_QR',
         qr_code: null,
         qr_expires_at: null,

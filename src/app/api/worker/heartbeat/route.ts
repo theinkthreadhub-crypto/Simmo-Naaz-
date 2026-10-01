@@ -55,6 +55,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, serverTime: new Date().toISOString() });
   } catch (error: any) {
     console.warn('[Heartbeat write skipped]', error?.message || error);
-    return NextResponse.json({ success: true, note: 'HEARTBEAT_ACKNOWLEDGED', serverTime: new Date().toISOString() });
+    return NextResponse.json({ success: false, error: 'HEARTBEAT_PERSISTENCE_FAILED' }, { status: 503 });
   }
 }

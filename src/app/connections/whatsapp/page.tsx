@@ -60,7 +60,7 @@ const initialSession: QrSession = {
 };
 
 export default function WhatsAppConnectionPage() {
-  const [activeTab, setActiveTab] = useState<'code' | 'qr'>('code');
+  const [activeTab, setActiveTab] = useState<'code' | 'qr'>('qr');
 
   // Cloud API & Link Code state
   const [cloudConnection, setCloudConnection] = useState<CloudConnection>({
@@ -324,8 +324,8 @@ export default function WhatsAppConnectionPage() {
   const qrImageUrl = useMemo(() => {
     if (!session.qr) return null;
     if (isAsciiQr) return null;
-    return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=8&data=${encodeURIComponent(session.qr)}`;
-  }, [session.qr, isAsciiQr]);
+    return `/api/whatsapp/qr/image?updated=${encodeURIComponent(session.updatedAt || '')}`;
+  }, [session.qr, session.updatedAt, isAsciiQr]);
 
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 pb-28 selection:bg-emerald-500/30 selection:text-emerald-200">

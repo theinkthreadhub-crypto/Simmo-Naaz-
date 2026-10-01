@@ -8,7 +8,9 @@ const AUTH_TAG_LENGTH = 16;
  * Derives a 32-byte key from TOKEN_ENCRYPTION_KEY or a secure fallback.
  */
 function getEncryptionKey(): Buffer {
-  const secret = process.env.TOKEN_ENCRYPTION_KEY || 'mentra_default_dev_secret_key_32_bytes_len!';
+  const configured = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!configured && process.env.NODE_ENV === 'production') throw new Error('TOKEN_ENCRYPTION_KEY_REQUIRED');
+  const secret = configured || 'mentra_default_dev_secret_key_32_bytes_len!';
   return crypto.createHash('sha256').update(secret).digest();
 }
 
@@ -38,6 +40,7 @@ export function decryptToken(encryptedPayload: string): string {
   if (!encryptedPayload) return '';
   const parts = encryptedPayload.split(':');
   if (parts.length !== 3) {
+    if (process.env.NODE_ENV === 'production') throw new Error('TOKEN_ENCRYPTION_FORMAT_INVALID');
     // Return as-is if unencrypted legacy format, preventing crashes
     return encryptedPayload;
   }

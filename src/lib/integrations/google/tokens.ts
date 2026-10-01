@@ -32,11 +32,11 @@ export async function getValidGoogleAccessToken(userId: string): Promise<{ token
       tag: tokenRecord.token_tag
     });
 
-    if (tokenRecord.encrypted_refresh_token) {
+    if (tokenRecord.encrypted_refresh_token && tokenRecord.refresh_token_iv && tokenRecord.refresh_token_tag) {
       refreshToken = decryptToken({
         ciphertext: tokenRecord.encrypted_refresh_token,
-        iv: tokenRecord.token_iv,
-        tag: tokenRecord.token_tag
+        iv: tokenRecord.refresh_token_iv,
+        tag: tokenRecord.refresh_token_tag
       });
     }
   } catch (err: any) {
@@ -69,7 +69,7 @@ export async function getValidGoogleAccessToken(userId: string): Promise<{ token
     const encrypted = encryptToken(refreshed.accessToken);
     const newExpiresAt = new Date(Date.now() + (refreshed.expiresIn || 3600) * 1000).toISOString();
 
-    await supabase
+    const { error: saveError } = await supabase
       .from('integration_tokens')
       .update({
         encrypted_access_token: encrypted.ciphertext,
@@ -80,6 +80,8 @@ export async function getValidGoogleAccessToken(userId: string): Promise<{ token
       })
       .eq('user_id', userId)
       .eq('provider', 'GOOGLE');
+
+    if (saveError) return { token: null, error: 'TOKEN_PERSISTENCE_FAILED' };
 
     return { token: refreshed.accessToken };
   } catch (err: any) {

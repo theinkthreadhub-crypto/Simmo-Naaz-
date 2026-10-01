@@ -52,19 +52,7 @@ export async function POST(req: NextRequest) {
       const supabase = createClient();
       let targetUserId = typeof body.userId === 'string' ? body.userId : '';
 
-      if (!targetUserId) {
-        const { data: latest } = await supabase
-          .from('whatsapp_qr_sessions')
-          .select('user_id')
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        targetUserId = latest?.user_id || '';
-      }
-
-      if (!targetUserId) {
-        targetUserId = '1d70b737-0e87-4718-95b7-21d5ab3254ed';
-      }
+      if (!targetUserId) throw new Error('USER_REQUIRED');
 
       try {
         const { error } = await supabase.from('whatsapp_qr_sessions').upsert({
@@ -81,13 +69,13 @@ export async function POST(req: NextRequest) {
         }, { onConflict: 'user_id' });
 
         if (error) {
-          console.warn('[WhatsApp QR session upsert skipped]', error.message);
+          throw error;
         }
 
         if (body.status === 'CONNECTED' && body.connectedNumber) {
           const cleanPhone = String(body.connectedNumber).replace(/[^0-9]/g, '');
           if (cleanPhone) {
-            await supabase.from('whatsapp_connections').upsert({
+            const { error: connectionError } = await supabase.from('whatsapp_connections').upsert({
               user_id: targetUserId,
               phone_number: cleanPhone,
               display_phone_number: `+${cleanPhone}`,
@@ -96,15 +84,20 @@ export async function POST(req: NextRequest) {
               last_active_at: now.toISOString(),
               updated_at: now.toISOString()
             }, { onConflict: 'user_id' });
+            if (connectionError) throw connectionError;
           }
         }
-      } catch (dbErr: any) {
-        console.warn('[WhatsApp event DB sync skipped]', dbErr?.message || dbErr);
-      }
+        if (body.status === 'DISCONNECTED' || body.status === 'ERROR') {
+          const { error: disconnectError } = await supabase.from('whatsapp_connections')
+            .update({ status: 'DISCONNECTED', verified: false, updated_at: now.toISOString() })
+            .eq('user_id', targetUserId);
+          if (disconnectError) throw disconnectError;
+        }
+      } catch (dbErr) { throw dbErr; }
     });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ success: true, note: 'EVENT_ACKNOWLEDGED' });
+    return NextResponse.json({ success: false, error: 'EVENT_PERSISTENCE_FAILED' }, { status: 503 });
   }
 }

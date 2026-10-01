@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { cookies, headers } from 'next/headers';
+import { cookies, headers, type UnsafeUnwrappedCookies, type UnsafeUnwrappedHeaders } from 'next/headers';
 import crypto from 'crypto';
 import { isTrustedServerScope } from './trustedScope';
 
@@ -12,11 +12,11 @@ function safeSecretEqual(provided: string | null | undefined, expected: string |
   return crypto.timingSafeEqual(a, b);
 }
 
-function isInternalServiceRequest(headerStore: ReturnType<typeof headers> | null): boolean {
+function isInternalServiceRequest(headerStore: Awaited<ReturnType<typeof headers>> | null): boolean {
   if (!headerStore) return false;
 
   const workerSecret = headerStore.get('x-mentra-internal-secret');
-  const expectedSecret = process.env.BRAIN_WORKER_SECRET || 'mentra-brain-cluster-2026';
+  const expectedSecret = process.env.BRAIN_WORKER_SECRET;
   if (safeSecretEqual(workerSecret, expectedSecret)) {
     return true;
   }
@@ -28,16 +28,16 @@ function isInternalServiceRequest(headerStore: ReturnType<typeof headers> | null
 
 export function createClient() {
   let cookieStore: any = null;
-  let headerStore: ReturnType<typeof headers> | null = null;
+  let headerStore: Awaited<ReturnType<typeof headers>> | null = null;
 
   try {
-    cookieStore = cookies();
+    cookieStore = (cookies() as unknown as UnsafeUnwrappedCookies);
   } catch {
     // Outside Next.js request scope.
   }
 
   try {
-    headerStore = headers();
+    headerStore = (headers() as unknown as UnsafeUnwrappedHeaders);
   } catch {
     // Outside Next.js request scope.
   }
@@ -49,7 +49,7 @@ export function createClient() {
   // Internal scheduler/worker requests are authenticated separately before
   // reaching application logic. Verified webhooks run inside a trusted server
   // scope (see ./trustedScope). Only those requests may use service-role.
-  if (serviceRoleKey && (isInternalServiceRequest(headerStore) || isTrustedServerScope())) {
+  if (serviceRoleKey && isTrustedServerScope()) {
     return createSupabaseClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
