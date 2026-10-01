@@ -13,8 +13,6 @@ import makeWASocket, {
   downloadMediaMessage,
   useMultiFileAuthState
 } from '@whiskeysockets/baileys';
-import qrcode from 'qrcode-terminal';
-import QRCode from 'qrcode';
 import { REPLY_MARK, extractText, isAllowedChat, unwrapMessage, createMessageDeduplicator } from './messagePolicy.mjs';
 
 const baseUrl = (process.env.MENTRA_BASE_URL || 'https://mentra.inkthreadhub.in').replace(/\/$/, '');
@@ -44,6 +42,13 @@ let messageQueue = Promise.resolve();
 
 let activeSocket = null;
 let reconnectTimer = null;
+let reconnectAttempt = 0;
+let connectingWhatsApp = false;
+let explicitStopRequested = false;
+let shuttingDown = false;
+let lastInboundAt = null;
+let lastOutboundAt = null;
+let lastMessageError = '';
 let privateKey = null;
 let configError = '';
 let backendError = '';
@@ -103,7 +108,7 @@ function signedHeaders(bodyText) {
   throw new Error('WORKER_AUTH_NOT_CONFIGURED');
 }
 
-async function postInternal(endpoint, body = {}) {
+async function postInternal(endpoint, body = {}, timeoutMs = 120_000) {
   const payload = {
     ...(userId ? { userId } : {}),
     ...body
@@ -114,7 +119,7 @@ async function postInternal(endpoint, body = {}) {
     method: 'POST',
     headers: signedHeaders(bodyText),
     body: bodyText,
-    signal: AbortSignal.timeout(120_000)
+    signal: AbortSignal.timeout(timeoutMs)
   });
 
   const text = await response.text();
@@ -214,100 +219,71 @@ async function clearRemoteAuth() {
 }
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
 
-async function syncToSupabaseDirect(table, payload) {
-  if (!supabaseUrl || !supabaseKey) return;
-  try {
-    await fetch(`${supabaseUrl}/rest/v1/${table}?on_conflict=user_id`, {
-      method: 'POST',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify(payload)
-    });
-  } catch (err) {}
+function targetUserIds() {
+  return userId ? [userId] : [];
 }
 
-const knownUserIds = [
-  userId,
-  '2acaa360-1ae3-4207-ad4f-c60f67dd8a94',
-  'd0bb9aab-8063-4629-894d-7f8f7c921403',
-  'a59e24a3-6b1f-4369-9226-09eb6cf57035'
-].filter(Boolean);
+async function syncToSupabaseDirect(table, payload) {
+  if (!supabaseUrl || !supabaseKey) return false;
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?on_conflict=user_id`, {
+      method: 'POST',
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000)
+    });
+    if (!response.ok) { console.warn('[Supabase direct sync]', table, response.status); return false; }
+    return true;
+  } catch (error) { console.warn('[Supabase direct sync]', table, error?.message || error); return false; }
+}
+
+async function patchSupabaseDirect(table, userIdValue, payload) {
+  if (!supabaseUrl || !supabaseKey || !userIdValue) return false;
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?user_id=eq.${encodeURIComponent(userIdValue)}`, {
+      method: 'PATCH',
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000)
+    });
+    if (!response.ok) { console.warn('[Supabase direct patch]', table, response.status); return false; }
+    return true;
+  } catch (error) { console.warn('[Supabase direct patch]', table, error?.message || error); return false; }
+}
 
 async function sendHeartbeat(status = 'ONLINE', metadata = {}) {
+  try { await postInternal('/api/worker/heartbeat', { workerId, status, metadata }, 15_000); return; }
+  catch (error) { console.warn('[Heartbeat API fallback]', error?.message || error); }
   const now = new Date().toISOString();
-  for (const uid of knownUserIds) {
-    try {
-      await fetch(`${supabaseUrl}/rest/v1/brain_worker_heartbeats?on_conflict=worker_id`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({
-          worker_id: workerId,
-          user_id: uid,
-          status,
-          metadata,
-          last_seen_at: now,
-          updated_at: now
-        })
-      });
-    } catch {}
+  for (const uid of targetUserIds()) {
+    await syncToSupabaseDirect('brain_worker_heartbeats', { worker_id: workerId, user_id: uid, status, metadata, last_seen_at: now, updated_at: now });
   }
-
-  try {
-    await postInternal('/api/worker/heartbeat', {
-      workerId,
-      status,
-      metadata
-    });
-  } catch {}
 }
 
 async function sendWhatsAppEvent(status, extra = {}) {
+  try { await postInternal('/api/worker/whatsapp/event', { workerId, status, ...extra }, 20_000); return; }
+  catch (error) { console.warn('[WhatsApp event API fallback]', status, error?.message || error); }
   const qrReady = status === 'QR_READY' && typeof extra.qr === 'string';
   const now = new Date();
-
-  for (const uid of knownUserIds) {
+  for (const uid of targetUserIds()) {
     await syncToSupabaseDirect('whatsapp_qr_sessions', {
-      user_id: uid,
-      worker_id: workerId,
-      status,
+      user_id: uid, worker_id: workerId, status,
       qr_code: qrReady ? extra.qr : null,
-      qr_expires_at: qrReady ? new Date(now.getTime() + 75000).toISOString() : null,
+      qr_expires_at: qrReady ? new Date(now.getTime() + 75_000).toISOString() : null,
       connected_number: typeof extra.connectedNumber === 'string' ? extra.connectedNumber : null,
       last_error: typeof extra.error === 'string' ? extra.error.slice(0, 1000) : null,
       connected_at: status === 'CONNECTED' ? now.toISOString() : null,
       updated_at: now.toISOString()
     });
-
     if (status === 'CONNECTED' && extra.connectedNumber) {
-      await syncToSupabaseDirect('whatsapp_connections', {
-        user_id: uid,
-        phone_number: String(extra.connectedNumber).replace(/[^0-9]/g, ''),
-        verified: true,
-        status: 'CONNECTED',
-        last_active_at: now.toISOString(),
-        updated_at: now.toISOString()
-      });
+      const phone = String(extra.connectedNumber).replace(/[^0-9]/g, '');
+      await syncToSupabaseDirect('whatsapp_connections', { user_id: uid, phone_number: phone, display_phone_number: `+${phone}`, verified: true, status: 'CONNECTED', last_active_at: now.toISOString(), updated_at: now.toISOString() });
+    } else if (status === 'DISCONNECTED' || status === 'ERROR') {
+      await patchSupabaseDirect('whatsapp_connections', uid, { verified: false, status: 'DISCONNECTED', updated_at: now.toISOString() });
     }
   }
-
-  try {
-    await postInternal('/api/worker/whatsapp/event', {
-      workerId,
-      status,
-      ...extra
-    });
-  } catch {}
 }
 
 function rememberBotMessage(id) {
@@ -317,7 +293,7 @@ function rememberBotMessage(id) {
 }
 
 const geminiApiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
-const geminiModel = process.env.AI_MODEL_FAST || 'gemini-3.5-flash';
+const geminiModel = process.env.AI_MODEL_FAST || 'gemini-flash-latest';
 
 async function generateAutonomousAIReply(userText, pushName = '', mediaInfo = null) {
   try {
@@ -368,162 +344,95 @@ Tone & Persona:
   }
 }
 
-async function recordConversationToSupabase(userMsg, botReply) {
-  if (!supabaseUrl || !supabaseKey || !userId) return;
-  try {
-    const convId = `conv_wa_${userId.slice(0, 8)}`;
-    await fetch(`${supabaseUrl}/rest/v1/conversations?on_conflict=id`, {
-      method: 'POST',
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify({
-        id: convId,
-        user_id: userId,
-        channel: 'WHATSAPP',
-        title: 'WhatsApp Sovereign Assistant',
-        updated_at: new Date().toISOString()
-      })
-    });
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-    const now = new Date().toISOString();
-    await fetch(`${supabaseUrl}/rest/v1/messages`, {
-      method: 'POST',
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify([
-        {
-          conversation_id: convId,
-          role: 'user',
-          content: userMsg,
-          created_at: now
-        },
-        {
-          conversation_id: convId,
-          role: 'assistant',
-          content: botReply,
-          created_at: new Date(Date.now() + 500).toISOString()
-        }
-      ])
-    });
-  } catch {}
+async function requestMentraBackend(payload) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const result = await postInternal('/api/worker/whatsapp/inbound', payload, 55_000);
+      if (result?.status === 'PROCESSING') {
+        if (attempt < 2) { await sleep(Math.max(500, Number(result.retryAfterMs || 1000))); continue; }
+        return result;
+      }
+      return result;
+    } catch (error) { lastError = error; if (attempt < 2) await sleep(800 * (attempt + 1)); }
+  }
+  if (lastError) console.warn('[Backend Inbound]', lastError?.message || lastError);
+  return null;
+}
+
+async function sendMessageWithRetry(sock, jid, text) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { return await sock.sendMessage(jid, { text }); }
+    catch (error) { lastError = error; if (attempt < 2) await sleep(600 * (attempt + 1)); }
+  }
+  throw lastError || new Error('WHATSAPP_SEND_FAILED');
 }
 
 async function handleIncoming(sock, envelope) {
   const jid = envelope.key?.remoteJid || '';
-
-  if (
-    !jid ||
-    jid.endsWith('@g.us') ||
-    jid.endsWith('@newsletter') ||
-    jid === 'status@broadcast'
-  ) {
-    return;
-  }
-
+  if (!jid || jid.endsWith('@g.us') || jid.endsWith('@newsletter') || jid === 'status@broadcast') return;
   if (sentByBot.has(envelope.key?.id)) return;
   if (!isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers })) {
     console.log('[WhatsApp message skipped]', JSON.stringify({ reason: 'CHAT_NOT_ALLOWED', destinationType: jid.split('@')[1], fromMe: Boolean(envelope.key?.fromMe) }));
     return;
   }
   envelope = { ...envelope, message: unwrapMessage(envelope.message) };
-
   const isImage = Boolean(envelope.message?.imageMessage);
   const rawText = extractText(envelope.message).trim();
   const text = rawText || (isImage ? '[FASHION_DESIGN_IMAGE_UPLOAD]' : '');
-
-  // Do not claim/deduplicate placeholder protocol events. WhatsApp can send an
-  // empty protocolMessage first and deliver the readable self-chat payload
-  // later via messages.update/history sync with the same message ID.
   if (!text || text.startsWith(REPLY_MARK)) {
     console.log('[WhatsApp message skipped]', JSON.stringify({ reason: text ? 'BOT_REPLY' : 'NO_TEXT', contentTypes: Object.keys(envelope.message || {}) }));
     return;
   }
-
   if (!receivedMessages.claim(jid, envelope.key?.id)) {
     console.log('[WhatsApp message skipped]', JSON.stringify({ reason: 'DUPLICATE_TEXT', fromMe: Boolean(envelope.key?.fromMe) }));
     return;
   }
-
+  lastInboundAt = new Date().toISOString();
+  lastMessageError = '';
   let imageBase64 = null;
   let mimeType = null;
-
   if (isImage) {
     try {
       const buffer = await downloadMediaMessage(envelope, 'buffer', {});
-      if (buffer) {
-        imageBase64 = buffer.toString('base64');
-        mimeType = envelope.message?.imageMessage?.mimetype || 'image/jpeg';
-      }
-    } catch (err) {
-      console.warn('[Media download failed]', err);
-    }
+      if (buffer) { imageBase64 = buffer.toString('base64'); mimeType = envelope.message?.imageMessage?.mimetype || 'image/jpeg'; }
+    } catch (error) { console.warn('[Media download failed]', error?.message || error); }
   }
-
-  const allowed = isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers });
-  console.log('[WhatsApp Inbound] Accepted message', envelope.key?.id, 'from:', jid, 'Text:', text.slice(0, 60));
-  if (!allowed) return;
-
+  console.log('[WhatsApp Inbound] Accepted owner message', envelope.key?.id);
   await sock.sendPresenceUpdate('composing', jid).catch(() => {});
-
-  let finalReply = null;
-
-  // 1. First attempt: Ask backend MENTRA engine
+  const payload = {
+    jid, messageId: envelope.key?.id || `wa_${Date.now()}`, text, pushName: envelope.pushName || '',
+    media: imageBase64 ? { base64: imageBase64, mimeType: mimeType || 'image/jpeg', caption: rawText } : null
+  };
+  const backendResult = await requestMentraBackend(payload);
+  if (backendResult?.duplicate && backendResult?.delivered) {
+    console.log('[WhatsApp Inbound] Duplicate already delivered; skipping resend');
+    await sock.sendPresenceUpdate('paused', jid).catch(() => {});
+    return;
+  }
+  let finalReply = backendResult?.reply ? String(backendResult.reply) : null;
+  if (!finalReply) {
+    console.log('[Autonomous AI Engine] Backend unavailable; using direct fallback');
+    finalReply = await generateAutonomousAIReply(text, envelope.pushName || '', imageBase64 ? { base64: imageBase64, mimeType } : null);
+  }
+  if (!finalReply) finalReply = 'MENTRA is connected, but the AI service is temporarily unavailable. Please send the message again.';
+  await sock.sendPresenceUpdate('paused', jid).catch(() => {});
   try {
-    console.log('[WhatsApp Inbound] Requesting MENTRA backend reply');
-    const result = await postInternal(
-      '/api/worker/whatsapp/inbound',
-      {
-        jid,
-        messageId: envelope.key?.id || `wa_${Date.now()}`,
-        text,
-        pushName: envelope.pushName || '',
-        media: imageBase64 ? {
-          base64: imageBase64,
-          mimeType: mimeType || 'image/jpeg',
-          caption: rawText
-        } : null
-      }
-    );
-
-    if (result?.reply) {
-      finalReply = result.reply;
+    const outboundText = `${REPLY_MARK}\n${String(finalReply)}`.slice(0, 12000);
+    const sent = await sendMessageWithRetry(sock, jid, outboundText);
+    rememberBotMessage(sent?.key?.id);
+    lastOutboundAt = new Date().toISOString();
+    if (backendResult?.reply && envelope.key?.id) {
+      postInternal('/api/worker/whatsapp/inbound', { action: 'ack', messageId: envelope.key.id }, 10_000).catch(error => console.warn('[Delivery ack]', error?.message || error));
     }
   } catch (error) {
-    console.warn('[Backend Inbound]', error?.message || error);
-  }
-
-  // 2. Resilient Fallback: Autonomous Gemini 3.5 Flash AI Engine
-  if (!finalReply) {
-    console.log('[Autonomous AI Engine] Generating direct Gemini 3.5 Flash response for:', text.slice(0, 50));
-    finalReply = await generateAutonomousAIReply(
-      text,
-      envelope.pushName || '',
-      imageBase64 ? { base64: imageBase64, mimeType } : null
-    );
-  }
-
-  await sock.sendPresenceUpdate('paused', jid).catch(() => {});
-
-  if (finalReply) {
-    console.log('[WhatsApp Outbound] Sending Gemini reply to WhatsApp');
-    const sent = await sock.sendMessage(jid, {
-      text: `${REPLY_MARK}\n${String(finalReply)}`.slice(0, 12000)
-    });
-    rememberBotMessage(sent?.key?.id);
-    recordConversationToSupabase(text, finalReply).catch(() => {});
-  } else {
-    console.error(`[WhatsApp Outbound] Failed to produce reply for ${jid}`);
-    const sent = await sock.sendMessage(jid, {
-      text: `${REPLY_MARK}\n*MENTRA AI:* Aapka message receive hua hai. Kripya apna question dobara type karein.`
-    }).catch(() => null);
-    rememberBotMessage(sent?.key?.id);
+    lastMessageError = error instanceof Error ? error.message : String(error);
+    receivedMessages.release(jid, envelope.key?.id);
+    console.error('[WhatsApp Outbound]', error);
+    throw error;
   }
 }
 
@@ -533,237 +442,116 @@ async function getEffectiveAuthState() {
   return useMultiFileAuthState(authDir);
 }
 
+function messageTimestampMs(value) {
+  if (!value) return 0;
+  const seconds = typeof value === 'number' ? value : Number(value?.low ?? value?.toString?.() ?? 0);
+  return Number.isFinite(seconds) ? seconds * 1000 : 0;
+}
+
+function scheduleReconnect(delayMs) {
+  if (shuttingDown || reconnectTimer || activeSocket || connectingWhatsApp) return;
+  const delay = Math.max(250, Number(delayMs || 0));
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (shuttingDown || activeSocket || connectingWhatsApp) return;
+    connectWhatsApp().catch(error => console.error('[WhatsApp reconnect]', error));
+  }, delay);
+  reconnectTimer.unref?.();
+}
+
 async function connectWhatsApp() {
-  if (activeSocket) {
-    try {
-      activeSocket.ev.removeAllListeners('connection.update');
-      activeSocket.ev.removeAllListeners('creds.update');
-      activeSocket.ev.removeAllListeners('messages.upsert');
-      activeSocket.ev.removeAllListeners('messages.update');
-      activeSocket.ev.removeAllListeners('messaging-history.set');
-      activeSocket.end(new Error('Reconnecting'));
-    } catch {}
-    activeSocket = null;
-  }
-
-  const { state, saveCreds } = await getEffectiveAuthState();
-
-  const sock = makeWASocket({
-    auth: state,
-    emitOwnEvents: true,
-    markOnlineOnConnect: true,
-    syncFullHistory: false
-  });
-
-  activeSocket = sock;
-  let connectionOpenedAtMs = Date.now();
-  sock.ev.on('creds.update', saveCreds);
-
-  sock.ev.on('connection.update', async update => {
-    try {
-      if (update.qr) {
-        latestRawQr = update.qr;
-        console.log('\n======================================================');
-        console.log('📱 SCAN THIS WHATSAPP QR CODE WITH YOUR PHONE CAMERA:');
-        console.log('🌐 LIVE DASHBOARD: https://mentra.inkthreadhub.in/connections/whatsapp');
-        console.log('======================================================\n');
-        qrcode.generate(update.qr, { small: true });
-        const qrText = await new Promise(resolve => {
-          qrcode.generate(update.qr, { small: true }, code => resolve(code));
-        }).catch(() => update.qr);
-        console.log('\n======================================================\n');
-        await sendWhatsAppEvent('QR_READY', { qr: update.qr, rawQr: update.qr, asciiQr: qrText }).catch(() => {});
-      }
-
-      if (update.connection === 'open') {
-        connectionOpenedAtMs = Date.now();
-        latestRawQr = null;
-        const connectedNumber = String(sock.user?.id || '')
-          .split(':')[0]
-          .split('@')[0];
-
-        await saveCreds();
-
-        if (!userId) {
-          try {
-            const pending = await postInternal('/api/worker/whatsapp/pending', { connectedNumber });
-            if (pending?.userId) {
-              userId = pending.userId;
-              console.log(`[MENTRA Brain Worker] ✅ Bound session to user: ${userId}`);
-            }
-          } catch (e) {
-            console.warn('[Session binding]', e?.message || e);
+  if (shuttingDown || connectingWhatsApp) return;
+  connectingWhatsApp = true;
+  try {
+    if (activeSocket) {
+      try {
+        activeSocket.ev.removeAllListeners('connection.update'); activeSocket.ev.removeAllListeners('creds.update');
+        activeSocket.ev.removeAllListeners('messages.upsert'); activeSocket.ev.removeAllListeners('messages.update');
+        activeSocket.ev.removeAllListeners('messaging-history.set'); activeSocket.end(new Error('Reconnecting'));
+      } catch {}
+      activeSocket = null;
+    }
+    const { state, saveCreds } = await getEffectiveAuthState();
+    const sock = makeWASocket({ auth: state, emitOwnEvents: true, markOnlineOnConnect: true, syncFullHistory: false });
+    activeSocket = sock;
+    let connectionOpenedAtMs = Date.now();
+    sock.ev.on('creds.update', () => { saveCreds().catch(error => console.warn('[WhatsApp creds]', error?.message || error)); });
+    sock.ev.on('connection.update', async update => {
+      try {
+        if (update.qr) { console.log('[WhatsApp QR] Fresh QR generated for authenticated dashboard'); await sendWhatsAppEvent('QR_READY', { qr: update.qr }).catch(() => {}); }
+        if (update.connection === 'open') {
+          connectionOpenedAtMs = Date.now(); reconnectAttempt = 0; explicitStopRequested = false;
+          const connectedNumber = String(sock.user?.id || '').split(':')[0].split('@')[0];
+          await saveCreds();
+          if (!userId) {
+            try { const pending = await postInternal('/api/worker/whatsapp/pending', { connectedNumber }, 15_000); if (pending?.userId) userId = pending.userId; }
+            catch (error) { console.warn('[Session binding]', error?.message || error); }
           }
+          await sendWhatsAppEvent('CONNECTED', { connectedNumber }).catch(() => {});
+          await sendHeartbeat('ONLINE', { whatsappConnected: true }).catch(() => {});
+          console.log('[MENTRA Brain Worker] WhatsApp CONNECTED; owner self-chat only');
         }
-
-        await sendWhatsAppEvent('CONNECTED', { connectedNumber }).catch(() => {});
-
-        console.log(
-          '\n✅ [MENTRA Brain Worker] WhatsApp CONNECTED successfully to:',
-          connectedNumber || 'linked device'
-        );
-        console.log(
-          '[MENTRA Brain Worker] Bot replies to: self chat ("Message yourself") and direct messages'
-        );
-      }
-
-      if (update.connection === 'close') {
-        const statusCode =
-          update.lastDisconnect?.error?.output?.statusCode;
-        const loggedOut = statusCode === DisconnectReason.loggedOut;
-
-        await sendWhatsAppEvent(
-          loggedOut ? 'DISCONNECTED' : 'ERROR',
-          {
-            error:
-              update.lastDisconnect?.error?.message ||
-              `Socket closed (${statusCode || 'unknown'})`
+        if (update.connection === 'close') {
+          const statusCode = update.lastDisconnect?.error?.output?.statusCode;
+          const loggedOut = statusCode === DisconnectReason.loggedOut;
+          const stopRequested = explicitStopRequested;
+          explicitStopRequested = false;
+          if (activeSocket === sock) activeSocket = null;
+          if (shuttingDown) return;
+          if (loggedOut) {
+            const authDir = process.env.WHATSAPP_AUTH_DIR || './data/whatsapp-auth';
+            try { if (fs.existsSync(authDir)) fs.rmSync(authDir, { recursive: true, force: true }); } catch {}
+            await clearRemoteAuth().catch(() => {});
+            if (stopRequested) { await sendWhatsAppEvent('DISCONNECTED').catch(() => {}); await sendHeartbeat('ONLINE', { whatsappConnected: false }).catch(() => {}); return; }
+            await sendWhatsAppEvent('WAITING_QR', { error: update.lastDisconnect?.error?.message || 'WhatsApp session requires re-linking' }).catch(() => {});
+            await sendHeartbeat('ONLINE', { whatsappConnected: false }).catch(() => {});
+            scheduleReconnect(2_000); return;
           }
-        ).catch(() => {});
-
-        activeSocket = null;
-
-        if (loggedOut) {
-          activeSocket = null;
-          latestRawQr = null;
-          const authDir = process.env.WHATSAPP_AUTH_DIR || './data/whatsapp-auth';
-          try {
-            if (fs.existsSync(authDir)) {
-              fs.rmSync(authDir, { recursive: true, force: true });
-            }
-          } catch {}
-          await clearRemoteAuth().catch(() => {});
-          console.log('[MENTRA Brain Worker] WhatsApp logged out. Generating fresh QR code in 2s...');
-          setTimeout(() => {
-            connectWhatsApp().catch(error =>
-              console.error('[WhatsApp reconnect]', error)
-            );
-          }, 2000);
-          return;
+          await sendWhatsAppEvent('ERROR', { error: update.lastDisconnect?.error?.message || `Socket closed (${statusCode || 'unknown'})` }).catch(() => {});
+          await sendHeartbeat('ONLINE', { whatsappConnected: false }).catch(() => {});
+          reconnectAttempt += 1;
+          scheduleReconnect(Math.min(30_000, 2_000 * (2 ** Math.min(reconnectAttempt, 4))));
         }
-
-        if (!reconnectTimer) {
-          reconnectTimer = setTimeout(() => {
-            reconnectTimer = null;
-            connectWhatsApp().catch(error =>
-              console.error('[WhatsApp reconnect]', error)
-            );
-          }, 5000);
-        }
+      } catch (error) { console.error('[WhatsApp connection event]', error); }
+    });
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (type !== 'notify' && type !== 'append') return;
+      for (const message of messages || []) {
+        try {
+          const msgTimestamp = messageTimestampMs(message.messageTimestamp);
+          if (msgTimestamp && Date.now() - msgTimestamp > 120_000) continue;
+          messageQueue = messageQueue.then(() => handleIncoming(sock, message)).catch(error => console.error('[WhatsApp inbound]', error));
+          await messageQueue;
+        } catch (error) { console.error('[WhatsApp inbound]', error); }
       }
-    } catch (error) {
-      console.error('[WhatsApp connection event]', error);
-    }
-  });
-
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    console.log('[WhatsApp message event]', JSON.stringify({ type, count: messages?.length || 0 }));
-    if (type !== 'notify' && type !== 'append') return;
-
-    for (const message of messages || []) {
-      try {
-        const msgTimestamp = Number(message.messageTimestamp) * 1000;
-        if (msgTimestamp && (Date.now() - msgTimestamp) > 120_000) {
-          continue;
-        }
-        messageQueue = messageQueue
-          .then(() => handleIncoming(sock, message))
-          .catch(error => console.error('[WhatsApp inbound]', error));
-        await messageQueue;
-      } catch (error) {
-        console.error('[WhatsApp inbound]', error);
+    });
+    sock.ev.on('messaging-history.set', async event => {
+      const historyMessages = Array.isArray(event?.messages) ? event.messages : [];
+      for (const message of historyMessages) {
+        try {
+          const msgTimestamp = messageTimestampMs(message?.messageTimestamp);
+          if (!msgTimestamp || msgTimestamp < connectionOpenedAtMs - 2_000) continue;
+          if (Date.now() - msgTimestamp > 120_000) continue;
+          if (!message?.key?.remoteJid || !extractText(message.message).trim()) continue;
+          if (!isAllowedChat(sock, message, { allowSelfChat, allowedNumbers })) continue;
+          messageQueue = messageQueue.then(() => handleIncoming(sock, message)).catch(error => console.error('[WhatsApp inbound history]', error));
+          await messageQueue;
+        } catch (error) { console.error('[WhatsApp inbound history]', error); }
       }
-    }
-  });
-
-  // Baileys v7 can surface self-chat/business payloads as message updates
-  // (for example editedMessage/protocol wrappers) instead of a fresh upsert.
-  // WhatsApp Business / self-chat messages sent from the primary phone can
-  // arrive through history sync instead of messages.upsert. Only process very
-  // recent messages created after this socket opened so old chat history never
-  // triggers replies.
-  sock.ev.on('messaging-history.set', async event => {
-    const historyMessages = Array.isArray(event?.messages) ? event.messages : [];
-    if (historyMessages.length === 0) return;
-
-    let eligible = 0;
-    for (const message of historyMessages) {
-      try {
-        const rawTs = message?.messageTimestamp;
-        const seconds =
-          typeof rawTs === 'number'
-            ? rawTs
-            : Number(rawTs?.low ?? rawTs?.toString?.() ?? 0);
-        const msgTimestamp = seconds * 1000;
-
-        if (!msgTimestamp) continue;
-        if (msgTimestamp < connectionOpenedAtMs - 5000) continue;
-        if ((Date.now() - msgTimestamp) > 120_000) continue;
-        if (!message?.key?.remoteJid) continue;
-        if (!extractText(message.message).trim()) continue;
-        if (!isAllowedChat(sock, message, { allowSelfChat, allowedNumbers })) continue;
-
-        eligible += 1;
-        console.log(
-          '[WhatsApp history message]',
-          JSON.stringify({
-            id: message.key?.id || null,
-            remoteJid: message.key?.remoteJid || null,
-            fromMe: Boolean(message.key?.fromMe),
-            syncType: event?.syncType ?? null
-          })
-        );
-
-        messageQueue = messageQueue
-          .then(() => handleIncoming(sock, message))
-          .catch(error => console.error('[WhatsApp inbound history]', error));
-        await messageQueue;
-      } catch (error) {
-        console.error('[WhatsApp inbound history]', error);
+    });
+    sock.ev.on('messages.update', async updates => {
+      for (const entry of updates || []) {
+        try {
+          const update = entry?.update || {};
+          if (!update.message || !entry?.key?.remoteJid) continue;
+          const synthetic = { key: entry.key, message: update.message, messageTimestamp: update.messageTimestamp || Math.floor(Date.now() / 1000), pushName: '' };
+          if (!extractText(synthetic.message).trim()) continue;
+          messageQueue = messageQueue.then(() => handleIncoming(sock, synthetic)).catch(error => console.error('[WhatsApp inbound update]', error));
+          await messageQueue;
+        } catch (error) { console.error('[WhatsApp inbound update]', error); }
       }
-    }
-
-    if (eligible > 0) {
-      console.log('[WhatsApp history fallback] processed recent messages:', eligible);
-    }
-  });
-
-  sock.ev.on('messages.update', async updates => {
-    for (const entry of updates || []) {
-      try {
-        const update = entry?.update || {};
-        if (!update.message || !entry?.key?.remoteJid) continue;
-
-        const synthetic = {
-          key: entry.key,
-          message: update.message,
-          messageTimestamp:
-            update.messageTimestamp ||
-            Math.floor(Date.now() / 1000),
-          pushName: ''
-        };
-
-        if (!extractText(synthetic.message).trim()) continue;
-
-        console.log(
-          '[WhatsApp message update]',
-          JSON.stringify({
-            id: entry.key?.id || null,
-            remoteJid: entry.key?.remoteJid || null,
-            fromMe: Boolean(entry.key?.fromMe),
-            contentTypes: Object.keys(update.message || {})
-          })
-        );
-
-        messageQueue = messageQueue
-          .then(() => handleIncoming(sock, synthetic))
-          .catch(error => console.error('[WhatsApp inbound update]', error));
-        await messageQueue;
-      } catch (error) {
-        console.error('[WhatsApp inbound update]', error);
-      }
-    }
-  });
+    });
+  } finally { connectingWhatsApp = false; }
 }
 
 async function triggerScheduler() {
@@ -790,182 +578,19 @@ async function triggerScheduler() {
   }
 }
 
-let latestRawQr = null;
-
 function startHealthServer() {
   const server = createServer((req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     if (req.url.startsWith('/pair')) {
-      const urlObj = new URL(req.url, 'http://localhost:10000');
-      const phone = (urlObj.searchParams.get('phone') || '').replace(/[^0-9]/g, '');
-      if (!phone) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'PHONE_REQUIRED' }));
-        return;
-      }
-
-      if (activeSocket) {
-        if (!activeSocket.authState?.creds?.registered) {
-          activeSocket.requestPairingCode(phone)
-            .then(code => {
-              console.log(`[MENTRA Brain Worker] 📱 8-Digit Pairing Code generated for ${phone}: ${code}`);
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ success: true, pairingCode: code, phone }));
-            })
-            .catch(err => {
-              res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: String(err?.message || err) }));
-            });
-          return;
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: true,
-          alreadyConnected: Boolean(activeSocket?.user),
-          connectedNumber: String(activeSocket?.user?.id || '').split(':')[0].split('@')[0]
-        }));
-        return;
-      }
-
-      res.writeHead(503, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'SOCKET_NOT_INITIALIZED' }));
+      res.writeHead(410, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'PAIRING_CODE_DISABLED', message: 'MENTRA supports authenticated QR pairing only.' }));
       return;
     }
-
     if (req.url === '/qr') {
-      if (!latestRawQr) {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(`<!DOCTYPE html>
-<html>
-<head>
-  <title>MENTRA WhatsApp QR</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="refresh" content="2">
-  <style>
-    body { background: #07090e; color: #fff; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .card { background: #0f172a; border: 1px solid #1e293b; padding: 32px; border-radius: 24px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); max-width: 420px; }
-    .spinner { border: 3px solid rgba(16,185,129,0.2); border-top: 3px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="spinner"></div>
-    <h2 style="margin:0 0 8px; font-size:18px;">Connecting to WhatsApp…</h2>
-    <p style="color:#94a3b8; font-size:13px; margin:0;">Generating fresh QR code session. Page refreshes every 2s.</p>
-  </div>
-</body>
-</html>`);
-        return;
-      }
-
-      QRCode.toDataURL(latestRawQr, {
-        width: 320,
-        margin: 2,
-        color: { dark: '#000000', light: '#ffffff' }
-      })
-        .then(dataUrl => {
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(`<!DOCTYPE html>
-<html>
-<head>
-  <title>MENTRA WhatsApp QR Scanner</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="refresh" content="20">
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      background: #07090e;
-      color: #f8fafc;
-      font-family: system-ui, -apple-system, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 20px;
-    }
-    .card {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 28px;
-      padding: 32px 28px;
-      text-align: center;
-      box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(16,185,129,0.15);
-      max-width: 440px;
-      width: 100%;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(16,185,129,0.1);
-      border: 1px solid rgba(16,185,129,0.3);
-      color: #34d399;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 14px;
-    }
-    .qr-box {
-      background: #ffffff;
-      padding: 16px;
-      border-radius: 20px;
-      display: inline-block;
-      margin: 16px 0;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-    }
-    .qr-box img {
-      display: block;
-      width: 280px;
-      height: 280px;
-    }
-    .instructions {
-      background: #020617;
-      border: 1px solid #1e293b;
-      border-radius: 16px;
-      padding: 14px;
-      font-size: 13px;
-      color: #cbd5e1;
-      text-align: left;
-      line-height: 1.6;
-      margin-top: 14px;
-    }
-    .step { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
-    .num { background: #10b981; color: #000; font-weight: bold; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="badge">● LIVE QR SCANNER</div>
-    <h1 style="margin:0; font-size:22px; font-weight:700;">Scan with WhatsApp</h1>
-    <p style="color:#94a3b8; font-size:13px; margin:6px 0 0;">Connect your personal WhatsApp to MENTRA AI</p>
-    
-    <div class="qr-box">
-      <img src="${dataUrl}" alt="WhatsApp QR Code" />
-    </div>
-
-    <div class="instructions">
-      <div class="step"><span class="num">1</span> Open <b>WhatsApp</b> on your phone</div>
-      <div class="step"><span class="num">2</span> Tap <b>Settings / ⋮ Menu</b> ➔ <b>Linked Devices</b></div>
-      <div class="step"><span class="num">3</span> Tap <b>Link a Device</b> and point camera here</div>
-    </div>
-    
-    <p style="color:#64748b; font-size:11px; margin:14px 0 0;">Auto-refreshes every 20 seconds</p>
-  </div>
-</body>
-</html>`);
-        })
-        .catch(err => {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end(String(err));
-        });
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'AUTHENTICATED_DASHBOARD_REQUIRED', qrUrl: `${baseUrl}/connections/whatsapp` }));
       return;
     }
-
     if (req.url === '/health' || req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(
@@ -979,6 +604,10 @@ function startHealthServer() {
           whatsappConnected: Boolean(activeSocket?.user),
           selfChat: allowSelfChat,
           workerId,
+          whatsappMode: 'QR_SELF_ONLY',
+          lastInboundAt,
+          lastOutboundAt,
+          lastMessageError: lastMessageError || null,
           qrUrl: `${baseUrl}/connections/whatsapp`,
           now: new Date().toISOString()
         })
@@ -992,99 +621,73 @@ function startHealthServer() {
 
   server.listen(port, '0.0.0.0', () => {
     console.log(`[MENTRA Brain Worker] Health server listening on :${port}`);
-    console.log(`[MENTRA Brain Worker] 🌐 Visual QR Web Page: http://localhost:${port}/qr`);
+    console.log(`[MENTRA Brain Worker] Authenticated QR UI: ${baseUrl}/connections/whatsapp`);
   });
 
   return server;
 }
 
 async function startBackendLoop() {
-  if (activeSocket) return;
-
+  if (activeSocket || connectingWhatsApp || shuttingDown) return;
   try {
-    await sendHeartbeat('STARTING', { node: process.version });
-    await sendWhatsAppEvent('WAITING_QR');
-    backendReady = true;
-    backendError = '';
-  } catch (error) {
-    backendReady = false;
-    backendError = error instanceof Error ? error.message : String(error);
-    console.warn('[Backend Notice]', backendError);
-  }
-
-  // Always Connect WhatsApp socket
-  try {
-    await connectWhatsApp();
-  } catch (err) {
-    console.error('[MENTRA Brain Worker] connectWhatsApp error:', err);
-  }
+    await sendHeartbeat('STARTING', { node: process.version, whatsappConnected: false });
+    backendReady = true; backendError = '';
+  } catch (error) { backendReady = false; backendError = error instanceof Error ? error.message : String(error); console.warn('[Backend Notice]', backendError); }
+  try { await connectWhatsApp(); }
+  catch (error) { backendReady = false; backendError = error instanceof Error ? error.message : String(error); console.error('[MENTRA Brain Worker] connectWhatsApp error:', error); scheduleReconnect(5_000); }
 }
 
 async function main() {
   startHealthServer();
-
-  try {
-    assertConfig();
-  } catch (error) {
-    configError = error instanceof Error ? error.message : String(error);
-    console.error('[MENTRA Brain Worker] Configuration required:', configError);
-    return;
-  }
-
-  // Announce worker presence immediately
-  sendHeartbeat('ONLINE', { workerId }).catch(() => {});
-
+  try { assertConfig(); }
+  catch (error) { configError = error instanceof Error ? error.message : String(error); console.error('[MENTRA Brain Worker] Configuration required:', configError); return; }
+  sendHeartbeat('ONLINE', { workerId, whatsappConnected: false }).catch(() => {});
   await startBackendLoop();
-
   setInterval(() => {
-    if (!userId) return;
-    if (!activeSocket) {
-      startBackendLoop().catch(error =>
-        console.warn('[Backend retry]', error)
-      );
-      return;
-    }
-
-    sendHeartbeat('ONLINE', {
-      whatsappConnected: Boolean(activeSocket?.user)
-    }).then(() => { backendReady = true; backendError = ''; }).catch(error => {
-      backendReady = false;
-      backendError = error instanceof Error ? error.message : String(error);
-      console.warn('[Heartbeat]', error);
-    });
+    if (!userId || shuttingDown) return;
+    if (!activeSocket && !connectingWhatsApp) { startBackendLoop().catch(error => console.warn('[Backend retry]', error)); return; }
+    sendHeartbeat('ONLINE', { whatsappConnected: Boolean(activeSocket?.user), lastInboundAt, lastOutboundAt, lastMessageError: lastMessageError || null })
+      .then(() => { backendReady = true; backendError = ''; })
+      .catch(error => { backendReady = false; backendError = error instanceof Error ? error.message : String(error); console.warn('[Heartbeat]', error); });
   }, heartbeatInterval).unref();
-
-  // The authenticated app can request disconnect or a fresh pairing QR.
   let checkingControl = false;
   setInterval(async () => {
-    if (!userId || !activeSocket?.user || checkingControl) return;
+    if (!userId || checkingControl || shuttingDown) return;
     checkingControl = true;
     try {
-      const desired = await postInternal('/api/worker/whatsapp/pending', {});
-      if (desired.status === 'DISCONNECTED' || desired.status === 'WAITING_QR') {
-        await clearRemoteAuth();
-        await activeSocket.logout();
+      const desired = await postInternal('/api/worker/whatsapp/pending', {}, 10_000);
+      if (desired.status === 'DISCONNECTED') {
+        explicitStopRequested = true;
+        await clearRemoteAuth().catch(() => {});
+        if (activeSocket?.user) await activeSocket.logout();
+        else if (activeSocket) { try { activeSocket.end(new Error('Disconnected by control plane')); } catch {} activeSocket = null; }
+        return;
+      }
+      if (desired.status === 'WAITING_QR') {
+        if (activeSocket?.user) { explicitStopRequested = false; await clearRemoteAuth().catch(() => {}); await activeSocket.logout(); }
+        else if (!activeSocket && !connectingWhatsApp) scheduleReconnect(250);
       }
     } catch (error) { console.warn('[WhatsApp control]', error?.message || error); }
     finally { checkingControl = false; }
   }, 10_000).unref();
-
-  setInterval(() => {
-    triggerScheduler().catch(error => console.warn('[Scheduler]', error));
-  }, schedulerInterval).unref();
+  setInterval(() => { triggerScheduler().catch(error => console.warn('[Scheduler]', error)); }, schedulerInterval).unref();
 }
 
-process.on('SIGTERM', async () => {
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[MENTRA Brain Worker] ${signal} received; preserving WhatsApp session`);
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   try {
-    await sendHeartbeat('STOPPING');
+    await sendHeartbeat('STOPPING', { whatsappConnected: Boolean(activeSocket?.user) });
+    activeSocket?.ev?.removeAllListeners?.('connection.update');
     activeSocket?.end?.(new Error('Worker shutting down'));
-  } finally {
-    process.exit(0);
-  }
-});
+  } catch (error) { console.warn('[Shutdown]', error?.message || error); }
+  finally { process.exit(0); }
+}
 
-main().catch(error => {
-  backendReady = false;
-  backendError = error instanceof Error ? error.message : String(error);
-  console.error('[MENTRA Brain Worker] Startup error:', error);
-});
+process.once('SIGTERM', () => { shutdown('SIGTERM').catch(() => process.exit(0)); });
+process.once('SIGINT', () => { shutdown('SIGINT').catch(() => process.exit(0)); });
+process.on('unhandledRejection', error => { console.error('[Unhandled rejection]', error); });
+
+main().catch(error => { backendReady = false; backendError = error instanceof Error ? error.message : String(error); console.error('[MENTRA Brain Worker] Startup error:', error); });
