@@ -23,12 +23,14 @@ export async function GET() {
   }
   const svg = await QRCode.toString(data.qr_code, {
     type: 'svg',
-    margin: 2,
-    width: 280,
+    errorCorrectionLevel: 'L',
+    margin: 4,
+    width: 360,
     color: { dark: '#000000', light: '#ffffff' }
   });
   return new NextResponse(svg, { headers: {
-    'Content-Type': 'image/svg+xml', 'Cache-Control': 'private, no-store',
+    'Content-Type': 'image/svg+xml',
+    'Cache-Control': 'private, no-store, max-age=0',
     'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
     'X-Content-Type-Options': 'nosniff'
   } });
