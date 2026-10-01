@@ -347,7 +347,7 @@ async function connectWhatsApp() {
         latestRawQr = update.qr;
         console.log('\n======================================================');
         console.log('📱 SCAN THIS WHATSAPP QR CODE WITH YOUR PHONE CAMERA:');
-        console.log('🌐 OR OPEN IN BROWSER: http://localhost:10000/qr');
+        console.log('🌐 LIVE DASHBOARD: https://mentra.inkthreadhub.in/connections/whatsapp');
         console.log('======================================================\n');
         qrcode.generate(update.qr, { small: true });
         const qrText = await new Promise(resolve => {
