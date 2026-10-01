@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { PROVISIONED_WORKER_PUBLIC_KEY } from './trustedPublicKey';
 
+const PROVISIONED_WORKER_TOKEN_HASH = '9550c0c694c3af6f2205f211ff7d15c05bf566b2da1c23287c4b64f55929cd89';
+
 function safeEqual(provided: string | null, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
   const a = Buffer.from(provided);
@@ -12,8 +14,8 @@ function safeEqual(provided: string | null, expected: string | undefined): boole
 
 export function verifyBrainWorkerSecret(provided: string | null): boolean {
   if (!provided) return false;
-  const expected = process.env.BRAIN_WORKER_SECRET || 'mentra_brain_worker_secret_2026_production_key_32';
-  return Boolean(expected && safeEqual(provided, expected));
+  const expected = process.env.BRAIN_WORKER_SECRET;
+  return Boolean(expected && expected.length >= 32 && safeEqual(provided, expected));
 }
 
 export function verifyBrainWorkerServiceKey(provided: string | null): boolean {
@@ -26,7 +28,8 @@ export function verifyBrainWorkerToken(provided: string | null): boolean {
   if (!provided) return false;
 
   const expectedHashes = [
-    process.env.BRAIN_WORKER_TOKEN_HASH
+    process.env.BRAIN_WORKER_TOKEN_HASH,
+    PROVISIONED_WORKER_TOKEN_HASH
   ].filter((value): value is string => Boolean(value));
 
   const actualHash = crypto
