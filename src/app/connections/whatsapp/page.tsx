@@ -50,6 +50,7 @@ export default function WhatsAppConnectionPage() {
   const [qrSecondsLeft, setQrSecondsLeft] = useState(0);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const lastQrRequestAt = useRef(0);
 
   const fetchQr = useCallback(async () => {
@@ -78,6 +79,8 @@ export default function WhatsAppConnectionPage() {
       setRequestError(null);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : 'Unable to load WhatsApp QR');
+    } finally {
+      setInitialLoaded(true);
     }
   }, []);
 
@@ -136,23 +139,6 @@ export default function WhatsAppConnectionPage() {
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [session.qrExpiresAt]);
-
-  useEffect(() => {
-    if (session.status === 'CONNECTED') return;
-
-    const expired = session.qrExpiresAt
-      ? new Date(session.qrExpiresAt).getTime() <= Date.now()
-      : false;
-
-    const needsQr =
-      session.status === 'DISCONNECTED' ||
-      session.status === 'ERROR' ||
-      (session.status === 'QR_READY' && (!session.qr || expired));
-
-    if (needsQr) {
-      requestFreshQr(false);
-    }
-  }, [session.status, session.qr, session.qrExpiresAt, requestFreshQr]);
 
   const handleDisconnect = async () => {
     if (!confirm('Disconnect WhatsApp from MENTRA?')) return;
@@ -283,7 +269,12 @@ export default function WhatsAppConnectionPage() {
             </div>
 
             <div className="md:col-span-2 p-6 rounded-2xl bg-slate-900/60 border border-slate-800 min-h-[420px] flex items-center justify-center">
-              {session.status === 'QR_READY' && session.qr ? (
+              {!initialLoaded ? (
+                <div className="text-center">
+                  <RefreshCw className="w-10 h-10 mx-auto text-emerald-400 animate-spin" />
+                  <h2 className="text-lg font-semibold text-white mt-5">Loading QR status…</h2>
+                </div>
+              ) : session.status === 'QR_READY' && session.qr ? (
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-2 text-sm font-semibold text-white mb-4">
                     <ScanLine className="w-4 h-4 text-emerald-400" />
@@ -322,10 +313,10 @@ export default function WhatsAppConnectionPage() {
                 <div className="text-center">
                   <RefreshCw className="w-10 h-10 mx-auto text-emerald-400 animate-spin" />
                   <h2 className="text-lg font-semibold text-white mt-5">
-                    Generating fresh QR…
+                    Waiting for fresh QR…
                   </h2>
                   <p className="text-sm text-slate-400 mt-2">
-                    QR appears here automatically. No 6-digit or 8-digit code is needed.
+                    The worker rotates WhatsApp QR automatically. If it does not appear, tap Generate Fresh QR once.
                   </p>
                 </div>
               )}
