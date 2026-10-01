@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import fs from 'node:fs';
 import {
   createPrivateKey,
   sign as signPayload
@@ -443,7 +444,21 @@ async function connectWhatsApp() {
         activeSocket = null;
 
         if (loggedOut) {
+          activeSocket = null;
+          latestRawQr = null;
+          const authDir = process.env.WHATSAPP_AUTH_DIR || './data/whatsapp-auth';
+          try {
+            if (fs.existsSync(authDir)) {
+              fs.rmSync(authDir, { recursive: true, force: true });
+            }
+          } catch {}
           await clearRemoteAuth().catch(() => {});
+          console.log('[MENTRA Brain Worker] WhatsApp logged out. Generating fresh QR code in 2s...');
+          setTimeout(() => {
+            connectWhatsApp().catch(error =>
+              console.error('[WhatsApp reconnect]', error)
+            );
+          }, 2000);
           return;
         }
 
@@ -506,6 +521,30 @@ let latestRawQr = null;
 
 function startHealthServer() {
   const server = createServer((req, res) => {
+    if (req.url === '/logout' || req.url === '/disconnect') {
+      try {
+        if (activeSocket) {
+          activeSocket.end(new Error('User requested logout'));
+          activeSocket = null;
+        }
+        latestRawQr = null;
+        const authDir = process.env.WHATSAPP_AUTH_DIR || './data/whatsapp-auth';
+        try {
+          if (fs.existsSync(authDir)) {
+            fs.rmSync(authDir, { recursive: true, force: true });
+          }
+        } catch {}
+        sendWhatsAppEvent('DISCONNECTED', { note: 'user_changed_number' }).catch(() => {});
+        console.log('[MENTRA Brain Worker] 🔄 Number reset requested. Generating fresh QR code...');
+        setTimeout(() => connectWhatsApp().catch(console.error), 1200);
+      } catch (err) {
+        console.error('[Logout handler error]', err);
+      }
+      res.writeHead(302, { Location: '/qr' });
+      res.end();
+      return;
+    }
+
     if (req.url === '/qr') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       if (activeSocket?.user) {
@@ -516,8 +555,13 @@ function startHealthServer() {
           <div style="background:#1e293b;padding:36px;border-radius:24px;border:1px solid #334155;max-width:440px;">
             <div style="font-size:48px;margin-bottom:12px;">✅</div>
             <h2 style="color:#22c55e;margin:0 0 10px 0;">WhatsApp Connected!</h2>
-            <p style="color:#94a3b8;">Linked Number: <b style="color:#f8fafc;">${String(activeSocket.user.id || '').split(':')[0]}</b></p>
+            <p style="color:#94a3b8;">Linked Number: <b style="color:#f8fafc;">+${String(activeSocket.user.id || '').split(':')[0]}</b></p>
             <p style="color:#64748b;font-size:13px;">MENTRA Autonomous Brain is live and listening for messages.</p>
+            <div style="margin-top:24px;border-top:1px solid #334155;padding-top:20px;">
+              <a href="/logout" onclick="return confirm('Kya aap dusra WhatsApp number link karna chahte hain? Isse purana session reset ho jayega aur naya QR code show hoga.');" style="display:inline-block;padding:10px 20px;border-radius:12px;background:#ef4444;color:#ffffff;text-decoration:none;font-weight:600;font-size:13px;">
+                🔄 Change WhatsApp Number (Logout)
+              </a>
+            </div>
           </div>
         </body></html>`);
         return;
