@@ -531,6 +531,7 @@ async function connectWhatsApp() {
       activeSocket.ev.removeAllListeners('connection.update');
       activeSocket.ev.removeAllListeners('creds.update');
       activeSocket.ev.removeAllListeners('messages.upsert');
+      activeSocket.ev.removeAllListeners('messages.update');
       activeSocket.end(new Error('Reconnecting'));
     } catch {}
     activeSocket = null;
@@ -540,8 +541,10 @@ async function connectWhatsApp() {
 
   const sock = makeWASocket({
     auth: state,
-    markOnlineOnConnect: false,
-    syncFullHistory: false
+    emitOwnEvents: true,
+    markOnlineOnConnect: true,
+    syncFullHistory: false,
+    shouldSyncHistoryMessage: () => false
   });
 
   activeSocket = sock;
@@ -653,10 +656,51 @@ async function connectWhatsApp() {
         if (msgTimestamp && (Date.now() - msgTimestamp) > 120_000) {
           continue;
         }
-        messageQueue = messageQueue.then(() => handleIncoming(sock, message)).catch(error => console.error('[WhatsApp inbound]', error));
+        messageQueue = messageQueue
+          .then(() => handleIncoming(sock, message))
+          .catch(error => console.error('[WhatsApp inbound]', error));
         await messageQueue;
       } catch (error) {
         console.error('[WhatsApp inbound]', error);
+      }
+    }
+  });
+
+  // Baileys v7 can surface self-chat/business payloads as message updates
+  // (for example editedMessage/protocol wrappers) instead of a fresh upsert.
+  sock.ev.on('messages.update', async updates => {
+    for (const entry of updates || []) {
+      try {
+        const update = entry?.update || {};
+        if (!update.message || !entry?.key?.remoteJid) continue;
+
+        const synthetic = {
+          key: entry.key,
+          message: update.message,
+          messageTimestamp:
+            update.messageTimestamp ||
+            Math.floor(Date.now() / 1000),
+          pushName: ''
+        };
+
+        if (!extractText(synthetic.message).trim()) continue;
+
+        console.log(
+          '[WhatsApp message update]',
+          JSON.stringify({
+            id: entry.key?.id || null,
+            remoteJid: entry.key?.remoteJid || null,
+            fromMe: Boolean(entry.key?.fromMe),
+            contentTypes: Object.keys(update.message || {})
+          })
+        );
+
+        messageQueue = messageQueue
+          .then(() => handleIncoming(sock, synthetic))
+          .catch(error => console.error('[WhatsApp inbound update]', error));
+        await messageQueue;
+      } catch (error) {
+        console.error('[WhatsApp inbound update]', error);
       }
     }
   });
