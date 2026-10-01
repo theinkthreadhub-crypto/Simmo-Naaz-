@@ -543,8 +543,7 @@ async function connectWhatsApp() {
     auth: state,
     emitOwnEvents: true,
     markOnlineOnConnect: true,
-    syncFullHistory: false,
-    shouldSyncHistoryMessage: () => false
+    syncFullHistory: false
   });
 
   activeSocket = sock;
