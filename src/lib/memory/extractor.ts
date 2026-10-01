@@ -29,11 +29,16 @@ function sourceHash(userText: string, assistantText: string): string {
 }
 
 function likelyDurable(userText: string): boolean {
-  const text = userText.toLowerCase();
-  return (
-    /\b(remember|yaad|prefer|preference|decide|decision|goal|target|always|never|from now on|ab se|rule|constraint|project)\b/i.test(text) ||
-    /\b(i like|i want|i need|mera goal|mujhe .* pasand|maine decide|hum decide|we decided)\b/i.test(text)
-  );
+  const text = userText.toLowerCase().trim();
+  if (!text || text.length < 8) return false;
+
+  const explicitMemoryIntent =
+    /\b(remember|yaad|yaad rakh|save this|save memory|prefer|preference|decide|decision|goal|target|always|never|from now on|ab se|rule|constraint|project)\b/i.test(text);
+
+  const durableSelfContext =
+    /\b(i like|i want|i need|i am|my |our |mera|meri|mere|hamara|hamari|mujhe .* pasand|maine decide|hum decide|we decided|brand|business|company|school|salary|income|budget)\b/i.test(text);
+
+  return explicitMemoryIntent || durableSelfContext;
 }
 
 function parseJsonArray(raw: string): unknown {
@@ -64,7 +69,9 @@ export async function extractDurableMemories(
   assistantText: string,
   conversationId?: string
 ): Promise<MemoryExtractionResult> {
-  if (process.env.AI_MEMORY_AUTO_EXTRACT !== 'true') {
+  // Memory is a core MENTRA capability. Keep it enabled by default and allow
+  // an explicit kill-switch only when an operator intentionally disables it.
+  if (process.env.AI_MEMORY_AUTO_EXTRACT === 'false') {
     return { extracted: 0, skipped: 0, status: 'SKIPPED' };
   }
 
