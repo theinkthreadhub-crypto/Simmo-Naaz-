@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import {
   verifyBrainWorkerSecret,
   verifyBrainWorkerSignature,
-  verifyBrainWorkerToken
+  verifyBrainWorkerToken,
+  verifyBrainWorkerServiceKey
 } from '@/lib/worker/auth';
 import { runAsTrustedServer } from '@/lib/supabase/trustedScope';
 
@@ -20,8 +21,11 @@ export async function POST(req: NextRequest) {
   const legacyWorker = verifyBrainWorkerSecret(
     req.headers.get('x-mentra-internal-secret')
   );
+  const serviceKeyWorker = verifyBrainWorkerServiceKey(
+    req.headers.get('x-mentra-service-key')
+  );
 
-  if (!signedWorker && !tokenWorker && !legacyWorker) {
+  if (!signedWorker && !tokenWorker && !legacyWorker && !serviceKeyWorker) {
     return NextResponse.json({ error: 'UNAUTHORIZED_WORKER' }, { status: 401 });
   }
 
