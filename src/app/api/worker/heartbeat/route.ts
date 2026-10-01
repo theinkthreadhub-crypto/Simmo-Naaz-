@@ -52,7 +52,16 @@ export async function POST(req: NextRequest) {
 
   try {
     await runAsTrustedServer('brain_worker_heartbeat', writeHeartbeat);
-    return NextResponse.json({ success: true, serverTime: new Date().toISOString() });
+    return NextResponse.json({ success: true, serverTime: new Date().toISOString(), ...(body.inspectConfiguration === true ? {
+      aiConfiguration: {
+        provider: process.env.AI_PROVIDER || 'auto',
+        cloudKeyConfigured: Boolean(process.env.GEMINI_API_KEY || process.env.AI_API_KEY || process.env.AI_PROVIDER_API_KEY),
+        gatewayConfigured: Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN),
+        localConfigured: Boolean(process.env.AI_LOCAL_BASE_URL),
+        fastModel: process.env.AI_MODEL_FAST || null,
+        smartModel: process.env.AI_MODEL_SMART || null
+      }
+    } : {}) });
   } catch (error: any) {
     console.warn('[Heartbeat write skipped]', error?.message || error);
     const credential = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
