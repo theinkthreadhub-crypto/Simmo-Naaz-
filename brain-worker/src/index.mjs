@@ -13,7 +13,7 @@ import makeWASocket, {
   downloadMediaMessage,
   useMultiFileAuthState
 } from '@whiskeysockets/baileys';
-import { REPLY_MARK, extractText, isAllowedChat, unwrapMessage, createMessageDeduplicator } from './messagePolicy.mjs';
+import { REPLY_MARK, extractText, isAllowedChat, shouldIgnoreTransportJid, unwrapMessage, createMessageDeduplicator } from './messagePolicy.mjs';
 
 const baseUrl = (process.env.MENTRA_BASE_URL || 'https://mentra.inkthreadhub.in').replace(/\/$/, '');
 let userId = process.env.MENTRA_USER_ID || '';
@@ -472,7 +472,16 @@ async function connectWhatsApp() {
       activeSocket = null;
     }
     const { state, saveCreds } = await getEffectiveAuthState();
-    const sock = makeWASocket({ auth: state, emitOwnEvents: true, markOnlineOnConnect: true, syncFullHistory: false });
+    const sock = makeWASocket({
+      auth: state,
+      emitOwnEvents: true,
+      markOnlineOnConnect: true,
+      syncFullHistory: false,
+      // Filter channels MENTRA can never consume before Baileys attempts
+      // decryption. This avoids noisy missing-session errors from Status,
+      // newsletters and groups while keeping owner self-chat untouched.
+      shouldIgnoreJid: shouldIgnoreTransportJid
+    });
     activeSocket = sock;
     let connectionOpenedAtMs = Date.now();
     sock.ev.on('creds.update', () => { saveCreds().catch(error => console.warn('[WhatsApp creds]', error?.message || error)); });

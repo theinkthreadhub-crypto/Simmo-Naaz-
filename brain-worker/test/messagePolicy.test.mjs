@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isAllowedChat, extractText, createMessageDeduplicator, REPLY_MARK } from '../src/messagePolicy.mjs';
+import { isAllowedChat, shouldIgnoreTransportJid, extractText, createMessageDeduplicator, REPLY_MARK } from '../src/messagePolicy.mjs';
 
 const sock = { user: { id: '911234567890:4@s.whatsapp.net', lid: '123456:2@lid' } };
 
@@ -52,4 +52,13 @@ test('Deduplicator can release failed sends for retry', () => {
   assert.equal(dedup.claim('self','a'), false);
   dedup.release('self','a');
   assert.equal(dedup.claim('self','a'), true);
+});
+
+
+test('Transport ignores status, newsletter and group JIDs before decryption', () => {
+  for (const jid of ['status@broadcast', '12345@newsletter', '911234567890@g.us']) {
+    assert.equal(shouldIgnoreTransportJid(jid), true);
+  }
+  assert.equal(shouldIgnoreTransportJid('911234567890@s.whatsapp.net'), false);
+  assert.equal(shouldIgnoreTransportJid('123456@lid'), false);
 });

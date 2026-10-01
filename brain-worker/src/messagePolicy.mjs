@@ -38,6 +38,16 @@ export function extractText(message) {
     '';
 }
 
+export function shouldIgnoreTransportJid(jid) {
+  const value = String(jid || '');
+  return (
+    !value ||
+    value === 'status@broadcast' ||
+    value.endsWith('@newsletter') ||
+    value.endsWith('@g.us')
+  );
+}
+
 export function isAllowedChat(sock, envelope, { allowSelfChat = true, allowedNumbers = [], selfOnly = true } = {}) {
   const key = envelope?.key || {};
   const jid = key.remoteJid || '';
