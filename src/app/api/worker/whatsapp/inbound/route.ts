@@ -227,9 +227,7 @@ export async function POST(req: NextRequest) {
         reply,
         duplicate: false,
         delivered: false,
-        conversationId: result.conversationId,
-        messageId: result.messageId,
-        actionsTaken: result.actionsTaken
+        conversationId: result.conversationId
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
