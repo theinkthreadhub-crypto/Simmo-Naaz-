@@ -6,7 +6,7 @@ export function jidNumber(jid) {
 
 export function unwrapMessage(message) {
   for (let depth = 0; depth < 5; depth++) {
-    const inner = message?.ephemeralMessage?.message || message?.viewOnceMessage?.message ||
+    const inner = message?.deviceSentMessage?.message || message?.ephemeralMessage?.message || message?.viewOnceMessage?.message ||
       message?.viewOnceMessageV2?.message || message?.documentWithCaptionMessage?.message;
     if (!inner) return message;
     message = inner;
@@ -48,3 +48,4 @@ export function createMessageDeduplicator(limit = 2000) {
     release(jid, id) { ids.delete(`${jid}:${id}`); }
   };
 }
+

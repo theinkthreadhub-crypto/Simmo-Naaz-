@@ -25,6 +25,7 @@ test('Explicit allowlist admits incoming messages only', () => {
 test('Wrapped and plain self-chat messages have readable text', () => {
   assert.equal(extractText({ ephemeralMessage: { message: { extendedTextMessage: { text: 'hello' } } } }), 'hello');
   assert.equal(extractText({ conversation: `${REPLY_MARK}\nhello` }).startsWith(REPLY_MARK), true);
+  assert.equal(extractText({ deviceSentMessage: { destinationJid: sock.user.id, message: { conversation: 'hello from phone' } } }), 'hello from phone');
 });
 test('Duplicate notify/append events are claimed once per chat', () => {
   const dedup = createMessageDeduplicator(2);
@@ -34,3 +35,4 @@ test('Duplicate notify/append events are claimed once per chat', () => {
   dedup.claim('self','b');
   assert.equal(dedup.claim('self','a'), true);
 });
+

@@ -241,7 +241,10 @@ async function handleIncoming(sock, envelope) {
   }
 
   if (sentByBot.has(envelope.key?.id)) return;
-  if (!isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers })) return;
+  if (!isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers })) {
+    console.log('[WhatsApp message skipped]', JSON.stringify({ reason: 'CHAT_NOT_ALLOWED', destinationType: jid.split('@')[1], fromMe: Boolean(envelope.key?.fromMe) }));
+    return;
+  }
   envelope = { ...envelope, message: unwrapMessage(envelope.message) };
   if (!receivedMessages.claim(jid, envelope.key?.id)) return;
 
@@ -263,7 +266,10 @@ async function handleIncoming(sock, envelope) {
 
   const rawText = extractText(envelope.message).trim();
   const text = rawText || (isImage ? '[FASHION_DESIGN_IMAGE_UPLOAD]' : '');
-  if (!text || text.startsWith(REPLY_MARK)) return;
+  if (!text || text.startsWith(REPLY_MARK)) {
+    console.log('[WhatsApp message skipped]', JSON.stringify({ reason: text ? 'BOT_REPLY' : 'NO_TEXT', contentTypes: Object.keys(envelope.message || {}) }));
+    return;
+  }
 
   const allowed = isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers });
   console.log('[WhatsApp Inbound] Accepted message', envelope.key?.id);
@@ -340,8 +346,8 @@ async function connectWhatsApp() {
       if (update.qr) {
         latestRawQr = update.qr;
         console.log('\n======================================================');
-        console.log('📱 SCAN THIS WHATSAPP QR CODE WITH YOUR PHONE CAMERA:');
-        console.log('🌐 OR OPEN IN BROWSER: http://localhost:10000/qr');
+        console.log('ðŸ“± SCAN THIS WHATSAPP QR CODE WITH YOUR PHONE CAMERA:');
+        console.log('ðŸŒ OR OPEN IN BROWSER: http://localhost:10000/qr');
         console.log('======================================================\n');
         qrcode.generate(update.qr, { small: true });
         const qrText = await new Promise(resolve => {
@@ -364,7 +370,7 @@ async function connectWhatsApp() {
             const pending = await postInternal('/api/worker/whatsapp/pending', { connectedNumber });
             if (pending?.userId) {
               userId = pending.userId;
-              console.log(`[MENTRA Brain Worker] ✅ Bound session to user: ${userId}`);
+              console.log(`[MENTRA Brain Worker] âœ… Bound session to user: ${userId}`);
             }
           } catch (e) {
             console.warn('[Session binding]', e?.message || e);
@@ -374,7 +380,7 @@ async function connectWhatsApp() {
         await sendWhatsAppEvent('CONNECTED', { connectedNumber }).catch(() => {});
 
         console.log(
-          '\n✅ [MENTRA Brain Worker] WhatsApp CONNECTED successfully to:',
+          '\nâœ… [MENTRA Brain Worker] WhatsApp CONNECTED successfully to:',
           connectedNumber || 'linked device'
         );
         console.log(
@@ -432,6 +438,7 @@ async function connectWhatsApp() {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    console.log('[WhatsApp message event]', JSON.stringify({ type, count: messages?.length || 0 }));
     if (type !== 'notify' && type !== 'append') return;
 
     for (const message of messages || []) {
@@ -510,7 +517,7 @@ function startHealthServer() {
 
   server.listen(port, '0.0.0.0', () => {
     console.log(`[MENTRA Brain Worker] Health server listening on :${port}`);
-    console.log(`[MENTRA Brain Worker] 🌐 Visual QR Web Page: http://localhost:${port}/qr`);
+    console.log(`[MENTRA Brain Worker] ðŸŒ Visual QR Web Page: http://localhost:${port}/qr`);
   });
 
   return server;
@@ -606,3 +613,4 @@ main().catch(error => {
   backendError = error instanceof Error ? error.message : String(error);
   console.error('[MENTRA Brain Worker] Startup error:', error);
 });
+
