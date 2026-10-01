@@ -24,14 +24,43 @@ export function isAllowedChat(sock, envelope, { allowSelfChat = true, allowedNum
   const key = envelope.key || {};
   const jid = key.remoteJid || '';
   if (!jid || !/@(s\.whatsapp\.net|lid)$/.test(jid)) return false;
-  // Only the destination identifies a self-chat. Sender fields identify the
-  const ownIds = new Set([sock?.user?.id, sock?.user?.lid].filter(Boolean)
-    .map(value => String(value).replace(/:\d+(?=@)/, '')));
-  const destinations = [jid, key.remoteJidAlt].filter(Boolean)
-    .map(value => String(value).replace(/:\d+(?=@)/, ''));
-  if (allowSelfChat && destinations.some(value => ownIds.has(value))) return true;
-  if (allowedNumbers.includes('*')) return !key.fromMe;
-  return !key.fromMe && destinations.some(value => value.endsWith('@s.whatsapp.net') && allowedNumbers.includes(jidNumber(value)));
+  if (jid.endsWith('@g.us') || jid.endsWith('@newsletter') || jid === 'status@broadcast') return false;
+
+  // 1. If self-chat is allowed and user is chatting with themselves (or LID device)
+  if (allowSelfChat) {
+    const ownIds = [sock?.user?.id, sock?.user?.lid, sock?.user?.jid]
+      .filter(Boolean)
+      .map(value => String(value).replace(/:\d+(?=@)/, ''));
+
+    const destinations = [jid, key.remoteJidAlt]
+      .filter(Boolean)
+      .map(value => String(value).replace(/:\d+(?=@)/, ''));
+
+    if (destinations.some(value => ownIds.some(own => value.includes(own) || own.includes(value)))) {
+      return true;
+    }
+
+    // In WhatsApp Web, messaging yourself often targets the LID remoteJid
+    if (jid.endsWith('@lid')) {
+      return true;
+    }
+  }
+
+  // 2. If all numbers are allowed (*)
+  if (allowedNumbers.includes('*')) {
+    return true;
+  }
+
+  // 3. Match against allowed phone numbers
+  const num = jidNumber(jid);
+  const altNum = key.remoteJidAlt ? jidNumber(key.remoteJidAlt) : '';
+  const participantNum = key.participant ? jidNumber(key.participant) : '';
+
+  return (
+    allowedNumbers.includes(num) ||
+    (altNum && allowedNumbers.includes(altNum)) ||
+    (participantNum && allowedNumbers.includes(participantNum))
+  );
 }
 
 export function createMessageDeduplicator(limit = 2000) {
