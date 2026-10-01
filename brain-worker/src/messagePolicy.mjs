@@ -5,9 +5,16 @@ export function jidNumber(jid) {
 }
 
 export function unwrapMessage(message) {
-  for (let depth = 0; depth < 5; depth++) {
-    const inner = message?.deviceSentMessage?.message || message?.ephemeralMessage?.message || message?.viewOnceMessage?.message ||
-      message?.viewOnceMessageV2?.message || message?.documentWithCaptionMessage?.message;
+  for (let depth = 0; depth < 8; depth++) {
+    const inner =
+      message?.deviceSentMessage?.message ||
+      message?.ephemeralMessage?.message ||
+      message?.viewOnceMessage?.message ||
+      message?.viewOnceMessageV2?.message ||
+      message?.viewOnceMessageV2Extension?.message ||
+      message?.documentWithCaptionMessage?.message ||
+      message?.editedMessage?.message ||
+      message?.protocolMessage?.editedMessage;
     if (!inner) return message;
     message = inner;
   }
@@ -16,8 +23,15 @@ export function unwrapMessage(message) {
 
 export function extractText(message) {
   const content = unwrapMessage(message);
-  return content?.conversation || content?.extendedTextMessage?.text ||
-    content?.imageMessage?.caption || content?.videoMessage?.caption || '';
+  return content?.conversation ||
+    content?.extendedTextMessage?.text ||
+    content?.imageMessage?.caption ||
+    content?.videoMessage?.caption ||
+    content?.documentMessage?.caption ||
+    content?.buttonsResponseMessage?.selectedDisplayText ||
+    content?.templateButtonReplyMessage?.selectedDisplayText ||
+    content?.listResponseMessage?.title ||
+    '';
 }
 
 export function isAllowedChat(sock, envelope, { allowSelfChat = true, allowedNumbers = [] } = {}) {
