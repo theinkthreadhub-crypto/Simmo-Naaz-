@@ -55,6 +55,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, serverTime: new Date().toISOString() });
   } catch (error: any) {
     console.warn('[Heartbeat write skipped]', error?.message || error);
-    return NextResponse.json({ success: false, error: 'HEARTBEAT_PERSISTENCE_FAILED' }, { status: 503 });
+    const credential = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
+    let credentialRole = credential.startsWith('sb_secret_') ? 'secret' : 'unknown';
+    if (credential.split('.').length === 3) {
+      try { credentialRole = JSON.parse(Buffer.from(credential.split('.')[1], 'base64url').toString()).role || 'unknown'; } catch {}
+    }
+    return NextResponse.json({ success: false, error: 'HEARTBEAT_PERSISTENCE_FAILED', databaseCredentialConfigured: Boolean(credential), databaseCredentialRole: credentialRole }, { status: 503 });
   }
 }
+
