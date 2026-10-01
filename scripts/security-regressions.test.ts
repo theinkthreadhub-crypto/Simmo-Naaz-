@@ -8,6 +8,17 @@ import { encryptToken, decryptToken } from '../src/lib/integrations/crypto';
 import { encryptToken as encryptEnvelope, decryptToken as decryptEnvelope } from '../src/lib/auth/tokenEncryption';
 import { createGoogleOAuthState, validateGoogleOAuthState } from '../src/lib/integrations/google/oauthState';
 import { verifyBrainWorkerSecret, verifyBrainWorkerSignature, verifyBrainWorkerToken } from '../src/lib/worker/auth';
+import { FallbackProvider } from '../src/lib/ai/providers/fallbackProvider';
+
+test('Normal replies do not draft email or invent a recipient', async () => {
+  const provider = new FallbackProvider();
+  const chat = await provider.generate([{role: 'user', content: 'Reply briefly in Hindi.'}]);
+  assert.equal(chat.toolCalls?.length || 0, 0);
+  const missing = await provider.generate([{role: 'user', content: 'Email draft karo'}]);
+  assert.equal(missing.toolCalls?.length || 0, 0);
+  const draft = await provider.generate([{role: 'user', content: 'team@example.com ko reply draft karo'}]);
+  assert.equal(draft.toolCalls?.[0]?.name, 'draftEmail');
+});
 
 test('Production rejects missing encryption keys in both token formats', () => {
   const previous = { ...process.env };
@@ -98,3 +109,4 @@ test('Pending-session POST verifies the actual signed body before database acces
     await new Promise<void>((resolve, reject) => database.close(error => error ? reject(error) : resolve()));
   }
 });
+
