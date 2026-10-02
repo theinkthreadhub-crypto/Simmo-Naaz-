@@ -386,11 +386,24 @@ export default function MentraHQScene() {
     };
 
     const loadRoom = async () => {
+      const fallback1 = new THREE.MeshStandardMaterial({
+        color: '#d7c2a4',
+        roughness: 0.78,
+        metalness: 0.02,
+      });
+      const fallback2 = new THREE.MeshStandardMaterial({
+        color: '#815d46',
+        roughness: 0.72,
+        metalness: 0.03,
+      });
+      const fallback3 = new THREE.MeshStandardMaterial({
+        color: '#264c55',
+        roughness: 0.8,
+        metalness: 0.02,
+      });
+
       try {
         const [
-          baked1,
-          baked2,
-          baked3,
           room1,
           room2,
           room3,
@@ -401,9 +414,6 @@ export default function MentraHQScene() {
           rubik,
           topChair,
         ] = await Promise.all([
-          ktx2.loadAsync(`${TEXTURE_ROOT}/baked1.ktx2`),
-          ktx2.loadAsync(`${TEXTURE_ROOT}/baked2.ktx2`),
-          ktx2.loadAsync(`${TEXTURE_ROOT}/baked3.ktx2`),
           gltf.loadAsync(`${MODEL_ROOT}/room.glb`),
           gltf.loadAsync(`${MODEL_ROOT}/room2.glb`),
           gltf.loadAsync(`${MODEL_ROOT}/room3.glb`),
@@ -417,35 +427,24 @@ export default function MentraHQScene() {
 
         if (disposed) return;
 
-        const material1 = new THREE.MeshBasicMaterial({
-          map: configureTexture(baked1),
-        });
-        const material2 = new THREE.MeshBasicMaterial({
-          map: configureTexture(baked2),
-        });
-        const material3 = new THREE.MeshBasicMaterial({
-          map: configureTexture(baked3),
-        });
-
-        applyMaterial(room1.scene, material1);
-        applyMaterial(room2.scene, material2);
-        applyMaterial(room3.scene, material3);
-
+        applyMaterial(room1.scene, fallback1);
+        applyMaterial(room2.scene, fallback2);
+        applyMaterial(room3.scene, fallback3);
         scene.add(room1.scene, room2.scene, room3.scene);
 
-        applyMaterial(leftMonitor.scene, material2);
+        applyMaterial(leftMonitor.scene, fallback2);
         leftMonitor.scene.name = 'leftMonitor';
         registerInteractive(leftMonitor.scene, 'ai');
 
-        applyMaterial(rightMonitor.scene, material2);
+        applyMaterial(rightMonitor.scene, fallback2);
         rightMonitor.scene.name = 'rightMonitor';
         registerInteractive(rightMonitor.scene, 'quests');
 
-        applyMaterial(whiteboard.scene, material2);
+        applyMaterial(whiteboard.scene, fallback2);
         whiteboard.scene.name = 'whiteboard';
         registerInteractive(whiteboard.scene, 'calendar');
 
-        applyMaterial(arcadeMachine.scene, material2);
+        applyMaterial(arcadeMachine.scene, fallback2);
         arcadeMachine.scene.name = 'arcadeMachine';
         registerInteractive(arcadeMachine.scene, 'agents');
 
@@ -454,7 +453,7 @@ export default function MentraHQScene() {
         rubik.scene.scale.setScalar(0.021432);
         registerInteractive(rubik.scene, 'skills');
 
-        applyMaterial(topChair.scene, material2);
+        applyMaterial(topChair.scene, fallback2);
         topChair.scene.position.set(1.4027, 0.496728, -1.21048);
         scene.add(topChair.scene);
 
@@ -501,14 +500,54 @@ export default function MentraHQScene() {
 
         controls.enabled = true;
         setLoaded(true);
-      } catch (error) {
-        console.error('Mentra HQ asset load failed', error);
-        setLoaded(true);
+
+        try {
+          const [baked1, baked2, baked3] = await Promise.all([
+            ktx2.loadAsync(`${TEXTURE_ROOT}/baked1.ktx2`),
+            ktx2.loadAsync(`${TEXTURE_ROOT}/baked2.ktx2`),
+            ktx2.loadAsync(`${TEXTURE_ROOT}/baked3.ktx2`),
+          ]);
+
+          if (disposed) return;
+
+          const material1 = new THREE.MeshBasicMaterial({
+            map: configureTexture(baked1),
+          });
+          const material2 = new THREE.MeshBasicMaterial({
+            map: configureTexture(baked2),
+          });
+          const material3 = new THREE.MeshBasicMaterial({
+            map: configureTexture(baked3),
+          });
+
+          applyMaterial(room1.scene, material1);
+          applyMaterial(room2.scene, material2);
+          applyMaterial(room3.scene, material3);
+          applyMaterial(leftMonitor.scene, material2);
+          applyMaterial(rightMonitor.scene, material2);
+          applyMaterial(whiteboard.scene, material2);
+          applyMaterial(arcadeMachine.scene, material2);
+          applyMaterial(topChair.scene, material2);
+        } catch (textureError) {
+          console.warn('Mentra HQ baked textures unavailable; using fallback materials', textureError);
+        }
+      } catch (modelError) {
+        console.error('Mentra HQ model load failed', modelError);
         controls.enabled = true;
+        setLoaded(true);
       }
     };
 
-    void loadRoom();
+    const loadingFailSafe = window.setTimeout(() => {
+      controls.enabled = true;
+      setLoaded(true);
+    }, 12000);
+
+    void loadRoom().finally(() => {
+      window.clearTimeout(loadingFailSafe);
+    });
+
+
 
     const reduceMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)'
