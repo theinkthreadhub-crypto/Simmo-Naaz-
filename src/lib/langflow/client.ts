@@ -40,15 +40,28 @@ function getTimeoutMs(): number {
   return Math.min(45000, Math.max(1000, parsed));
 }
 
+const MENTRA_LFX_URL = 'https://mentra-lfx-core.onrender.com';
+const MENTRA_LFX_FLOW_ID = '66a1aeb0-784d-4b50-b926-2fc53d89adf1';
+
+function getRuntime(): 'langflow' | 'lfx' {
+  return (process.env.LANGFLOW_RUNTIME || 'lfx').trim().toLowerCase() === 'langflow'
+    ? 'langflow'
+    : 'lfx';
+}
+
+function getResolvedUrl(runtime: 'langflow' | 'lfx'): string {
+  return process.env.LANGFLOW_URL?.trim() || (runtime === 'lfx' ? MENTRA_LFX_URL : '');
+}
+
+function getResolvedFlowId(runtime: 'langflow' | 'lfx'): string {
+  return process.env.LANGFLOW_FLOW_ID?.trim() || (runtime === 'lfx' ? MENTRA_LFX_FLOW_ID : '');
+}
+
 export function getLangflowStatus(): LangflowStatus {
   const enabled = process.env.LANGFLOW_ENABLED === 'true';
-  const urlConfigured = Boolean(process.env.LANGFLOW_URL?.trim());
-  const flowConfigured = Boolean(process.env.LANGFLOW_FLOW_ID?.trim());
-
-  const runtime =
-    (process.env.LANGFLOW_RUNTIME || 'langflow').trim().toLowerCase() === 'lfx'
-      ? 'lfx'
-      : 'langflow';
+  const runtime = getRuntime();
+  const urlConfigured = Boolean(getResolvedUrl(runtime));
+  const flowConfigured = Boolean(getResolvedFlowId(runtime));
 
   return {
     enabled,
@@ -115,8 +128,8 @@ export async function runLangflow(input: LangflowRunInput): Promise<LangflowRunR
     throw new Error('LANGFLOW_NOT_CONFIGURED');
   }
 
-  const baseUrl = normalizeBaseUrl(process.env.LANGFLOW_URL || '');
-  const flowId = process.env.LANGFLOW_FLOW_ID?.trim() || '';
+  const baseUrl = normalizeBaseUrl(getResolvedUrl(status.runtime));
+  const flowId = getResolvedFlowId(status.runtime);
   const apiKey = process.env.LANGFLOW_API_KEY?.trim();
 
   const controller = new AbortController();
