@@ -264,7 +264,6 @@ export default function MentraHQScene() {
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enabled = false;
-    controls.enableKeys = false;
     controls.enablePan = false;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
