@@ -244,14 +244,17 @@ export default function MentraHQScene() {
 
     camera.position.copy(homePosition);
 
+    const isMobile = window.innerWidth < 768;
+    const pixelRatio = isMobile ? 1 : Math.min(Math.max(window.devicePixelRatio, 1), 2);
+
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: !isMobile,
       powerPreference: 'high-performance',
     });
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.15));
     renderer.setClearColor(0x072446, 1);
-    renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, 1), 2));
+    renderer.setPixelRatio(pixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.localClippingEnabled = true;
@@ -279,7 +282,7 @@ export default function MentraHQScene() {
     controls.target.copy(HOME_TARGET);
 
     const composer = new EffectComposer(renderer);
-    composer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, 1), 2));
+    composer.setPixelRatio(pixelRatio);
     composer.setSize(window.innerWidth, window.innerHeight);
 
     const renderPass = new RenderPass(scene, camera);
@@ -304,6 +307,7 @@ export default function MentraHQScene() {
 
     const ktx2 = new KTX2Loader();
     ktx2.setTranscoderPath(BASIS_ROOT);
+    ktx2.setWorkerLimit(isMobile ? 1 : 2);
     ktx2.detectSupport(renderer);
 
     const gltf = new GLTFLoader();
@@ -498,34 +502,46 @@ export default function MentraHQScene() {
         setLoaded(true);
 
         try {
-          const [baked1, baked2, baked3] = await Promise.all([
-            ktx2.loadAsync(`${TEXTURE_ROOT}/baked1.ktx2`),
-            ktx2.loadAsync(`${TEXTURE_ROOT}/baked2.ktx2`),
-            ktx2.loadAsync(`${TEXTURE_ROOT}/baked3.ktx2`),
-          ]);
-
+          const baked1 = await ktx2.loadAsync(`${TEXTURE_ROOT}/baked1.ktx2`);
           if (disposed) return;
-
           const material1 = new THREE.MeshBasicMaterial({
             map: configureTexture(baked1),
           });
+          applyMaterial(room1.scene, material1);
+
+          const baked2 = await ktx2.loadAsync(`${TEXTURE_ROOT}/baked2.ktx2`);
+          if (disposed) return;
           const material2 = new THREE.MeshBasicMaterial({
             map: configureTexture(baked2),
           });
-          const material3 = new THREE.MeshBasicMaterial({
-            map: configureTexture(baked3),
-          });
-
-          applyMaterial(room1.scene, material1);
           applyMaterial(room2.scene, material2);
-          applyMaterial(room3.scene, material3);
           applyMaterial(leftMonitor.scene, material2);
           applyMaterial(rightMonitor.scene, material2);
           applyMaterial(whiteboard.scene, material2);
           applyMaterial(arcadeMachine.scene, material2);
           applyMaterial(topChair.scene, material2);
+
+          const baked3 = await ktx2.loadAsync(`${TEXTURE_ROOT}/baked3.ktx2`);
+          if (disposed) return;
+          const material3 = new THREE.MeshBasicMaterial({
+            map: configureTexture(baked3),
+          });
+          applyMaterial(room3.scene, material3);
         } catch (textureError) {
           console.warn('Mentra HQ baked textures unavailable; using fallback materials', textureError);
+          void fetch('/api/hq-client-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              stage: 'ktx2',
+              message:
+                textureError instanceof Error
+                  ? textureError.message
+                  : String(textureError),
+              mobile: isMobile,
+              userAgent: navigator.userAgent.slice(0, 180),
+            }),
+          }).catch(() => undefined);
         }
       } catch (modelError) {
         console.error('Mentra HQ model load failed', modelError);
@@ -708,7 +724,11 @@ export default function MentraHQScene() {
       }
 
       controls.update();
-      composer.render();
+      if (isMobile) {
+        renderer.render(scene, camera);
+      } else {
+        composer.render();
+      }
       frameId = requestAnimationFrame(tick);
     };
 
