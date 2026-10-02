@@ -109,8 +109,7 @@ const MODULES: Record<ModuleKey, ModuleConfig> = {
 const HOME_POSITION = new THREE.Vector3(-23, 17, 23);
 const HOME_TARGET = new THREE.Vector3(0, 2.5, 0);
 
-const ASSET_ROOT =
-  'https://cdn.jsdelivr.net/gh/jrefusta/joan-portfolio@main/static';
+const ASSET_ROOT = '/api/joan-assets';
 const MODEL_ROOT = `${ASSET_ROOT}/assets/models`;
 const TEXTURE_ROOT = `${ASSET_ROOT}/assets/textures`;
 const BASIS_ROOT = `${ASSET_ROOT}/basis/`;
