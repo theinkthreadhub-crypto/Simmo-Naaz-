@@ -888,10 +888,11 @@ export default function MentraHQScene({
         <button
           type="button"
           onClick={goHome}
-          className="absolute bottom-5 left-5 z-30 grid h-16 w-16 place-items-center rounded-full bg-[#0a3362] text-2xl font-black text-[#eda72d] shadow-[0_4px_14px_rgba(0,0,0,.5)] transition hover:scale-105 sm:bottom-10 sm:left-10 sm:h-20 sm:w-20"
+          className="fixed left-3 top-3 z-50 inline-flex items-center gap-2 rounded-full border border-[#eda72d]/40 bg-[#0a3362]/95 px-3.5 py-2.5 text-[11px] font-black tracking-[0.08em] text-[#eda72d] shadow-[0_8px_24px_rgba(0,0,0,.38)] backdrop-blur-md transition hover:scale-[1.02] sm:left-4 sm:top-4"
           aria-label="Back to room"
         >
-          ←
+          <span className="text-base leading-none">←</span>
+          <span>ROOM</span>
         </button>
       )}
 
