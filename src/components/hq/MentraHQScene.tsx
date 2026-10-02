@@ -109,6 +109,31 @@ const MODULES: Record<ModuleKey, ModuleConfig> = {
 const HOME_POSITION = new THREE.Vector3(-23, 17, 23);
 const HOME_TARGET = new THREE.Vector3(0, 2.5, 0);
 
+const ROUTE_MODULES: Array<[string, ModuleKey]> = [
+  ['/mentra', 'ai'],
+  ['/quests', 'quests'],
+  ['/goals', 'quests'],
+  ['/habits', 'quests'],
+  ['/projects', 'quests'],
+  ['/missions', 'quests'],
+  ['/focus', 'quests'],
+  ['/agents', 'agents'],
+  ['/connections', 'agents'],
+  ['/calendar', 'calendar'],
+  ['/skills', 'skills'],
+  ['/memory', 'memory'],
+  ['/reports', 'memory'],
+  ['/settings', 'memory'],
+  ['/system', 'memory'],
+  ['/finance', 'finance'],
+  ['/journal', 'journal'],
+];
+
+function moduleForPath(pathname: string): ModuleKey | null {
+  const match = ROUTE_MODULES.find(([path]) => pathname.startsWith(path));
+  return match?.[1] ?? null;
+}
+
 const ASSET_ROOT = '/api/joan-assets';
 const MODEL_ROOT = `${ASSET_ROOT}/assets/models`;
 const TEXTURE_ROOT = `${ASSET_ROOT}/assets/textures`;
@@ -213,7 +238,13 @@ function createArcadeTexture() {
   return texture;
 }
 
-export default function MentraHQScene() {
+export default function MentraHQScene({
+  activePath = '/hq',
+  shellMode = false,
+}: {
+  activePath?: string;
+  shellMode?: boolean;
+}) {
   const router = useRouter();
   const mountRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
@@ -789,10 +820,33 @@ export default function MentraHQScene() {
     mount?.goHome?.();
   };
 
+  useEffect(() => {
+    if (!loaded) return;
+
+    const mount = mountRef.current as
+      | (HTMLDivElement & {
+          focusModule?: (key: ModuleKey) => void;
+          goHome?: () => void;
+        })
+      | null;
+
+    const routeModule = moduleForPath(activePath);
+    const timer = window.setTimeout(() => {
+      if (routeModule) {
+        mount?.focusModule?.(routeModule);
+      } else {
+        mount?.goHome?.();
+      }
+    }, 80);
+
+    return () => window.clearTimeout(timer);
+  }, [activePath, loaded]);
+
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#072446]">
       <div ref={mountRef} className="absolute inset-0" />
 
+      {!shellMode && (
       <nav
         className={`absolute left-0 right-0 top-0 z-20 flex h-[64px] items-center gap-2 overflow-x-auto bg-[#0a3362] px-3 text-[#eda72d] shadow-[0_2px_8px_rgba(0,0,0,.55)] transition-transform duration-500 sm:justify-around sm:px-6 ${
           active ? '-translate-y-full' : 'translate-y-0'
@@ -818,6 +872,7 @@ export default function MentraHQScene() {
           </button>
         ))}
       </nav>
+      )}
 
       {!loaded && (
         <div className="absolute inset-0 z-40 grid place-items-center bg-[#072446]">
@@ -829,7 +884,7 @@ export default function MentraHQScene() {
         </div>
       )}
 
-      {active && (
+      {!shellMode && active && (
         <button
           type="button"
           onClick={goHome}
@@ -840,7 +895,7 @@ export default function MentraHQScene() {
         </button>
       )}
 
-      {activeModule && focused && (
+      {!shellMode && activeModule && focused && (
         <div className="absolute bottom-5 left-1/2 z-30 w-[min(90vw,430px)] -translate-x-1/2 rounded-2xl border border-[#eda72d]/60 bg-[#0a3362]/95 p-4 text-center text-white shadow-2xl backdrop-blur-md sm:bottom-8">
           <div className="text-xs font-black tracking-[0.15em] text-[#eda72d]">
             {activeModule.label}
