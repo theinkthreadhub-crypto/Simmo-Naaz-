@@ -573,12 +573,12 @@ export default function MentraHQScene() {
     (mount as HTMLDivElement & { goHome?: () => void }).goHome = goHome;
 
     const openModuleFocus = (key: ModuleKey) => {
-      const module = MODULES[key];
+      const moduleConfig = MODULES[key];
       setActive(key);
       setFocused(false);
 
-      if (module.focus) {
-        moveCamera(module.focus.position, module.focus.target);
+      if (moduleConfig.focus) {
+        moveCamera(moduleConfig.focus.position, moduleConfig.focus.target);
       } else {
         setFocused(true);
       }
