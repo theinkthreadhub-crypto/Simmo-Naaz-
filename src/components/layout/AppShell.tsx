@@ -45,6 +45,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <OnboardingSequence />;
   }
 
+  if (pathname === '/hq') {
+    return (
+      <div className="fixed inset-0 overflow-hidden bg-[#060806] text-[#f4f1e8]">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#080907] text-[#f4f1e8] flex flex-col relative selection:bg-[#d8ff63] selection:text-[#080907]">
       <PillNavbar />
