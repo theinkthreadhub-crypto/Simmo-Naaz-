@@ -27,6 +27,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { useMentraStore } from '@/lib/store/mentraStore';
 
 const primaryNavItems = [
+  { href: '/hq', label: 'HQ', icon: Cpu },
   { href: '/mentra', label: 'MENTRA AI', icon: Sparkles },
   { href: '/system', label: 'System', icon: Cpu },
   { href: '/quests', label: 'Quests', icon: Sword },
@@ -76,7 +77,7 @@ export default function PillNavbar() {
         
         {/* Left: Brand Wordmark */}
         <Link 
-          href="/" 
+          href="/hq" 
           className="flex items-center gap-2.5 px-4 py-2 glass-pill bg-black/40 border-white/10 hover:border-[#d8ff63]/40 transition-all group"
         >
           <div className="w-2 h-2 rounded-full bg-[#d8ff63] shadow-[0_0_14px_rgba(216,255,99,0.55)]" />
