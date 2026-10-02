@@ -567,7 +567,7 @@ export default function MentraJoanHomePage() {
             </div>
             <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-2">
               <span className="text-[10px] text-orange-400 uppercase tracking-wider block font-bold">🎣 HOOK (0.0s - 2.5s)</span>
-              <p className="text-xs text-white/90">"If you're still buying ₹2,000 oversized tees that lose shape after one wash... watch this."</p>
+              <p className="text-xs text-white/90">&quot;If you&apos;re still buying ₹2,000 oversized tees that lose shape after one wash... watch this.&quot;</p>
             </div>
             <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-2">
               <span className="text-[10px] text-amber-400 uppercase tracking-wider block font-bold">📹 VISUAL BODY (2.5s - 10s)</span>
@@ -575,7 +575,7 @@ export default function MentraJoanHomePage() {
             </div>
             <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-2">
               <span className="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold">⚡ CALL TO ACTION (10s - 15s)</span>
-              <p className="text-xs text-white/90">"Use code DROP20 for 20% off our launch batch. Link in bio."</p>
+              <p className="text-xs text-white/90">&quot;Use code DROP20 for 20% off our launch batch. Link in bio.&quot;</p>
             </div>
           </div>
         </div>
