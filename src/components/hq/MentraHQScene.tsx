@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Html, OrbitControls, PerspectiveCamera, useTexture } from '@react-three/drei';
 import { useRouter } from 'next/navigation';
@@ -45,7 +45,7 @@ function sphericalPosition(yaw: number, pitch: number, radius = 8): [number, num
 function RealOfficePanorama() {
   const texture = useTexture(PANORAMA_URL);
 
-  useMemo(() => {
+  useEffect(() => {
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 8;
     texture.needsUpdate = true;
