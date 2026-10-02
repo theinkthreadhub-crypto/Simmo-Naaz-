@@ -19,7 +19,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <ConfigurationRequired missing={runtimeConfig.missing} />;
   }
 
-  if (pathname === '/demo' || pathname === '/auth/reset-password') {
+  if (pathname === '/' || pathname === '/demo' || pathname === '/auth/reset-password') {
     return <>{children}</>;
   }
 

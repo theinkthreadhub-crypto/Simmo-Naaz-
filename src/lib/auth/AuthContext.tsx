@@ -99,10 +99,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem('mentra_demo_session');
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
+        // Resilient session lookup with 1.5s timeout
+        const sessionPromise = supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        const timeoutPromise = new Promise<{ data: { session: null } }>(resolve => 
+          setTimeout(() => resolve({ data: { session: null } }), 1500)
+        );
+
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
         if (session?.user) {
           setUser(session.user);
           await loadUserData(session.user.id);
+        } else if (process.env.NODE_ENV !== 'production') {
+          // Dev Mode: Provide instant default Sovereign Operator
+          const devUser = { id: 'dev_operator_01', email: 'operator@mentra.os' };
+          const devProfile: Profile = {
+            id: 'dev_operator_01',
+            user_id: 'dev_operator_01',
+            display_name: 'Sovereign Operator',
+            timezone: 'Asia/Kolkata',
+            preferred_language: 'Hinglish',
+            onboarding_completed: true
+          };
+          const devProgress: PlayerProgress = {
+            user_id: 'dev_operator_01',
+            level: 5,
+            current_xp: 6850,
+            total_xp: 28500,
+            current_streak: 18,
+            longest_streak: 24,
+            last_active_date: new Date().toISOString(),
+            quests_completed: 42
+          };
+          setUser(devUser);
+          setProfile(devProfile);
+          setProgress(devProgress);
         }
       } catch (err) {
         console.warn('[AUTH] Supabase session check fallback:', err);

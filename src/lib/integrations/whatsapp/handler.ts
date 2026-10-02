@@ -153,11 +153,30 @@ export async function processWhatsAppInboundWebhook(payload: WhatsAppInboundPayl
           }
         }
 
-        // 6c. Approval Shortcut (e.g. "APPROVE <uuid>" or "REJECT <uuid>")
-        if (upperText.startsWith('APPROVE') || upperText.startsWith('REJECT')) {
+        // 6c. Approval Shortcut (e.g. "1", "APPROVE", "APPROVE <uuid>", "3", "REJECT")
+        const isApproveKeyword = upperText === '1' || upperText === 'YES' || upperText === 'HAAN' || upperText.startsWith('APPROVE');
+        const isRejectKeyword = upperText === '3' || upperText === 'NO' || upperText === 'NAHI' || upperText.startsWith('REJECT');
+
+        if (isApproveKeyword || isRejectKeyword) {
           const rawParts = incomingText.trim().split(/[\s_]+/);
-          const decision = rawParts[0].toUpperCase() === 'APPROVE' ? 'APPROVE' : 'REJECT';
-          const approvalId = rawParts.slice(1).join('').trim();
+          const decision = isApproveKeyword ? 'APPROVE' : 'REJECT';
+          let approvalId = rawParts.length > 1 ? rawParts.slice(1).join('').trim() : '';
+
+          // If no UUID is provided, automatically find the latest pending approval for this user
+          if (!approvalId) {
+            const { data: latestPending } = await supabase
+              .from('approval_requests')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('status', 'PENDING')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (latestPending?.id) {
+              approvalId = latestPending.id;
+            }
+          }
 
           if (approvalId) {
             const approvalResult = await executeApprovalDecision(
@@ -179,7 +198,83 @@ export async function processWhatsAppInboundWebhook(payload: WhatsAppInboundPayl
           }
         }
 
-        // 6d. Voice Note Audio Processing Foundation
+        // 6d. E-Commerce Product Search Shortcut
+        // Trigger: "find kurta", "search trending tops", "product search women dress"
+        const productSearchMatch = upperText.match(/^(?:FIND|SEARCH|PRODUCT\s+SEARCH|DHUNDHO|DHUNDO)\s+(.+)$/i);
+        if (productSearchMatch) {
+          const searchQuery = productSearchMatch[1].trim();
+          await whatsappClient.sendTextMessage(
+            fromPhone,
+            `🔍 *SEARCHING PRODUCTS...*\n\n_Hunting best deals for "${searchQuery}" on Amazon, Myntra & Meesho..._`,
+            userId
+          );
+
+          try {
+            const { searchEcommerceProducts } = await import('@/lib/fashion/productHunter');
+            const result = await searchEcommerceProducts(searchQuery, ['Amazon', 'Myntra', 'Meesho'], 2);
+            await whatsappClient.sendTextMessage(fromPhone, result.formattedWhatsAppText, userId);
+          } catch (err) {
+            await whatsappClient.sendTextMessage(fromPhone, `⚠️ Product search failed. Try: "find summer dress"`, userId);
+          }
+
+          processedCount++;
+          continue;
+        }
+
+        // 6e. UGC Post Generation Shortcut  
+        // Trigger: "ugc for product 2", "post 1", "create post for product 3"
+        const ugcProductMatch = upperText.match(/^(?:UGC\s+FOR\s+PRODUCT\s+|CREATE\s+POST\s+FOR\s+PRODUCT\s+|POST\s+)(\d+)$/i);
+        if (ugcProductMatch) {
+          const productIndex = parseInt(ugcProductMatch[1], 10) - 1;
+          await whatsappClient.sendTextMessage(
+            fromPhone,
+            `🎨 *GENERATING AI UGC MODEL...*\n\n_Creating Gemini AI model image, viral caption & Instagram/Facebook post for Product ${productIndex + 1}..._`,
+            userId
+          );
+
+          try {
+            // Fetch latest product search results for this user from Supabase cache or last AI context
+            const { data: lastProductMessages } = await supabase
+              .from('inbound_messages')
+              .select('text')
+              .eq('user_id', userId)
+              .eq('channel', 'WHATSAPP')
+              .like('text', '%FIND %')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const lastQuery = lastProductMessages?.text?.replace(/^(?:FIND|SEARCH)\s+/i, '') || 'trending fashion';
+
+            const { searchEcommerceProducts } = await import('@/lib/fashion/productHunter');
+            const { generateUGCContent } = await import('@/lib/fashion/ugcSocialPoster');
+
+            const productResult = await searchEcommerceProducts(lastQuery, ['Amazon', 'Myntra', 'Meesho'], 3);
+            const targetProduct = productResult.products[productIndex] || productResult.products[0];
+
+            if (targetProduct) {
+              const ugcResult = await generateUGCContent({
+                userId,
+                productTitle: targetProduct.title,
+                productPrice: targetProduct.price,
+                productUrl: targetProduct.productUrl,
+                platform: targetProduct.platform,
+                category: targetProduct.category
+              });
+
+              await whatsappClient.sendTextMessage(fromPhone, ugcResult.message, userId);
+            } else {
+              await whatsappClient.sendTextMessage(fromPhone, `⚠️ No product found at index ${productIndex + 1}. First search: "find [product]"`, userId);
+            }
+          } catch (err) {
+            await whatsappClient.sendTextMessage(fromPhone, `⚠️ UGC generation failed. First run: "find [product]", then reply "UGC for product 1"`, userId);
+          }
+
+          processedCount++;
+          continue;
+        }
+
+        // 6f. Voice Note Audio Processing Foundation
         if (msg.type === 'audio' && msg.audio?.id) {
           if (speechProvider.isAvailable()) {
             await whatsappClient.sendTextMessage(

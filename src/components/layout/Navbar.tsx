@@ -27,6 +27,7 @@ export const Close = (props: React.SVGProps<SVGSVGElement>) => (
 
 const links = [
   { label: 'Command Hub', href: '/' },
+  { label: '✨ Gemini AI', href: '/gemini' },
   { label: 'Life Quests', href: '/quests' },
   { label: 'Goals', href: '/goals' },
   { label: 'Finance HUD', href: '/finance' },

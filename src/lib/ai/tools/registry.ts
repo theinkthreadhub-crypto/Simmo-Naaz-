@@ -1359,6 +1359,104 @@ export const publishFashionProductTool: ToolDefinition = {
   }
 };
 
+import { searchEcommerceProducts } from '@/lib/fashion/productHunter';
+import { generateUGCContent, publishToSocialMedia } from '@/lib/fashion/ugcSocialPoster';
+
+export const searchEcommerceProductsTool: ToolDefinition = {
+  name: 'searchEcommerceProducts',
+  description: 'Search top trending, best-selling, or best-rated products across Amazon, Myntra, and Meesho with verified direct links, ratings, and prices in INR.',
+  permission: 'READ',
+  schema: z.object({
+    query: z.string().min(1).describe('Product search query e.g. oversized t-shirts, sneakers, cargo pants'),
+    platforms: z.array(z.enum(['Amazon', 'Myntra', 'Meesho'])).default(['Amazon', 'Myntra', 'Meesho']),
+    limitPerPlatform: z.number().int().min(1).max(5).default(2)
+  }),
+  execute: async (params) => {
+    const result = await searchEcommerceProducts(
+      params.query,
+      params.platforms,
+      params.limitPerPlatform
+    );
+
+    return {
+      ok: result.success,
+      data: result,
+      card: {
+        id: `card_${Date.now()}`,
+        type: 'AGENT_WORKING',
+        title: `E-Commerce Hunter: "${params.query}"`,
+        subtitle: `Found ${result.products.length} products across ${params.platforms.join(', ')}`,
+        data: result
+      },
+      message: result.formattedWhatsAppText || result.message
+    };
+  }
+};
+
+export const generateUgcProductPostTool: ToolDefinition = {
+  name: 'generateUgcProductPost',
+  description: 'Create an AI UGC model photo prompt, viral Hinglish Instagram caption, hashtags, Facebook copy, and preview for a product.',
+  permission: 'READ',
+  schema: z.object({
+    productTitle: z.string().min(1),
+    productPrice: z.number().min(1),
+    productUrl: z.string().url().optional(),
+    platform: z.string().optional(),
+    category: z.string().optional(),
+    customInstructions: z.string().optional()
+  }),
+  execute: async (params, context) => {
+    const result = await generateUGCContent({
+      userId: context.userId,
+      productTitle: params.productTitle,
+      productPrice: params.productPrice,
+      productUrl: params.productUrl,
+      platform: params.platform,
+      category: params.category,
+      customInstructions: params.customInstructions
+    });
+
+    return {
+      ok: result.success,
+      data: result,
+      card: {
+        id: `card_${Date.now()}`,
+        type: 'APPROVAL_REQUIRED',
+        title: `AI UGC Post: ${params.productTitle}`,
+        subtitle: `₹${params.productPrice} • Instagram & Facebook Ready`,
+        data: result,
+        requiresApproval: Boolean(result.approvalId),
+        approvalId: result.approvalId
+      },
+      message: result.message
+    };
+  }
+};
+
+export const publishToSocialMediaTool: ToolDefinition = {
+  name: 'publishToSocialMedia',
+  description: 'Publish approved UGC product photo and caption to Instagram account and Facebook Page.',
+  permission: 'APPROVAL_REQUIRED',
+  schema: z.object({
+    productTitle: z.string().min(1),
+    price: z.number().min(1),
+    imageUrl: z.string().url().optional(),
+    instagramCaption: z.string().min(1),
+    facebookCaption: z.string().optional(),
+    productUrl: z.string().optional()
+  }),
+  execute: async (params) => {
+    const result = await publishToSocialMedia(params);
+
+    return {
+      ok: result.success,
+      data: result,
+      errorCode: result.success ? undefined : 'SOCIAL_PUBLISH_FAILED',
+      message: result.message
+    };
+  }
+};
+
 // Tool Registry Map
 export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   getPlayerProgress: getPlayerProgressTool,
@@ -1401,7 +1499,12 @@ export const MENTRA_TOOL_REGISTRY: Record<string, ToolDefinition> = {
   appendToSheet: appendToSheetTool,
   searchContacts: searchContactsTool,
   runWebResearch: runWebResearchTool,
-  runMultiAgentTask: runMultiAgentTaskTool
+  runMultiAgentTask: runMultiAgentTaskTool,
+
+  // E-Commerce Hunter & UGC Social Tools
+  searchEcommerceProducts: searchEcommerceProductsTool,
+  generateUgcProductPost: generateUgcProductPostTool,
+  publishToSocialMedia: publishToSocialMediaTool
 };
 
 export const ALL_MENTRA_TOOLS = Object.values(MENTRA_TOOL_REGISTRY);
