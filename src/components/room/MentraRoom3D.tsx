@@ -324,7 +324,7 @@ function Monitor({ displayName }: { displayName: string }) {
             <div>
               <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px', fontFamily: 'monospace', marginBottom: '8px' }}>▸ AUTOMATED VIRAL SCRIPT & VIDEO GENERATOR</p>
               <div style={{ background: 'rgba(167,139,250,0.06)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(167,139,250,0.2)', marginBottom: '10px' }}>
-                <p style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 600 }}>Hook #1: "Stop buying boring hoodies until you see this..."</p>
+                <p style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 600 }}>Hook #1: &quot;Stop buying boring hoodies until you see this...&quot;</p>
                 <p style={{ fontSize: '9px', color: '#aaa', marginTop: '4px' }}>Estimated Views: 450K - 1.2M · Platform: Instagram Reels / TikTok</p>
               </div>
               <Link href="/creator" style={{ display: 'inline-block', width: '100%', textAlign: 'center', background: '#a78bfa', color: '#000', padding: '7px 0', borderRadius: '5px', fontSize: '11px', fontWeight: 700, textDecoration: 'none' }}>
