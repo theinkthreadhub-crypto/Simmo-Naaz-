@@ -1,727 +1,767 @@
 'use client';
 
-import React, { Suspense, useEffect, useRef, useState } from 'react';
-import { Canvas, ThreeEvent, useThree } from '@react-three/fiber';
-import {
-  ContactShadows,
-  Html,
-  OrbitControls,
-  OrthographicCamera,
-  RoundedBox,
-} from '@react-three/drei';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import gsap from 'gsap';
 
-type ModuleConfig = {
-  key: string;
+type ModuleId =
+  | 'computer'
+  | 'whiteboard'
+  | 'shelf'
+  | 'certificates'
+  | 'phone'
+  | 'window'
+  | 'cabinet'
+  | 'finance';
+
+type ModuleContent = {
   label: string;
+  title: string;
+  description: string;
   href: string;
-  color: string;
+  bullets: string[];
 };
 
-const MODULES = {
-  ai: { key: 'ai', label: 'MENTRA AI', href: '/mentra', color: '#2FAF79' },
-  quests: { key: 'quests', label: 'QUESTS', href: '/quests', color: '#E8A63A' },
-  skills: { key: 'skills', label: 'SKILLS', href: '/skills', color: '#6680D8' },
-  calendar: { key: 'calendar', label: 'CALENDAR', href: '/calendar', color: '#6AAAD6' },
-  memory: { key: 'memory', label: 'MEMORY', href: '/memory', color: '#8B6BC9' },
-  journal: { key: 'journal', label: 'JOURNAL', href: '/journal', color: '#B87948' },
-  finance: { key: 'finance', label: 'FINANCE', href: '/finance', color: '#2F9F6D' },
-  agents: { key: 'agents', label: 'AGENTS', href: '/agents', color: '#7468C8' },
-} satisfies Record<string, ModuleConfig>;
+type FocusTarget = {
+  pos: [number, number, number];
+  target: [number, number, number];
+};
 
-function HoverLabel({
-  module,
-  visible,
-  position = [0, 0.65, 0],
-}: {
-  module: ModuleConfig;
-  visible: boolean;
-  position?: [number, number, number];
-}) {
-  if (!visible) return null;
-
-  return (
-    <Html center position={position} distanceFactor={8} style={{ pointerEvents: 'none' }}>
-      <div
-        style={{
-          whiteSpace: 'nowrap',
-          borderRadius: 999,
-          padding: '7px 11px',
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: '.08em',
-          color: '#2E2925',
-          background: 'rgba(255,255,255,.96)',
-          border: `1px solid ${module.color}55`,
-          boxShadow: '0 10px 28px rgba(93,68,48,.18)',
-        }}
-      >
-        {module.label}
-      </div>
-    </Html>
-  );
-}
-
-function Interactive({
-  module,
-  children,
-  labelPosition,
-  onOpen,
-}: {
-  module: ModuleConfig;
-  children: React.ReactNode;
-  labelPosition?: [number, number, number];
-  onOpen: (module: ModuleConfig) => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const ref = useRef<THREE.Group>(null);
-
-  useEffect(() => {
-    if (!hovered || !ref.current) return;
-    ref.current.scale.setScalar(1.02);
-    return () => {
-      if (ref.current) ref.current.scale.setScalar(1);
-    };
-  }, [hovered]);
-
-  const over = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation();
-    document.body.style.cursor = 'pointer';
-    setHovered(true);
+type ClickableGroup = THREE.Group & {
+  userData: {
+    id: ModuleId;
+    focus: FocusTarget;
   };
+};
 
-  return (
-    <group
-      ref={ref}
-      onPointerOver={over}
-      onPointerOut={() => {
-        document.body.style.cursor = 'default';
-        setHovered(false);
-      }}
-      onClick={(event) => {
-        event.stopPropagation();
-        onOpen(module);
-      }}
-    >
-      {children}
-      <HoverLabel module={module} visible={hovered} position={labelPosition} />
-    </group>
-  );
-}
+const CONTENT: Record<ModuleId, ModuleContent> = {
+  computer: {
+    label: 'Mentra AI',
+    title: 'Mentra AI',
+    description: 'Your main mentor console for planning, decisions and execution.',
+    href: '/mentra',
+    bullets: ['Ask Mentra anything', 'Build plans from your goals', 'Turn ideas into next actions'],
+  },
+  whiteboard: {
+    label: 'Quest Board',
+    title: 'Quests',
+    description: 'Your active missions, daily priorities and progress.',
+    href: '/quests',
+    bullets: ['Daily quests', 'Priority missions', 'Progress tracking'],
+  },
+  shelf: {
+    label: 'Skill Shelf',
+    title: 'Skills',
+    description: 'Your skill library and long-term growth map.',
+    href: '/skills',
+    bullets: ['Skill progression', 'Learning roadmap', 'Level-up targets'],
+  },
+  certificates: {
+    label: 'Calendar Wall',
+    title: 'Calendar',
+    description: 'See the schedule, commitments and important upcoming work.',
+    href: '/calendar',
+    bullets: ['Upcoming schedule', 'Important dates', 'Planning view'],
+  },
+  phone: {
+    label: 'Journal',
+    title: 'Journal',
+    description: 'Capture your thoughts, reflection and daily notes.',
+    href: '/journal',
+    bullets: ['Daily reflection', 'Notes and ideas', 'Personal check-ins'],
+  },
+  window: {
+    label: 'Agent Window',
+    title: 'Agents',
+    description: 'Open the agent workspace for delegated AI work.',
+    href: '/agents',
+    bullets: ['Specialist agents', 'Delegated work', 'Automation workflows'],
+  },
+  cabinet: {
+    label: 'Memory Cabinet',
+    title: 'Memory',
+    description: 'Your stored context, preferences and important information.',
+    href: '/memory',
+    bullets: ['Long-term context', 'Important facts', 'Personal knowledge'],
+  },
+  finance: {
+    label: 'Finance Pad',
+    title: 'Finance',
+    description: 'Track money, plans, expenses and financial goals.',
+    href: '/finance',
+    bullets: ['Money tracking', 'Plans and targets', 'Financial overview'],
+  },
+};
 
-function Plant({
-  position,
-  scale = 1,
-}: {
-  position: [number, number, number];
-  scale?: number;
-}) {
-  return (
-    <group position={position} scale={scale}>
-      <mesh castShadow>
-        <cylinderGeometry args={[0.2, 0.16, 0.42, 20]} />
-        <meshStandardMaterial color="#D8C8B8" roughness={0.82} />
-      </mesh>
-
-      {[
-        [-0.14, 0.48, 0.02, -0.38],
-        [0.15, 0.54, 0.02, 0.38],
-        [0.03, 0.66, 0.08, -0.12],
-        [-0.09, 0.73, -0.06, 0.28],
-        [0.1, 0.8, -0.04, -0.25],
-      ].map(([x, y, z, rot], index) => (
-        <mesh
-          key={index}
-          position={[x, y, z]}
-          rotation={[0.1, index * 0.7, rot]}
-          castShadow
-        >
-          <coneGeometry args={[0.15, 0.64, 7]} />
-          <meshStandardMaterial
-            color={index % 2 ? '#4F8057' : '#628F61'}
-            roughness={0.9}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function RoomShell() {
-  const planks = ['#C58E60', '#D5A06F', '#BF875A', '#D9AA77'];
-
-  return (
-    <group>
-      <RoundedBox
-        position={[0, -0.33, 0]}
-        args={[10.4, 0.6, 7.9]}
-        radius={0.12}
-        smoothness={5}
-        receiveShadow
-        castShadow
-      >
-        <meshStandardMaterial color="#E8DDD2" roughness={0.88} />
-      </RoundedBox>
-
-      {Array.from({ length: 17 }).map((_, index) => (
-        <mesh
-          key={index}
-          position={[-4.8 + index * 0.6, 0.005, 0]}
-          receiveShadow
-        >
-          <boxGeometry args={[0.56, 0.035, 7.35]} />
-          <meshStandardMaterial color={planks[index % planks.length]} roughness={0.76} />
-        </mesh>
-      ))}
-
-      <mesh position={[0, 2.55, -3.82]} receiveShadow castShadow>
-        <boxGeometry args={[10.35, 5.1, 0.18]} />
-        <meshStandardMaterial color="#F4F0EA" roughness={0.94} />
-      </mesh>
-
-      <mesh position={[-5.1, 2.55, 0]} receiveShadow castShadow>
-        <boxGeometry args={[0.18, 5.1, 7.7]} />
-        <meshStandardMaterial color="#EEE7DF" roughness={0.94} />
-      </mesh>
-
-      <mesh position={[0, 0.12, 3.67]} receiveShadow>
-        <boxGeometry args={[10.3, 0.2, 0.12]} />
-        <meshStandardMaterial color="#D8C8B9" roughness={0.8} />
-      </mesh>
-
-      <mesh position={[5.02, 0.12, 0]} receiveShadow>
-        <boxGeometry args={[0.12, 0.2, 7.7]} />
-        <meshStandardMaterial color="#D8C8B9" roughness={0.8} />
-      </mesh>
-    </group>
-  );
-}
-
-function WindowAndCurtains() {
-  return (
-    <group position={[3.15, 2.55, -3.72]}>
-      <mesh>
-        <boxGeometry args={[2.9, 2.55, 0.08]} />
-        <meshStandardMaterial color="#FBF8F3" roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 0, 0.055]}>
-        <planeGeometry args={[2.62, 2.25]} />
-        <meshStandardMaterial
-          color="#CDE6F1"
-          emissive="#E7F4F9"
-          emissiveIntensity={0.45}
-        />
-      </mesh>
-
-      {[-0.66, 0, 0.66].map((x) => (
-        <mesh key={x} position={[x, 0, 0.08]}>
-          <boxGeometry args={[0.045, 2.25, 0.03]} />
-          <meshStandardMaterial color="#FBF8F3" />
-        </mesh>
-      ))}
-
-      <mesh position={[0, 0, 0.08]}>
-        <boxGeometry args={[2.62, 0.045, 0.03]} />
-        <meshStandardMaterial color="#FBF8F3" />
-      </mesh>
-
-      {[-1.55, 1.55].map((x) => (
-        <RoundedBox
-          key={x}
-          position={[x, 0, 0.1]}
-          args={[0.42, 2.8, 0.1]}
-          radius={0.06}
-          smoothness={4}
-        >
-          <meshStandardMaterial color="#D8CDC2" roughness={0.92} />
-        </RoundedBox>
-      ))}
-    </group>
-  );
-}
-
-function MainDesk({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
-  return (
-    <group>
-      <group position={[-0.55, 0.88, -2.55]}>
-        <RoundedBox
-          args={[4.25, 0.2, 1.48]}
-          radius={0.07}
-          smoothness={4}
-          castShadow
-          receiveShadow
-        >
-          <meshStandardMaterial color="#9D6746" roughness={0.5} />
-        </RoundedBox>
-
-        {[-1.82, 1.82].flatMap((x) =>
-          [-0.52, 0.52].map((z) => (
-            <mesh key={`${x}-${z}`} position={[x, -0.72, z]} castShadow>
-              <boxGeometry args={[0.12, 1.42, 0.12]} />
-              <meshStandardMaterial color="#6D5140" roughness={0.58} />
-            </mesh>
-          ))
-        )}
-      </group>
-
-      <Interactive module={MODULES.ai} onOpen={onOpen} labelPosition={[0, 1.05, 0]}>
-        <group position={[-0.55, 1.82, -2.82]}>
-          <RoundedBox args={[2.05, 1.22, 0.12]} radius={0.05} smoothness={4} castShadow>
-            <meshStandardMaterial color="#2D302E" metalness={0.34} roughness={0.32} />
-          </RoundedBox>
-
-          <mesh position={[0, 0, 0.07]}>
-            <planeGeometry args={[1.82, 1.0]} />
-            <meshPhysicalMaterial
-              color="#173C2B"
-              emissive="#2FAF79"
-              emissiveIntensity={0.22}
-              roughness={0.18}
-              metalness={0.08}
-            />
-          </mesh>
-
-          <Html
-            transform
-            position={[0, 0, 0.085]}
-            distanceFactor={1.55}
-            style={{ pointerEvents: 'none' }}
-          >
-            <div
-              style={{
-                width: 290,
-                height: 160,
-                borderRadius: 10,
-                padding: 18,
-                background: 'linear-gradient(145deg,#173628,#1e4433)',
-                color: '#F6FFF9',
-                fontFamily: 'Arial, sans-serif',
-                overflow: 'hidden',
-              }}
-            >
-              <div style={{ fontSize: 10, letterSpacing: '.14em', fontWeight: 800, color: '#82E0B6' }}>
-                MENTRA AI
-              </div>
-              <div style={{ marginTop: 20, fontSize: 22, fontWeight: 800 }}>Personal Mentor</div>
-              <div style={{ marginTop: 6, fontSize: 11, opacity: 0.72 }}>Ask · Plan · Execute</div>
-            </div>
-          </Html>
-
-          <mesh position={[0, -0.79, 0]}>
-            <boxGeometry args={[0.12, 0.4, 0.12]} />
-            <meshStandardMaterial color="#747875" metalness={0.45} roughness={0.32} />
-          </mesh>
-          <mesh position={[0, -1.0, 0]}>
-            <boxGeometry args={[0.72, 0.06, 0.34]} />
-            <meshStandardMaterial color="#747875" metalness={0.45} roughness={0.32} />
-          </mesh>
-        </group>
-      </Interactive>
-
-      <Interactive module={MODULES.finance} onOpen={onOpen} labelPosition={[0, 0.52, 0]}>
-        <group position={[-1.82, 1.04, -2.27]}>
-          <RoundedBox args={[0.92, 0.1, 0.58]} radius={0.035} smoothness={3}>
-            <meshStandardMaterial color="#F4F0EA" roughness={0.58} />
-          </RoundedBox>
-          {[0.14, 0, -0.14].map((z, index) => (
-            <mesh key={z} position={[0, 0.058, z]}>
-              <boxGeometry args={[0.58 - index * 0.08, 0.024, 0.04]} />
-              <meshStandardMaterial color="#2F9F6D" />
-            </mesh>
-          ))}
-        </group>
-      </Interactive>
-
-      <Interactive module={MODULES.journal} onOpen={onOpen} labelPosition={[0, 0.5, 0]}>
-        <group position={[0.92, 1.04, -2.25]} rotation={[0, -0.12, 0]}>
-          <RoundedBox args={[0.82, 0.08, 0.6]} radius={0.035} smoothness={3}>
-            <meshStandardMaterial color="#E6D1B0" roughness={0.86} />
-          </RoundedBox>
-          <mesh position={[0, 0.045, 0]}>
-            <boxGeometry args={[0.035, 0.01, 0.52]} />
-            <meshStandardMaterial color="#9B6D49" />
-          </mesh>
-        </group>
-      </Interactive>
-
-      <group position={[-0.35, 0.68, -0.42]}>
-        <RoundedBox args={[1.22, 0.2, 1.0]} radius={0.1} smoothness={4} castShadow>
-          <meshStandardMaterial color="#BBB2A8" roughness={0.72} />
-        </RoundedBox>
-        <RoundedBox
-          position={[0, 0.78, 0.38]}
-          args={[1.22, 1.32, 0.24]}
-          radius={0.11}
-          smoothness={4}
-          castShadow
-        >
-          <meshStandardMaterial color="#C9C1B8" roughness={0.72} />
-        </RoundedBox>
-      </group>
-    </group>
-  );
-}
-
-function WallModules({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
-  return (
-    <group>
-      <Interactive module={MODULES.skills} onOpen={onOpen} labelPosition={[0, 1.0, 0]}>
-        <group position={[-4.98, 2.82, -2.25]} rotation={[0, Math.PI / 2, 0]}>
-          <RoundedBox args={[2.1, 1.9, 0.1]} radius={0.045} smoothness={3}>
-            <meshStandardMaterial color="#FCFBF8" roughness={0.82} />
-          </RoundedBox>
-
-          {[0.45, 0.1, -0.25, -0.6].map((y, index) => (
-            <group key={y}>
-              <mesh position={[-0.16, y, 0.065]}>
-                <boxGeometry args={[0.92, 0.048, 0.02]} />
-                <meshStandardMaterial color="#E5E0DB" />
-              </mesh>
-              <mesh position={[-0.46, y, 0.076]}>
-                <boxGeometry args={[0.35 + index * 0.11, 0.064, 0.022]} />
-                <meshStandardMaterial
-                  color={['#6680D8', '#8B6BC9', '#2FAF79', '#E8A63A'][index]}
-                />
-              </mesh>
-            </group>
-          ))}
-        </group>
-      </Interactive>
-
-      <Interactive module={MODULES.quests} onOpen={onOpen} labelPosition={[0, 1.0, 0]}>
-        <group position={[-4.98, 2.55, 0.25]} rotation={[0, Math.PI / 2, 0]}>
-          <RoundedBox args={[1.95, 1.82, 0.1]} radius={0.045} smoothness={3}>
-            <meshStandardMaterial color="#FBFAF8" roughness={0.82} />
-          </RoundedBox>
-
-          {[0.44, 0.08, -0.28, -0.64].map((y, index) => (
-            <group key={y}>
-              <mesh position={[-0.55, y, 0.07]}>
-                <boxGeometry args={[0.11, 0.11, 0.02]} />
-                <meshStandardMaterial color={index < 2 ? '#2FAF79' : '#D8D1C9'} />
-              </mesh>
-              <mesh position={[0.12, y, 0.07]}>
-                <boxGeometry args={[0.96, 0.045, 0.02]} />
-                <meshStandardMaterial color="#A89E95" />
-              </mesh>
-            </group>
-          ))}
-        </group>
-      </Interactive>
-
-      <Interactive module={MODULES.calendar} onOpen={onOpen} labelPosition={[0, 1.0, 0]}>
-        <group position={[0.95, 2.6, -3.7]}>
-          <RoundedBox args={[1.95, 1.75, 0.1]} radius={0.045} smoothness={3}>
-            <meshStandardMaterial color="#FCFBF8" roughness={0.82} />
-          </RoundedBox>
-
-          <mesh position={[0, 0.55, 0.065]}>
-            <boxGeometry args={[1.48, 0.06, 0.02]} />
-            <meshStandardMaterial color="#A69B91" />
-          </mesh>
-
-          {[-0.48, 0, 0.48].flatMap((x) =>
-            [0.12, -0.28, -0.68].map((y, index) => (
-              <mesh key={`${x}-${y}`} position={[x, y, 0.068]}>
-                <boxGeometry args={[0.26, 0.2, 0.02]} />
-                <meshStandardMaterial
-                  color={['#F4D074', '#90C7E4', '#E29E89', '#BBA4DD'][
-                    (index + Math.round((x + 0.5) * 2)) % 4
-                  ]}
-                />
-              </mesh>
-            ))
-          )}
-        </group>
-      </Interactive>
-    </group>
-  );
-}
-
-function StorageAndAgents({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
-  return (
-    <group>
-      <Interactive module={MODULES.memory} onOpen={onOpen} labelPosition={[0, 1.2, 0]}>
-        <group position={[4.15, 1.45, -2.9]}>
-          <RoundedBox args={[1.45, 2.75, 0.82]} radius={0.06} smoothness={4} castShadow>
-            <meshStandardMaterial color="#E8E0D7" roughness={0.68} />
-          </RoundedBox>
-
-          {[-0.65, 0, 0.65].map((y) => (
-            <mesh key={y} position={[0, y, 0.43]}>
-              <boxGeometry args={[1.16, 0.04, 0.025]} />
-              <meshStandardMaterial color="#A99E93" />
-            </mesh>
-          ))}
-
-          <mesh position={[0, 0.08, 0.46]}>
-            <torusGeometry args={[0.28, 0.045, 16, 44]} />
-            <meshStandardMaterial color="#8B6BC9" emissive="#8B6BC9" emissiveIntensity={0.08} />
-          </mesh>
-        </group>
-      </Interactive>
-
-      <group position={[4.15, 0.55, 1.8]}>
-        <RoundedBox args={[1.9, 0.8, 0.72]} radius={0.07} smoothness={4} castShadow>
-          <meshStandardMaterial color="#9C6746" roughness={0.56} />
-        </RoundedBox>
-      </group>
-
-      <Interactive module={MODULES.agents} onOpen={onOpen} labelPosition={[0, 0.92, 0]}>
-        <group position={[4.08, 1.08, 1.8]}>
-          <mesh castShadow>
-            <sphereGeometry args={[0.45, 32, 32]} />
-            <meshPhysicalMaterial
-              color="#C9C4F4"
-              emissive="#7468C8"
-              emissiveIntensity={0.28}
-              roughness={0.12}
-              metalness={0.08}
-              transmission={0.18}
-              transparent
-              opacity={0.92}
-            />
-          </mesh>
-
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[0.62, 0.022, 12, 64]} />
-            <meshStandardMaterial color="#D5A26D" />
-          </mesh>
-          <mesh rotation={[0.48, 0.58, 0]}>
-            <torusGeometry args={[0.68, 0.018, 12, 64]} />
-            <meshStandardMaterial
-              color="#7468C8"
-              emissive="#7468C8"
-              emissiveIntensity={0.1}
-            />
-          </mesh>
-        </group>
-      </Interactive>
-    </group>
-  );
-}
-
-function Bookshelf() {
-  return (
-    <group position={[-4.7, 1.35, 2.6]} rotation={[0, Math.PI / 2, 0]}>
-      {[-0.58, 0, 0.58].map((y) => (
-        <mesh key={y} position={[0, y, 0]}>
-          <boxGeometry args={[1.9, 0.09, 0.44]} />
-          <meshStandardMaterial color="#9C6746" roughness={0.58} />
-        </mesh>
-      ))}
-
-      {[-0.58, 0, 0.58].map((y) =>
-        [-0.62, 0, 0.62].map((x, index) => (
-          <mesh key={`${y}-${x}`} position={[x, y + 0.17, 0]}>
-            <boxGeometry args={[0.12 + (index % 2) * 0.05, 0.3, 0.24]} />
-            <meshStandardMaterial color={index === 1 ? '#D4A65C' : '#E9E0D5'} />
-          </mesh>
-        ))
-      )}
-    </group>
-  );
-}
-
-function Lounge() {
-  return (
-    <group>
-      <group position={[-3.0, 0.48, 2.0]} rotation={[0, 0.52, 0]}>
-        <RoundedBox args={[2.1, 0.68, 1.08]} radius={0.16} smoothness={5} castShadow>
-          <meshStandardMaterial color="#D8D0C7" roughness={0.88} />
-        </RoundedBox>
-        <RoundedBox
-          position={[0, 0.65, 0.36]}
-          args={[2.1, 0.82, 0.3]}
-          radius={0.16}
-          smoothness={5}
-          castShadow
-        >
-          <meshStandardMaterial color="#E4DDD6" roughness={0.88} />
-        </RoundedBox>
-
-        {[-0.68, 0.68].map((x) => (
-          <RoundedBox
-            key={x}
-            position={[x, 0.55, -0.18]}
-            args={[0.52, 0.52, 0.22]}
-            radius={0.1}
-            smoothness={4}
-          >
-            <meshStandardMaterial color={x < 0 ? '#D1B395' : '#C9D2C0'} roughness={0.88} />
-          </RoundedBox>
-        ))}
-      </group>
-
-      <group position={[1.3, 0.35, 1.8]}>
-        <mesh castShadow>
-          <cylinderGeometry args={[0.72, 0.78, 0.15, 36]} />
-          <meshStandardMaterial color="#A56F4A" roughness={0.56} />
-        </mesh>
-        <mesh position={[0, -0.36, 0]}>
-          <cylinderGeometry args={[0.06, 0.06, 0.7, 18]} />
-          <meshStandardMaterial color="#6D5140" />
-        </mesh>
-      </group>
-
-      <mesh position={[-0.75, 0.025, 1.65]} receiveShadow>
-        <boxGeometry args={[5.1, 0.03, 2.65]} />
-        <meshStandardMaterial color="#E8DED2" roughness={0.95} />
-      </mesh>
-    </group>
-  );
-}
-
-function Decor() {
-  return (
-    <group>
-      <Plant position={[-4.55, 0.2, 2.95]} scale={1.08} />
-      <Plant position={[4.55, 0.2, 3.0]} scale={0.95} />
-      <Plant position={[2.25, 0.2, 2.45]} scale={0.55} />
-
-      <group position={[-1.85, 3.55, -3.7]}>
-        <mesh>
-          <boxGeometry args={[1.7, 0.1, 0.4]} />
-          <meshStandardMaterial color="#9C6746" />
-        </mesh>
-
-        <mesh position={[-0.3, 0.32, 0]}>
-          <cylinderGeometry args={[0.16, 0.24, 0.34, 20]} />
-          <meshStandardMaterial color="#DFAE48" metalness={0.5} roughness={0.28} />
-        </mesh>
-        <Plant position={[0.46, 0.1, 0]} scale={0.38} />
-      </group>
-
-      <Html
-        transform
-        position={[-0.4, 4.15, -3.72]}
-        distanceFactor={4.8}
-        style={{ pointerEvents: 'none' }}
-      >
-        <div style={{ textAlign: 'center', whiteSpace: 'nowrap', color: '#2F2A26' }}>
-          <div style={{ fontFamily: 'Arial, sans-serif', fontWeight: 900, fontSize: 36, letterSpacing: '.18em' }}>
-            MENTRA
-          </div>
-          <div style={{ marginTop: 4, fontSize: 9, letterSpacing: '.28em', color: '#84776C', fontWeight: 700 }}>
-            BUILD A BETTER YOU
-          </div>
-        </div>
-      </Html>
-    </group>
-  );
-}
-
-function CameraRig() {
-  const cameraRef = useRef<THREE.OrthographicCamera>(null);
-  const { size } = useThree();
-
-  useEffect(() => {
-    if (!cameraRef.current) return;
-    cameraRef.current.zoom = size.width < 640 ? 46 : size.width < 1024 ? 54 : 62;
-    cameraRef.current.updateProjectionMatrix();
-  }, [size.width]);
-
-  return (
-    <>
-      <OrthographicCamera
-        ref={cameraRef}
-        makeDefault
-        position={[8.1, 7.3, 8.1]}
-        near={0.1}
-        far={100}
-        zoom={58}
-      />
-      <OrbitControls
-        makeDefault
-        enablePan={false}
-        enableDamping
-        dampingFactor={0.07}
-        minZoom={42}
-        maxZoom={74}
-        minPolarAngle={0.66}
-        maxPolarAngle={0.98}
-        minAzimuthAngle={0.55}
-        maxAzimuthAngle={1.02}
-        target={[0, 1.5, -0.25]}
-      />
-    </>
-  );
-}
-
-function Scene({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
-  return (
-    <>
-      <color attach="background" args={['#CBBEB2']} />
-
-      <ambientLight intensity={1.45} color="#FFF8EF" />
-      <hemisphereLight intensity={1.3} color="#FFFFFF" groundColor="#B88860" />
-      <directionalLight
-        position={[7, 9, 7]}
-        intensity={2.15}
-        color="#FFF0D5"
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-      />
-      <pointLight position={[-2, 4.2, -2.8]} intensity={0.7} distance={6} color="#FFF5E8" />
-
-      <RoomShell />
-      <WindowAndCurtains />
-      <MainDesk onOpen={onOpen} />
-      <WallModules onOpen={onOpen} />
-      <StorageAndAgents onOpen={onOpen} />
-      <Bookshelf />
-      <Lounge />
-      <Decor />
-
-      <ContactShadows
-        position={[0, -0.04, 0]}
-        opacity={0.28}
-        scale={12}
-        blur={2.8}
-        far={5}
-      />
-
-      <CameraRig />
-    </>
-  );
-}
+const HOME = {
+  pos: new THREE.Vector3(7.5, 5.5, 8.5),
+  target: new THREE.Vector3(0, 1.4, 0),
+};
 
 export default function MentraHQScene() {
   const router = useRouter();
-  const [opening, setOpening] = useState<ModuleConfig | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const goHomeRef = useRef<() => void>(() => undefined);
+  const [activeId, setActiveId] = useState<ModuleId | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  const openModule = (module: ModuleConfig) => {
-    setOpening(module);
-    window.setTimeout(() => router.push(module.href), 160);
-  };
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#1c2230');
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+    camera.position.copy(HOME.pos);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.target.copy(HOME.target);
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.minDistance = 4;
+    controls.maxDistance = 14;
+    controls.minPolarAngle = 0.4;
+    controls.maxPolarAngle = 1.35;
+    controls.minAzimuthAngle = -0.1;
+    controls.maxAzimuthAngle = 1.4;
+
+    scene.add(new THREE.HemisphereLight('#fff4e0', '#2a2018', 1.4));
+
+    const sun = new THREE.DirectionalLight('#ffe2b0', 2.2);
+    sun.position.set(-3, 6, 4);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -6;
+    sun.shadow.camera.right = 6;
+    sun.shadow.camera.top = 6;
+    sun.shadow.camera.bottom = -6;
+    scene.add(sun);
+
+    const lampLight = new THREE.PointLight('#ffc36b', 6, 4);
+    lampLight.position.set(1.4, 2.2, -0.6);
+    scene.add(lampLight);
+
+    const material = (color: string, options: THREE.MeshStandardMaterialParameters = {}) =>
+      new THREE.MeshStandardMaterial({ color, roughness: 0.75, ...options });
+
+    const mat = {
+      floor: material('#6e4a2f', { roughness: 0.6 }),
+      wall: material('#24464a'),
+      wall2: material('#2c5357'),
+      walnut: material('#5b3a24', { roughness: 0.5 }),
+      dark: material('#1a1a1a', { roughness: 0.4 }),
+      brass: material('#c9a04a', { metalness: 0.8, roughness: 0.3 }),
+      paper: material('#f3ede2'),
+      steel: material('#7d8790', { metalness: 0.6, roughness: 0.4 }),
+      screen: new THREE.MeshStandardMaterial({
+        color: '#0d1b2a',
+        emissive: '#3a7bd5',
+        emissiveIntensity: 0.6,
+      }),
+    };
+
+    const box = (
+      width: number,
+      height: number,
+      depth: number,
+      meshMaterial: THREE.Material,
+      x: number,
+      y: number,
+      z: number,
+      parent: THREE.Object3D = scene,
+      rounded = false
+    ) => {
+      const geometry = rounded
+        ? new RoundedBoxGeometry(
+            width,
+            height,
+            depth,
+            3,
+            Math.min(width, height, depth) * 0.15
+          )
+        : new THREE.BoxGeometry(width, height, depth);
+
+      const mesh = new THREE.Mesh(geometry, meshMaterial);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      parent.add(mesh);
+      return mesh;
+    };
+
+    box(8, 0.2, 8, mat.floor, 0, -0.1, 0);
+    box(8, 4.5, 0.2, mat.wall, 0, 2.25, -4);
+    box(0.2, 4.5, 8, mat.wall2, -4, 2.25, 0);
+    box(8, 0.15, 0.05, mat.walnut, 0, 0.08, -3.88);
+    box(0.05, 0.15, 8, mat.walnut, -3.88, 0.08, 0);
+
+    const rug = new THREE.Mesh(
+      new THREE.CircleGeometry(1.8, 48),
+      material('#5e2b26', { roughness: 1 })
+    );
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(0.3, 0.01, 0.6);
+    rug.receiveShadow = true;
+    scene.add(rug);
+
+    const clickables: ClickableGroup[] = [];
+
+    const makeGroup = (id: ModuleId, focus: FocusTarget) => {
+      const group = new THREE.Group() as ClickableGroup;
+      group.userData = { id, focus };
+      scene.add(group);
+      clickables.push(group);
+      return group;
+    };
+
+    box(3, 0.1, 1.4, mat.walnut, 0.3, 1.0, -1.2, scene, true);
+    [
+      [-1.05, -1.75],
+      [1.65, -1.75],
+      [-1.05, -0.65],
+      [1.65, -0.65],
+    ].forEach(([x, z]) => box(0.08, 1, 0.08, mat.dark, x, 0.5, z));
+
+    box(0.7, 0.1, 0.7, mat.dark, 0.3, 0.6, 0.0, scene, true);
+    box(0.7, 0.8, 0.1, mat.dark, 0.3, 1.05, 0.33, scene, true);
+    box(0.06, 0.55, 0.06, mat.steel, 0.3, 0.3, 0.0);
+
+    box(0.25, 0.05, 0.25, mat.brass, 1.4, 1.08, -1.6);
+    box(0.04, 0.9, 0.04, mat.brass, 1.4, 1.5, -1.6);
+
+    const shade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.22, 0.25, 24, 1, true),
+      material('#f0d89c', {
+        side: THREE.DoubleSide,
+        emissive: '#ffcf70',
+        emissiveIntensity: 0.4,
+      })
+    );
+    shade.position.set(1.4, 1.95, -1.6);
+    scene.add(shade);
+
+    {
+      const group = makeGroup('computer', {
+        pos: [0.3, 1.75, 0.4],
+        target: [0.0, 1.5, -1.5],
+      });
+      box(1.3, 0.8, 0.06, mat.dark, 0, 1.55, -1.5, group, true);
+      box(1.18, 0.68, 0.01, mat.screen, 0, 1.55, -1.465, group);
+      box(0.1, 0.4, 0.1, mat.dark, 0, 1.2, -1.55, group);
+      box(0.4, 0.03, 0.25, mat.dark, 0, 1.06, -1.55, group);
+      box(0.9, 0.03, 0.3, mat.dark, 0, 1.065, -1.0, group);
+    }
+
+    {
+      const group = makeGroup('whiteboard', {
+        pos: [-0.8, 2.3, 0.4],
+        target: [-3.9, 2.3, 0.4],
+      });
+      box(0.05, 1.4, 2.4, mat.steel, -3.86, 2.4, 0.4, group);
+      box(0.02, 1.3, 2.3, mat.paper, -3.83, 2.4, 0.4, group);
+
+      [
+        [-0.3, 2.7],
+        [0.2, 2.45],
+        [-0.1, 2.2],
+      ].forEach(([depthOffset, y], index) => {
+        box(
+          0.01,
+          0.05,
+          1.2 - index * 0.25,
+          material(['#2e5aa8', '#a83232', '#2e8b57'][index]),
+          -3.81,
+          y,
+          0.4 + depthOffset,
+          group
+        );
+      });
+    }
+
+    {
+      const group = makeGroup('shelf', {
+        pos: [-1.2, 1.8, 3.0],
+        target: [-3.6, 1.5, 2.6],
+      });
+
+      [0.9, 1.7, 2.5].forEach((y) =>
+        box(0.5, 0.06, 1.8, mat.walnut, -3.65, y, 2.6, group)
+      );
+      box(0.5, 2.0, 0.06, mat.walnut, -3.65, 1.6, 1.7, group);
+      box(0.5, 2.0, 0.06, mat.walnut, -3.65, 1.6, 3.5, group);
+
+      const books = ['#3b4a2b', '#111111', '#c2b280', '#7a1f1f', '#4f5d73', '#e9e4d8'];
+      books.forEach((color, index) => {
+        const y = index < 3 ? 1.0 : 1.8;
+        const z = 2.0 + (index % 3) * 0.6;
+        box(0.4, 0.12, 0.45, material(color), -3.62, y, z, group, true);
+      });
+    }
+
+    {
+      const group = makeGroup('certificates', {
+        pos: [2.6, 2.6, 0.2],
+        target: [2.6, 2.6, -3.9],
+      });
+
+      [
+        [2.0, 3.0],
+        [3.0, 3.0],
+        [2.0, 2.2],
+        [3.0, 2.2],
+      ].forEach(([x, y]) => {
+        box(0.7, 0.55, 0.04, mat.brass, x, y, -3.87, group);
+        box(0.6, 0.45, 0.01, mat.paper, x, y, -3.845, group);
+      });
+    }
+
+    {
+      const group = makeGroup('phone', {
+        pos: [-0.4, 1.9, -0.2],
+        target: [-0.7, 1.05, -1.2],
+      });
+
+      box(0.22, 0.03, 0.4, mat.dark, -0.7, 1.07, -1.2, group, true);
+      box(
+        0.19,
+        0.005,
+        0.36,
+        new THREE.MeshStandardMaterial({
+          color: '#4a2c1f',
+          emissive: '#c98654',
+          emissiveIntensity: 0.28,
+        }),
+        -0.7,
+        1.088,
+        -1.2,
+        group
+      );
+    }
+
+    {
+      const group = makeGroup('window', {
+        pos: [-1.6, 2.4, 0.5],
+        target: [-1.6, 2.4, -3.9],
+      });
+
+      const skyCanvas = document.createElement('canvas');
+      skyCanvas.width = 16;
+      skyCanvas.height = 256;
+      const context = skyCanvas.getContext('2d');
+
+      if (context) {
+        const gradient = context.createLinearGradient(0, 0, 0, 256);
+        gradient.addColorStop(0, '#f6a35a');
+        gradient.addColorStop(0.6, '#f7d9a0');
+        gradient.addColorStop(1, '#9fb7c9');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 16, 256);
+      }
+
+      const sky = new THREE.MeshBasicMaterial({
+        map: new THREE.CanvasTexture(skyCanvas),
+      });
+
+      box(1.8, 1.6, 0.02, sky, -1.6, 2.5, -3.88, group);
+      box(1.9, 0.08, 0.1, mat.walnut, -1.6, 3.32, -3.85, group);
+      box(1.9, 0.08, 0.15, mat.walnut, -1.6, 1.68, -3.85, group);
+      box(0.06, 1.6, 0.08, mat.walnut, -1.6, 2.5, -3.85, group);
+      box(1.8, 0.05, 0.08, mat.walnut, -1.6, 2.5, -3.85, group);
+    }
+
+    {
+      const group = makeGroup('cabinet', {
+        pos: [3.0, 1.6, 0.8],
+        target: [3.2, 0.9, -3.2],
+      });
+
+      box(0.9, 1.6, 0.7, mat.steel, 3.2, 0.8, -3.4, group, true);
+
+      [0.35, 0.85, 1.35].forEach((y) => {
+        box(
+          0.8,
+          0.42,
+          0.02,
+          material('#6b747c', { metalness: 0.5 }),
+          3.2,
+          y,
+          -3.04,
+          group
+        );
+        box(0.25, 0.04, 0.04, mat.brass, 3.2, y + 0.1, -3.02, group);
+      });
+
+      box(0.3, 0.3, 0.3, material('#b5652b'), 3.2, 1.75, -3.4, group);
+      const leaves = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.32, 1),
+        material('#3f6b3a', { flatShading: true })
+      );
+      leaves.position.set(3.2, 2.15, -3.4);
+      leaves.castShadow = true;
+      group.add(leaves);
+    }
+
+    {
+      const group = makeGroup('finance', {
+        pos: [1.45, 1.85, 0.1],
+        target: [1.05, 1.08, -1.05],
+      });
+
+      box(0.65, 0.035, 0.46, mat.dark, 1.05, 1.07, -1.02, group, true);
+      box(
+        0.58,
+        0.006,
+        0.39,
+        new THREE.MeshStandardMaterial({
+          color: '#0d2b21',
+          emissive: '#2f9f6d',
+          emissiveIntensity: 0.36,
+        }),
+        1.05,
+        1.092,
+        -1.02,
+        group,
+        true
+      );
+    }
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let hovered: ClickableGroup | null = null;
+    let focused = false;
+    let downAt: [number, number] | null = null;
+
+    const findGroup = (object: THREE.Object3D | null): ClickableGroup | null => {
+      let current: THREE.Object3D | null = object;
+      while (current && !clickables.includes(current as ClickableGroup)) {
+        current = current.parent;
+      }
+      return current as ClickableGroup | null;
+    };
+
+    const setHighlight = (group: ClickableGroup, on: boolean) => {
+      group.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+
+        const currentMaterial = Array.isArray(object.material)
+          ? object.material[0]
+          : object.material;
+
+        if (!(currentMaterial instanceof THREE.MeshStandardMaterial)) return;
+
+        if (on) {
+          if (!object.userData.originalMaterial) {
+            object.userData.originalMaterial = currentMaterial;
+          }
+
+          const highlighted = currentMaterial.clone();
+          highlighted.emissive.set('#c9a04a');
+          highlighted.emissiveIntensity = 0.25;
+          object.material = highlighted;
+        } else if (object.userData.originalMaterial) {
+          const highlightedMaterial = Array.isArray(object.material)
+            ? object.material[0]
+            : object.material;
+
+          if (highlightedMaterial !== object.userData.originalMaterial) {
+            highlightedMaterial.dispose();
+          }
+
+          object.material = object.userData.originalMaterial as THREE.Material;
+          delete object.userData.originalMaterial;
+        }
+      });
+    };
+
+    const moveCamera = (
+      position: [number, number, number],
+      target: [number, number, number],
+      onDone?: () => void
+    ) => {
+      const duration = reduceMotion ? 0 : 1.4;
+
+      gsap.to(camera.position, {
+        x: position[0],
+        y: position[1],
+        z: position[2],
+        duration,
+        ease: 'power3.inOut',
+      });
+
+      gsap.to(controls.target, {
+        x: target[0],
+        y: target[1],
+        z: target[2],
+        duration,
+        ease: 'power3.inOut',
+        onComplete: onDone,
+      });
+    };
+
+    const focusOn = (group: ClickableGroup) => {
+      const { id, focus } = group.userData;
+      focused = true;
+      controls.enabled = false;
+
+      if (tooltipRef.current) {
+        tooltipRef.current.classList.remove('opacity-100');
+        tooltipRef.current.classList.add('opacity-0');
+      }
+
+      moveCamera(focus.pos, focus.target, () => {
+        setActiveId(id);
+        setPanelOpen(true);
+      });
+    };
+
+    const goHome = () => {
+      setPanelOpen(false);
+      moveCamera(
+        HOME.pos.toArray() as [number, number, number],
+        HOME.target.toArray() as [number, number, number],
+        () => {
+          focused = false;
+          setActiveId(null);
+          controls.enabled = true;
+        }
+      );
+    };
+
+    goHomeRef.current = goHome;
+
+    const updatePointer = (event: PointerEvent) => {
+      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (focused) return;
+
+      updatePointer(event);
+      raycaster.setFromCamera(pointer, camera);
+
+      const hit = raycaster.intersectObjects(clickables, true)[0];
+      const group = hit ? findGroup(hit.object) : null;
+
+      if (group !== hovered) {
+        if (hovered) setHighlight(hovered, false);
+        if (group) setHighlight(group, true);
+        hovered = group;
+      }
+
+      canvas.style.cursor = group ? 'pointer' : 'grab';
+
+      const tooltip = tooltipRef.current;
+      if (!tooltip) return;
+
+      if (group) {
+        tooltip.textContent = CONTENT[group.userData.id].label;
+        tooltip.style.left = `${event.clientX + 14}px`;
+        tooltip.style.top = `${event.clientY + 14}px`;
+        tooltip.classList.remove('opacity-0');
+        tooltip.classList.add('opacity-100');
+      } else {
+        tooltip.classList.remove('opacity-100');
+        tooltip.classList.add('opacity-0');
+      }
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      downAt = [event.clientX, event.clientY];
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (focused || !downAt) return;
+
+      const moved = Math.hypot(
+        event.clientX - downAt[0],
+        event.clientY - downAt[1]
+      );
+
+      if (moved > 6) return;
+
+      updatePointer(event);
+      raycaster.setFromCamera(pointer, camera);
+
+      const hit = raycaster.intersectObjects(clickables, true)[0];
+      const group = hit ? findGroup(hit.object) : null;
+
+      if (group) {
+        if (hovered) {
+          setHighlight(hovered, false);
+          hovered = null;
+        }
+        focusOn(group);
+      }
+    };
+
+    const handleResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && focused) {
+        goHome();
+      }
+    };
+
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('keydown', handleKeyDown);
+
+    const clock = new THREE.Clock();
+    let frameId = 0;
+
+    const tick = () => {
+      const elapsed = clock.getElapsedTime();
+      lampLight.intensity = 6 + Math.sin(elapsed * 2) * 0.15;
+      controls.update();
+      renderer.render(scene, camera);
+      frameId = requestAnimationFrame(tick);
+    };
+
+    tick();
+    setLoaded(true);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      canvas.removeEventListener('pointermove', handlePointerMove);
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      canvas.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+
+      if (hovered) setHighlight(hovered, false);
+
+      gsap.killTweensOf(camera.position);
+      gsap.killTweensOf(controls.target);
+      controls.dispose();
+
+      scene.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        object.geometry.dispose();
+
+        const materials = Array.isArray(object.material)
+          ? object.material
+          : [object.material];
+
+        materials.forEach((meshMaterial) => meshMaterial.dispose());
+      });
+
+      renderer.dispose();
+      goHomeRef.current = () => undefined;
+    };
+  }, []);
+
+  const active = activeId ? CONTENT[activeId] : null;
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-[#CBBEB2]">
-      <Canvas
-        shadows
-        dpr={[1, 1.35]}
-        gl={{
-          antialias: true,
-          powerPreference: 'high-performance',
-          toneMapping: THREE.ACESFilmicToneMapping,
-        }}
-      >
-        <Suspense fallback={null}>
-          <Scene onOpen={openModule} />
-        </Suspense>
-      </Canvas>
+    <div className="absolute inset-0 overflow-hidden bg-[#1c2230] text-[#f3ede2]">
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
 
-      <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/70 bg-white/85 px-4 py-2 text-[9px] font-semibold tracking-[0.08em] text-[#5D534B] shadow-md backdrop-blur-md">
-        DRAG ROOM · PINCH ZOOM · TAP OBJECTS
+      <div
+        className={`pointer-events-none absolute left-5 top-[calc(18px+env(safe-area-inset-top,0px))] z-10 transition-opacity duration-300 ${
+          panelOpen ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
+        <h1 className="font-serif text-[clamp(1.7rem,4vw,2.7rem)] font-bold leading-none text-[#f3ede2]">
+          Mentra HQ
+        </h1>
+        <p className="mt-2 text-sm text-[#f3ede2]/70">
+          Drag to look around · tap objects
+        </p>
       </div>
 
-      {opening && (
-        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-black/10 bg-white/95 px-4 py-3 text-[10px] font-bold tracking-[0.08em] text-[#312B26] shadow-xl">
-          OPENING {opening.label}...
+      <div
+        ref={tooltipRef}
+        className="pointer-events-none fixed z-30 rounded-[3px] border border-[#c9a04a] bg-[#1c2230] px-2.5 py-1.5 text-xs text-[#f3ede2] opacity-0 transition-opacity duration-150"
+      />
+
+      <div
+        className={`fixed bottom-0 right-0 top-0 z-20 w-full border-l-[6px] border-[#c9a04a] bg-[#f3ede2] text-[#1c2230] shadow-[-20px_0_60px_rgba(0,0,0,.22)] transition-transform duration-500 [transition-timing-function:cubic-bezier(.2,.8,.2,1)] sm:w-[420px] ${
+          panelOpen ? 'translate-x-0' : 'translate-x-[105%]'
+        } max-sm:top-auto max-sm:h-[62%] max-sm:border-l-0 max-sm:border-t-[6px] max-sm:translate-x-0 ${
+          panelOpen ? 'max-sm:translate-y-0' : 'max-sm:translate-y-[105%]'
+        }`}
+      >
+        <div className="h-full overflow-y-auto px-7 pb-[calc(28px+env(safe-area-inset-bottom,0px))] pt-[calc(28px+env(safe-area-inset-top,0px))]">
+          <button
+            type="button"
+            onClick={() => goHomeRef.current()}
+            className="rounded border border-[#1c2230] px-3.5 py-2 text-sm transition hover:bg-[#1c2230] hover:text-[#f3ede2]"
+          >
+            ← Back to room
+          </button>
+
+          {active && (
+            <>
+              <div className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-[#9a7538]">
+                {active.label}
+              </div>
+
+              <h2 className="mt-2 font-serif text-3xl font-bold leading-tight">
+                {active.title}
+              </h2>
+
+              <p className="mt-3 text-sm leading-6 text-[#1c2230]/75">
+                {active.description}
+              </p>
+
+              <ul className="mt-4">
+                {active.bullets.map((bullet) => (
+                  <li
+                    key={bullet}
+                    className="border-b border-[#d8cfbf] py-3 text-sm leading-5"
+                  >
+                    {bullet}
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                type="button"
+                onClick={() => router.push(active.href)}
+                className="mt-5 inline-flex rounded bg-[#24464a] px-5 py-3 text-sm font-semibold text-[#f3ede2] transition hover:bg-[#1d393c]"
+              >
+                Open {active.title}
+              </button>
+            </>
+          )}
         </div>
-      )}
+      </div>
+
+      <div
+        className={`pointer-events-none fixed inset-0 z-40 grid place-items-center bg-[#1c2230] text-[#c9a04a] transition-opacity duration-500 ${
+          loaded ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
+        <div className="font-serif text-lg">Entering Mentra HQ…</div>
+      </div>
     </div>
   );
 }
