@@ -49,7 +49,7 @@ export default function MobileDock() {
     <>
       {/* Top Compact Brand Bar */}
       <div className="lg:hidden fixed top-0 inset-x-0 z-40 px-3 py-3 bg-black/70 backdrop-blur-xl border-b border-white/10 flex items-center justify-between sm:px-4">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/hq" className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#d8ff63] shadow-[0_0_12px_rgba(216,255,99,0.5)]" />
           <span className="font-display font-bold tracking-wider text-sm text-white">MENTRA</span>
           <span className="text-[9px] uppercase font-mono tracking-widest text-white/40 px-1 py-0.5 rounded bg-white/5">
@@ -80,13 +80,13 @@ export default function MobileDock() {
         <div className="flex items-center justify-around p-2 glass-pill bg-black/80 border-white/10 shadow-2xl backdrop-blur-2xl">
           {/* Home */}
           <Link
-            href="/"
+            href="/hq"
             className={`flex flex-col items-center gap-1 py-1 px-2.5 sm:px-3 rounded-full transition-all ${
-              pathname === '/' ? 'text-[#d8ff63] font-medium' : 'text-white/60 hover:text-white'
+              pathname === '/hq' ? 'text-[#d8ff63] font-medium' : 'text-white/60 hover:text-white'
             }`}
           >
             <Home className="w-4 h-4" />
-            <span className="text-[10px]">Home</span>
+            <span className="text-[10px]">HQ</span>
           </Link>
 
           {/* Quests */}
