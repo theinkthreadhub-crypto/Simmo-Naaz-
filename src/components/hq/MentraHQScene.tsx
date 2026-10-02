@@ -51,9 +51,13 @@ function RealOfficePanorama() {
   }, [texture]);
 
   return (
-    <mesh scale={[-1, 1, 1]}>
+    <mesh rotation={[0, Math.PI, 0]}>
       <sphereGeometry args={[20, 72, 48]} />
-      <meshBasicMaterial map={texture} toneMapped={false} />
+      <meshBasicMaterial
+        map={texture}
+        side={THREE.BackSide}
+        toneMapped={false}
+      />
     </mesh>
   );
 }
