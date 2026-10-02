@@ -2,7 +2,7 @@
 
 import React, { Suspense, useRef, useState } from 'react';
 import { Canvas, ThreeEvent, useFrame } from '@react-three/fiber';
-import { Html, OrbitControls, RoundedBox, Sparkles } from '@react-three/drei';
+import { Html, OrbitControls, RoundedBox } from '@react-three/drei';
 import { useRouter } from 'next/navigation';
 import * as THREE from 'three';
 
@@ -14,30 +14,38 @@ type ModuleConfig = {
 };
 
 const MODULES = {
-  ai: { key: 'ai', label: 'MENTRA AI', href: '/mentra', color: '#d8ff63' },
-  quests: { key: 'quests', label: 'QUESTS', href: '/quests', color: '#70e1ff' },
-  memory: { key: 'memory', label: 'MEMORY VAULT', href: '/memory', color: '#a78bfa' },
-  finance: { key: 'finance', label: 'FINANCE', href: '/finance', color: '#34d399' },
-  skills: { key: 'skills', label: 'SKILL MATRIX', href: '/skills', color: '#fb7185' },
-  journal: { key: 'journal', label: 'JOURNAL', href: '/journal', color: '#fbbf24' },
-  calendar: { key: 'calendar', label: 'CALENDAR', href: '/calendar', color: '#60a5fa' },
-  agents: { key: 'agents', label: 'AGENT CORE', href: '/agents', color: '#f4f1e8' },
+  ai: { key: 'ai', label: 'MENTRA AI', href: '/mentra', color: '#31C48D' },
+  quests: { key: 'quests', label: 'QUESTS', href: '/quests', color: '#F0B429' },
+  memory: { key: 'memory', label: 'MEMORY', href: '/memory', color: '#8B5CF6' },
+  finance: { key: 'finance', label: 'FINANCE', href: '/finance', color: '#2BB673' },
+  skills: { key: 'skills', label: 'SKILLS', href: '/skills', color: '#5B7CFA' },
+  journal: { key: 'journal', label: 'JOURNAL', href: '/journal', color: '#C88445' },
+  calendar: { key: 'calendar', label: 'CALENDAR', href: '/calendar', color: '#4FA3E3' },
+  agents: { key: 'agents', label: 'AGENTS', href: '/agents', color: '#6C63FF' },
 } satisfies Record<string, ModuleConfig>;
 
-function HoverLabel({ label, color, visible, position = [0, 0.7, 0] }: {
-  label: string;
-  color: string;
+function HoverLabel({
+  module,
+  visible,
+  position = [0, 0.7, 0],
+}: {
+  module: ModuleConfig;
   visible: boolean;
   position?: [number, number, number];
 }) {
   if (!visible) return null;
   return (
-    <Html center position={position} distanceFactor={7.5} style={{ pointerEvents: 'none' }}>
+    <Html center position={position} distanceFactor={7} style={{ pointerEvents: 'none' }}>
       <div
-        className="whitespace-nowrap rounded-full border bg-black/80 px-3 py-1.5 text-[9px] font-mono tracking-[0.18em] text-white backdrop-blur-xl"
-        style={{ borderColor: `${color}66`, boxShadow: `0 0 30px ${color}22` }}
+        className="whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-semibold tracking-[0.08em] shadow-xl backdrop-blur-xl"
+        style={{
+          color: '#2F2B27',
+          background: 'rgba(255,255,255,.94)',
+          borderColor: `${module.color}66`,
+          boxShadow: `0 10px 30px rgba(120,93,62,.16), 0 0 0 1px ${module.color}14`,
+        }}
       >
-        {label}
+        {module.label}
       </div>
     </Html>
   );
@@ -60,89 +68,103 @@ function Interactive({
   useFrame(() => {
     if (!ref.current) return;
     const target = hovered ? 1.035 : 1;
-    const s = THREE.MathUtils.lerp(ref.current.scale.x, target, 0.12);
+    const s = THREE.MathUtils.lerp(ref.current.scale.x, target, 0.1);
     ref.current.scale.setScalar(s);
   });
 
-  const over = (event: ThreeEvent<PointerEvent>) => {
+  const onOver = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     document.body.style.cursor = 'pointer';
     setHovered(true);
   };
 
-  const out = () => {
-    document.body.style.cursor = 'default';
-    setHovered(false);
-  };
-
   return (
     <group
       ref={ref}
-      onPointerOver={over}
-      onPointerOut={out}
+      onPointerOver={onOver}
+      onPointerOut={() => {
+        document.body.style.cursor = 'default';
+        setHovered(false);
+      }}
       onClick={(event) => {
         event.stopPropagation();
         onOpen(module);
       }}
     >
       {children}
-      <HoverLabel
-        label={module.label}
-        color={module.color}
-        visible={hovered}
-        position={labelPosition}
-      />
+      <HoverLabel module={module} visible={hovered} position={labelPosition} />
+    </group>
+  );
+}
+
+function Plant({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh castShadow>
+        <cylinderGeometry args={[0.24, 0.18, 0.45, 20]} />
+        <meshStandardMaterial color="#E7E1D7" roughness={0.8} />
+      </mesh>
+      {[
+        [-0.18, 0.52, 0],
+        [0.18, 0.55, 0.05],
+        [0, 0.65, 0.12],
+        [-0.08, 0.76, -0.1],
+        [0.12, 0.82, -0.06],
+      ].map(([x, y, z], i) => (
+        <mesh key={i} position={[x, y, z]} rotation={[0.12 * i, 0.45 * i, i % 2 ? -0.45 : 0.45]} castShadow>
+          <coneGeometry args={[0.18, 0.72, 7]} />
+          <meshStandardMaterial color={i % 2 ? '#4E8A55' : '#5C9B62'} roughness={0.9} />
+        </mesh>
+      ))}
     </group>
   );
 }
 
 function RoomShell() {
+  const wood = ['#C99562', '#D5A36D', '#C78F5B', '#D9AA74'];
   return (
     <group>
-      <mesh position={[0, -0.12, -0.8]} receiveShadow>
-        <boxGeometry args={[12, 0.22, 10]} />
-        <meshStandardMaterial color="#191a18" roughness={0.72} metalness={0.12} />
+      <mesh position={[0, -0.15, -0.8]} receiveShadow>
+        <boxGeometry args={[12.4, 0.25, 10]} />
+        <meshStandardMaterial color="#D6A16D" roughness={0.72} />
       </mesh>
 
-      {Array.from({ length: 17 }).map((_, i) => (
-        <mesh key={i} position={[-5.6 + i * 0.7, 0.005, -0.7]} receiveShadow>
-          <boxGeometry args={[0.63, 0.012, 9.2]} />
-          <meshStandardMaterial color={i % 2 ? '#20211f' : '#242522'} roughness={0.78} />
+      {Array.from({ length: 18 }).map((_, i) => (
+        <mesh key={i} position={[-5.9 + i * 0.68, -0.01, -0.8]} receiveShadow>
+          <boxGeometry args={[0.64, 0.018, 9.7]} />
+          <meshStandardMaterial color={wood[i % wood.length]} roughness={0.76} />
         </mesh>
       ))}
 
-      <mesh position={[0, 2.65, -5.72]} receiveShadow>
-        <boxGeometry args={[12, 5.7, 0.2]} />
-        <meshStandardMaterial color="#111310" roughness={0.9} />
+      <mesh position={[0, 2.65, -5.76]} receiveShadow>
+        <boxGeometry args={[12.4, 5.7, 0.2]} />
+        <meshStandardMaterial color="#F7F2EA" roughness={0.93} />
       </mesh>
-
-      <mesh position={[-5.9, 2.65, -0.8]} receiveShadow>
+      <mesh position={[-6.05, 2.65, -0.8]} receiveShadow>
         <boxGeometry args={[0.2, 5.7, 10]} />
-        <meshStandardMaterial color="#0f110f" roughness={0.9} />
+        <meshStandardMaterial color="#F5F0E7" roughness={0.93} />
       </mesh>
-
-      <mesh position={[5.9, 2.65, -0.8]} receiveShadow>
+      <mesh position={[6.05, 2.65, -0.8]} receiveShadow>
         <boxGeometry args={[0.2, 5.7, 10]} />
-        <meshStandardMaterial color="#101210" roughness={0.9} />
+        <meshStandardMaterial color="#F7F2EA" roughness={0.93} />
+      </mesh>
+      <mesh position={[0, 5.46, -0.8]} receiveShadow>
+        <boxGeometry args={[12.4, 0.16, 10]} />
+        <meshStandardMaterial color="#FFFCF7" roughness={0.96} />
       </mesh>
 
-      <mesh position={[0, 5.44, -0.8]} receiveShadow>
-        <boxGeometry args={[12, 0.16, 10]} />
-        <meshStandardMaterial color="#0b0d0b" roughness={0.9} />
+      <mesh position={[0, 0.02, 0.7]} receiveShadow>
+        <boxGeometry args={[6.3, 0.035, 3.8]} />
+        <meshStandardMaterial color="#EDE4D8" roughness={0.96} />
       </mesh>
 
-      <mesh position={[0, 0.025, 0.65]} receiveShadow>
-        <boxGeometry args={[5.4, 0.03, 3.3]} />
-        <meshStandardMaterial color="#111512" roughness={0.95} />
-      </mesh>
-
-      {[-3.2, 0, 3.2].map((x) => (
-        <group key={x} position={[x, 5.12, -0.8]}>
+      {[-3.4, 0, 3.4].map((x) => (
+        <group key={x} position={[x, 5.18, -0.8]}>
           <mesh>
             <cylinderGeometry args={[0.18, 0.22, 0.12, 24]} />
-            <meshStandardMaterial color="#232522" metalness={0.65} roughness={0.25} />
+            <meshStandardMaterial color="#FFFFFF" roughness={0.35} />
           </mesh>
-          <pointLight position={[0, -0.2, 0]} intensity={1.8} distance={5.5} color="#fff2d2" />
+          <pointLight position={[0, -0.25, 0]} intensity={2.1} distance={6} color="#FFF2D8" />
         </group>
       ))}
     </group>
@@ -151,37 +173,34 @@ function RoomShell() {
 
 function WindowWall() {
   return (
-    <group position={[5.76, 2.75, -1.4]} rotation={[0, -Math.PI / 2, 0]}>
+    <group position={[5.9, 2.8, -1.35]} rotation={[0, -Math.PI / 2, 0]}>
       <mesh>
-        <boxGeometry args={[5.5, 3.25, 0.05]} />
-        <meshStandardMaterial color="#06090b" roughness={0.1} metalness={0.25} />
+        <boxGeometry args={[5.8, 3.45, 0.08]} />
+        <meshStandardMaterial color="#F4F1EB" roughness={0.6} />
       </mesh>
-      <mesh position={[0, 0, 0.035]}>
-        <planeGeometry args={[5.12, 2.86]} />
-        <meshStandardMaterial
-          color="#11253a"
-          emissive="#16324d"
-          emissiveIntensity={0.34}
-          roughness={0.12}
-          metalness={0.15}
-        />
+      <mesh position={[0, 0, 0.05]}>
+        <planeGeometry args={[5.42, 3.04]} />
+        <meshStandardMaterial color="#BFE3F7" emissive="#D7F0FF" emissiveIntensity={0.6} roughness={0.12} />
       </mesh>
-      {[-1.28, 0, 1.28].map(x => (
-        <mesh key={x} position={[x, 0, 0.07]}>
-          <boxGeometry args={[0.04, 2.86, 0.035]} />
-          <meshStandardMaterial color="#2d312f" metalness={0.65} roughness={0.3} />
+      {[-1.35, 0, 1.35].map((x) => (
+        <mesh key={x} position={[x, 0, 0.085]}>
+          <boxGeometry args={[0.055, 3.05, 0.04]} />
+          <meshStandardMaterial color="#FDFBF8" roughness={0.3} />
         </mesh>
       ))}
-      <mesh position={[0, 0, 0.075]}>
-        <boxGeometry args={[5.12, 0.04, 0.035]} />
-        <meshStandardMaterial color="#2d312f" metalness={0.65} roughness={0.3} />
+      <mesh position={[0, 0, 0.085]}>
+        <boxGeometry args={[5.42, 0.055, 0.04]} />
+        <meshStandardMaterial color="#FDFBF8" roughness={0.3} />
       </mesh>
-      {[-1.95, -1.2, -0.45, 0.3, 1.05, 1.8].map((x, i) => (
-        <mesh key={x} position={[x, -0.98 + (i % 2) * 0.12, 0.09]}>
-          <boxGeometry args={[0.35 + (i % 3) * 0.12, 0.5 + (i % 4) * 0.2, 0.03]} />
-          <meshStandardMaterial color="#26384a" emissive="#335779" emissiveIntensity={0.12} />
+
+      {[-2.05, -1.3, -0.55, 0.2, 0.95, 1.7].map((x, i) => (
+        <mesh key={x} position={[x, -1.0 + (i % 2) * 0.12, 0.1]}>
+          <boxGeometry args={[0.36 + (i % 3) * 0.13, 0.55 + (i % 4) * 0.18, 0.03]} />
+          <meshStandardMaterial color="#8AA6B7" emissive="#A8C8DA" emissiveIntensity={0.25} />
         </mesh>
       ))}
+
+      <directionalLight position={[0, 1.2, 2.2]} intensity={2.2} color="#FFF0D0" castShadow />
     </group>
   );
 }
@@ -189,104 +208,104 @@ function WindowWall() {
 function DeskAndChair({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
   return (
     <group>
-      <group position={[0, 0.82, -2.72]}>
-        <RoundedBox args={[5.1, 0.22, 1.85]} radius={0.08} smoothness={4} castShadow receiveShadow>
-          <meshStandardMaterial color="#29231e" roughness={0.42} metalness={0.2} />
+      <group position={[0, 0.84, -2.72]}>
+        <RoundedBox args={[5.25, 0.22, 1.85]} radius={0.08} smoothness={4} castShadow receiveShadow>
+          <meshStandardMaterial color="#9D6A45" roughness={0.48} />
         </RoundedBox>
-        {[-2.2, 2.2].flatMap(x => [-0.68, 0.68].map(z => (
-          <mesh key={`${x}-${z}`} position={[x, -0.74, z]} castShadow>
-            <boxGeometry args={[0.12, 1.48, 0.12]} />
-            <meshStandardMaterial color="#151715" metalness={0.72} roughness={0.28} />
+        {[-2.25, 2.25].flatMap((x) => [-0.68, 0.68].map((z) => (
+          <mesh key={`${x}-${z}`} position={[x, -0.75, z]} castShadow>
+            <boxGeometry args={[0.14, 1.5, 0.14]} />
+            <meshStandardMaterial color="#6F523E" roughness={0.5} />
           </mesh>
         )))}
       </group>
 
-      <Interactive module={MODULES.ai} onOpen={onOpen} labelPosition={[0, 1.15, 0]}>
-        <group position={[0, 2.12, -3.05]}>
-          <RoundedBox args={[2.9, 1.68, 0.16]} radius={0.08} smoothness={4} castShadow>
-            <meshStandardMaterial color="#0d100d" metalness={0.78} roughness={0.24} />
+      <Interactive module={MODULES.ai} onOpen={onOpen} labelPosition={[0, 1.22, 0]}>
+        <group position={[0, 2.15, -3.05]}>
+          <RoundedBox args={[3.0, 1.75, 0.16]} radius={0.08} smoothness={4} castShadow>
+            <meshStandardMaterial color="#2E3130" metalness={0.5} roughness={0.3} />
           </RoundedBox>
           <mesh position={[0, 0, 0.09]}>
-            <planeGeometry args={[2.56, 1.35]} />
-            <meshStandardMaterial color="#081109" emissive="#d8ff63" emissiveIntensity={0.15} />
+            <planeGeometry args={[2.66, 1.42]} />
+            <meshStandardMaterial color="#10221A" emissive="#2BB673" emissiveIntensity={0.2} />
           </mesh>
-          <Html transform position={[0, 0, 0.105]} distanceFactor={1.28} style={{ pointerEvents: 'none' }}>
+          <Html transform position={[0, 0, 0.11]} distanceFactor={1.26} style={{ pointerEvents: 'none' }}>
             <div
               style={{
-                width: 420,
-                height: 220,
-                borderRadius: 12,
-                background: 'linear-gradient(150deg,#061008,#0a0d0a)',
-                padding: 20,
-                color: '#f4f1e8',
-                fontFamily: 'monospace',
+                width: 430,
+                height: 230,
+                borderRadius: 14,
+                background: 'linear-gradient(145deg,#10251b,#132f24)',
+                padding: 22,
+                color: '#F7FFF9',
+                fontFamily: 'Arial, sans-serif',
                 overflow: 'hidden',
-                border: '1px solid rgba(216,255,99,.15)',
+                border: '1px solid rgba(63,201,144,.2)',
               }}
             >
-              <div style={{ fontSize: 11, color: '#d8ff63', letterSpacing: '.2em' }}>MENTRA // CORE ONLINE</div>
-              <div style={{ marginTop: 24, fontSize: 28, fontFamily: 'sans-serif', fontWeight: 700 }}>Good to see you.</div>
-              <div style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,.45)' }}>Tap the monitor to open your AI mentor.</div>
+              <div style={{ fontSize: 11, color: '#74E0AE', letterSpacing: '.15em', fontWeight: 700 }}>MENTRA AI</div>
+              <div style={{ marginTop: 23, fontSize: 28, fontWeight: 800 }}>Your personal mentor</div>
+              <div style={{ marginTop: 7, fontSize: 12, color: 'rgba(255,255,255,.7)' }}>Ask, plan, decide, execute.</div>
               <div style={{ display: 'flex', gap: 8, marginTop: 28 }}>
-                {['MEMORY', 'GOALS', 'AGENTS'].map((item) => (
-                  <div key={item} style={{ padding: '7px 10px', border: '1px solid rgba(255,255,255,.08)', borderRadius: 20, fontSize: 9, color: 'rgba(255,255,255,.6)' }}>{item}</div>
+                {['GOALS', 'MEMORY', 'AGENTS'].map((item) => (
+                  <div key={item} style={{ padding: '7px 10px', border: '1px solid rgba(255,255,255,.14)', borderRadius: 20, fontSize: 9, color: 'rgba(255,255,255,.8)' }}>
+                    {item}
+                  </div>
                 ))}
               </div>
             </div>
           </Html>
-          <mesh position={[0, -1.08, 0]}>
+          <mesh position={[0, -1.1, 0]}>
             <boxGeometry args={[0.16, 0.5, 0.18]} />
-            <meshStandardMaterial color="#181b18" metalness={0.75} roughness={0.25} />
+            <meshStandardMaterial color="#6F7470" metalness={0.55} roughness={0.3} />
           </mesh>
-          <mesh position={[0, -1.33, 0]}>
-            <boxGeometry args={[0.9, 0.08, 0.5]} />
-            <meshStandardMaterial color="#181b18" metalness={0.75} roughness={0.25} />
+          <mesh position={[0, -1.36, 0]}>
+            <boxGeometry args={[0.95, 0.08, 0.5]} />
+            <meshStandardMaterial color="#6F7470" metalness={0.55} roughness={0.3} />
           </mesh>
         </group>
       </Interactive>
 
       <Interactive module={MODULES.finance} onOpen={onOpen} labelPosition={[0, 0.65, 0]}>
-        <group position={[-1.75, 1.02, -2.22]}>
-          <RoundedBox args={[1.05, 0.12, 0.72]} radius={0.04} smoothness={3}>
-            <meshStandardMaterial color="#0e1511" emissive="#34d399" emissiveIntensity={0.09} metalness={0.55} roughness={0.3} />
+        <group position={[-1.75, 1.03, -2.22]}>
+          <RoundedBox args={[1.08, 0.12, 0.74]} radius={0.04} smoothness={3}>
+            <meshStandardMaterial color="#F5F1EA" roughness={0.55} />
           </RoundedBox>
           {[0.18, 0.02, -0.14].map((z, i) => (
             <mesh key={z} position={[0, 0.07, z]}>
               <boxGeometry args={[0.72 - i * 0.12, 0.025, 0.05]} />
-              <meshStandardMaterial color="#34d399" emissive="#34d399" emissiveIntensity={0.38} />
+              <meshStandardMaterial color="#2BB673" emissive="#2BB673" emissiveIntensity={0.16} />
             </mesh>
           ))}
         </group>
       </Interactive>
 
       <Interactive module={MODULES.journal} onOpen={onOpen} labelPosition={[0, 0.55, 0]}>
-        <group position={[1.72, 1.02, -2.22]} rotation={[0, -0.16, 0]}>
-          <RoundedBox args={[0.92, 0.1, 0.72]} radius={0.04} smoothness={3}>
-            <meshStandardMaterial color="#2d2412" roughness={0.75} />
+        <group position={[1.75, 1.03, -2.22]} rotation={[0, -0.16, 0]}>
+          <RoundedBox args={[0.95, 0.1, 0.74]} radius={0.04} smoothness={3}>
+            <meshStandardMaterial color="#EAD8BE" roughness={0.82} />
           </RoundedBox>
           <mesh position={[0, 0.055, 0]}>
-            <boxGeometry args={[0.04, 0.01, 0.64]} />
-            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.18} />
+            <boxGeometry args={[0.04, 0.01, 0.65]} />
+            <meshStandardMaterial color="#9A6B42" />
           </mesh>
         </group>
       </Interactive>
 
-      <group position={[0, 0.72, 0.0]}>
-        <mesh castShadow>
-          <boxGeometry args={[1.35, 0.18, 1.35]} />
-          <meshStandardMaterial color="#151715" roughness={0.46} metalness={0.3} />
+      <group position={[0, 0.75, 0.05]}>
+        <RoundedBox args={[1.45, 0.2, 1.4]} radius={0.1} smoothness={4} castShadow>
+          <meshStandardMaterial color="#B9B2A9" roughness={0.65} />
+        </RoundedBox>
+        <RoundedBox position={[0, 1.0, 0.58]} args={[1.45, 1.75, 0.24]} radius={0.12} smoothness={4} castShadow>
+          <meshStandardMaterial color="#C8C2BA" roughness={0.68} />
+        </RoundedBox>
+        <mesh position={[0, -0.78, 0]}>
+          <cylinderGeometry args={[0.08, 0.08, 1.55, 18]} />
+          <meshStandardMaterial color="#757A78" metalness={0.45} roughness={0.35} />
         </mesh>
-        <mesh position={[0, 1.0, 0.55]} rotation={[-0.1, 0, 0]} castShadow>
-          <boxGeometry args={[1.35, 1.75, 0.22]} />
-          <meshStandardMaterial color="#111311" roughness={0.48} metalness={0.28} />
-        </mesh>
-        <mesh position={[0, -0.75, 0]}>
-          <cylinderGeometry args={[0.08, 0.08, 1.5, 18]} />
-          <meshStandardMaterial color="#141614" metalness={0.72} roughness={0.25} />
-        </mesh>
-        <mesh position={[0, -1.46, 0]}>
-          <cylinderGeometry args={[0.78, 0.78, 0.08, 5]} />
-          <meshStandardMaterial color="#141614" metalness={0.72} roughness={0.25} />
+        <mesh position={[0, -1.5, 0]}>
+          <cylinderGeometry args={[0.82, 0.82, 0.08, 5]} />
+          <meshStandardMaterial color="#757A78" metalness={0.45} roughness={0.35} />
         </mesh>
       </group>
     </group>
@@ -296,96 +315,50 @@ function DeskAndChair({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
 function LeftWall({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
   return (
     <group>
-      <Interactive module={MODULES.quests} onOpen={onOpen} labelPosition={[0, 1.25, 0]}>
-        <group position={[-4.9, 2.65, -3.82]} rotation={[0, Math.PI / 2, 0]}>
-          <RoundedBox args={[2.4, 2.25, 0.12]} radius={0.05} smoothness={3}>
-            <meshStandardMaterial color="#12191b" roughness={0.6} />
+      <Interactive module={MODULES.skills} onOpen={onOpen} labelPosition={[0, 1.35, 0]}>
+        <group position={[-4.95, 2.75, -3.65]} rotation={[0, Math.PI / 2, 0]}>
+          <RoundedBox args={[2.55, 2.35, 0.12]} radius={0.05} smoothness={3}>
+            <meshStandardMaterial color="#FCFBF8" roughness={0.78} />
           </RoundedBox>
-          {[0.58, 0.18, -0.22, -0.62].map((y, i) => (
-            <group key={y}>
-              <mesh position={[-0.62 + (i % 2) * 0.18, y, 0.07]}>
-                <boxGeometry args={[0.12, 0.12, 0.025]} />
-                <meshStandardMaterial color={i < 2 ? '#70e1ff' : '#41515a'} emissive={i < 2 ? '#70e1ff' : '#000000'} emissiveIntensity={0.35} />
+          {[
+            ['COMM', 0.62, '#5B7CFA'],
+            ['DESIGN', 0.2, '#8B5CF6'],
+            ['CODING', -0.22, '#31C48D'],
+            ['MARKETING', -0.64, '#F59E0B'],
+          ].map(([label, y, color]) => (
+            <group key={String(label)}>
+              <mesh position={[-0.3, y as number, 0.07]}>
+                <boxGeometry args={[0.9, 0.06, 0.025]} />
+                <meshStandardMaterial color="#E7E4DF" />
               </mesh>
-              <mesh position={[0.26, y, 0.07]}>
-                <boxGeometry args={[1.28, 0.045, 0.025]} />
-                <meshStandardMaterial color={i < 2 ? '#70e1ff' : '#5b6264'} emissive={i < 2 ? '#70e1ff' : '#000000'} emissiveIntensity={0.2} />
+              <mesh position={[-0.58, y as number, 0.085]}>
+                <boxGeometry args={[0.55, 0.075, 0.025]} />
+                <meshStandardMaterial color={String(color)} />
               </mesh>
             </group>
           ))}
         </group>
       </Interactive>
 
-      <Interactive module={MODULES.calendar} onOpen={onOpen} labelPosition={[0, 1.05, 0]}>
-        <group position={[-4.9, 2.45, -0.58]} rotation={[0, Math.PI / 2, 0]}>
-          <RoundedBox args={[2.1, 1.9, 0.12]} radius={0.05} smoothness={3}>
-            <meshStandardMaterial color="#11161d" roughness={0.62} />
+      <Interactive module={MODULES.quests} onOpen={onOpen} labelPosition={[0, 1.25, 0]}>
+        <group position={[-4.95, 2.55, -0.62]} rotation={[0, Math.PI / 2, 0]}>
+          <RoundedBox args={[2.35, 2.15, 0.12]} radius={0.05} smoothness={3}>
+            <meshStandardMaterial color="#FBFAF7" roughness={0.78} />
           </RoundedBox>
-          <mesh position={[0, 0.58, 0.07]}>
-            <boxGeometry args={[1.6, 0.08, 0.025]} />
-            <meshStandardMaterial color="#60a5fa" emissive="#60a5fa" emissiveIntensity={0.35} />
-          </mesh>
-          {[-0.5, 0, 0.5].flatMap(x => [-0.2, -0.62].map(y => (
-            <mesh key={`${x}-${y}`} position={[x, y, 0.07]}>
-              <boxGeometry args={[0.26, 0.22, 0.025]} />
-              <meshStandardMaterial color="#26354a" emissive="#60a5fa" emissiveIntensity={0.08} />
-            </mesh>
-          )))}
-        </group>
-      </Interactive>
-
-      <group position={[-4.9, 0.72, 2.2]}>
-        <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
-          <cylinderGeometry args={[0.5, 0.58, 1.15, 20]} />
-          <meshStandardMaterial color="#1c201b" roughness={0.85} />
-        </mesh>
-        {[0, 0.55, 1.0].map((y, i) => (
-          <mesh key={y} position={[0.12 * (i - 1), 0.7 + y, 0]} rotation={[0.15 * i, 0.2 * i, 0.1 * i]}>
-            <coneGeometry args={[0.35 - i * 0.04, 1.1 - i * 0.08, 6]} />
-            <meshStandardMaterial color={i === 1 ? '#406c4e' : '#33593f'} roughness={0.78} />
-          </mesh>
-        ))}
-      </group>
-    </group>
-  );
-}
-
-function RightStorage({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
-  return (
-    <group>
-      <Interactive module={MODULES.memory} onOpen={onOpen} labelPosition={[0, 1.55, 0]}>
-        <group position={[4.42, 1.55, -4.2]}>
-          <RoundedBox args={[1.55, 3.05, 1.0]} radius={0.07} smoothness={4} castShadow>
-            <meshStandardMaterial color="#15131b" metalness={0.48} roughness={0.34} />
-          </RoundedBox>
-          {[-0.72, 0, 0.72].map(y => (
-            <mesh key={y} position={[0, y, 0.52]}>
-              <boxGeometry args={[1.28, 0.025, 0.03]} />
-              <meshStandardMaterial color="#a78bfa" emissive="#a78bfa" emissiveIntensity={0.18} />
-            </mesh>
-          ))}
-          <mesh position={[0, 0, 0.55]}>
-            <torusGeometry args={[0.34, 0.055, 16, 48]} />
-            <meshStandardMaterial color="#a78bfa" emissive="#a78bfa" emissiveIntensity={0.38} metalness={0.72} roughness={0.22} />
-          </mesh>
-        </group>
-      </Interactive>
-
-      <Interactive module={MODULES.skills} onOpen={onOpen} labelPosition={[0, 1.25, 0]}>
-        <group position={[4.32, 2.65, -1.55]} rotation={[0, -Math.PI / 2, 0]}>
-          <RoundedBox args={[2.35, 2.2, 0.12]} radius={0.05} smoothness={3}>
-            <meshStandardMaterial color="#1b1115" roughness={0.62} />
-          </RoundedBox>
-          {[[-0.65, 0.45], [0, 0.72], [0.62, 0.2], [-0.1, -0.15], [0.55, -0.58], [-0.62, -0.52]].map(([x, y], i) => (
-            <group key={i}>
-              <mesh position={[x, y, 0.08]}>
-                <circleGeometry args={[0.13, 24]} />
-                <meshStandardMaterial color="#fb7185" emissive="#fb7185" emissiveIntensity={0.32} />
+          {[0.55, 0.15, -0.25, -0.65].map((y, i) => (
+            <group key={y}>
+              <mesh position={[-0.68, y, 0.075]}>
+                <boxGeometry args={[0.13, 0.13, 0.025]} />
+                <meshStandardMaterial color={i < 2 ? '#31C48D' : '#CFC9C0'} />
               </mesh>
-              {i > 0 && (
-                <mesh position={[(x as number) * 0.52, (y as number) * 0.52, 0.067]} rotation={[0, 0, Math.atan2(y as number, x as number)]}>
-                  <boxGeometry args={[Math.sqrt((x as number) ** 2 + (y as number) ** 2) * 0.9, 0.025, 0.02]} />
-                  <meshStandardMaterial color="#fb7185" emissive="#fb7185" emissiveIntensity={0.14} />
+              <mesh position={[0.18, y, 0.075]}>
+                <boxGeometry args={[1.18, 0.05, 0.025]} />
+                <meshStandardMaterial color={i < 2 ? '#9B8F83' : '#CFC9C0'} />
+              </mesh>
+              {i === 1 && (
+                <mesh position={[0.72, y + 0.12, 0.08]}>
+                  <boxGeometry args={[0.38, 0.34, 0.025]} />
+                  <meshStandardMaterial color="#F8D66D" />
                 </mesh>
               )}
             </group>
@@ -393,83 +366,174 @@ function RightStorage({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
         </group>
       </Interactive>
 
-      <group position={[4.3, 0.82, 1.4]}>
-        <RoundedBox args={[2.3, 1.25, 0.78]} radius={0.06} smoothness={3} castShadow>
-          <meshStandardMaterial color="#171917" roughness={0.65} metalness={0.32} />
-        </RoundedBox>
-        {[0.34, -0.05, -0.44].map(y => (
-          <mesh key={y} position={[0, y, 0.41]}>
-            <boxGeometry args={[1.92, 0.06, 0.03]} />
-            <meshStandardMaterial color="#343834" />
+      <group position={[-5.05, 1.75, 2.2]} rotation={[0, Math.PI / 2, 0]}>
+        {[-0.8, 0, 0.8].map((y) => (
+          <mesh key={y} position={[0, y, 0]}>
+            <boxGeometry args={[2.4, 0.12, 0.5]} />
+            <meshStandardMaterial color="#9D6A45" roughness={0.56} />
           </mesh>
         ))}
+        {[-0.8, 0, 0.8].map((y, shelfIndex) =>
+          [-0.75, 0, 0.72].map((x, i) => (
+            <mesh key={`${y}-${x}`} position={[x, y + 0.22, 0]}>
+              <boxGeometry args={[0.14 + (i % 2) * 0.08, 0.36 + shelfIndex * 0.04, 0.28]} />
+              <meshStandardMaterial color={i === 1 ? '#E2B96D' : '#E8E0D5'} roughness={0.75} />
+            </mesh>
+          ))
+        )}
       </group>
+
+      <Plant position={[-4.85, 0.2, 2.1]} scale={1.1} />
+      <Plant position={[-4.75, 3.42, 2.15]} scale={0.7} />
     </group>
   );
 }
 
-function AgentCore({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
-  const ref = useRef<THREE.Group>(null);
-
-  useFrame((state) => {
-    if (!ref.current) return;
-    ref.current.rotation.y = state.clock.elapsedTime * 0.22;
-    ref.current.position.y = 1.55 + Math.sin(state.clock.elapsedTime * 1.3) * 0.08;
-  });
-
+function RightSide({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
   return (
-    <Interactive module={MODULES.agents} onOpen={onOpen} labelPosition={[0, 1.0, 0]}>
-      <group position={[0, 0, 2.0]}>
-        <group ref={ref}>
-          <mesh castShadow>
-            <icosahedronGeometry args={[0.62, 1]} />
-            <meshStandardMaterial
-              color="#f4f1e8"
-              emissive="#d8ff63"
-              emissiveIntensity={0.18}
-              wireframe
-              metalness={0.75}
-              roughness={0.2}
-            />
+    <group>
+      <Interactive module={MODULES.calendar} onOpen={onOpen} labelPosition={[0, 1.15, 0]}>
+        <group position={[4.75, 2.8, -3.95]} rotation={[0, -Math.PI / 2, 0]}>
+          <RoundedBox args={[2.25, 2.15, 0.12]} radius={0.05} smoothness={3}>
+            <meshStandardMaterial color="#FCFBF8" roughness={0.78} />
+          </RoundedBox>
+          <mesh position={[0, 0.68, 0.075]}>
+            <boxGeometry args={[1.65, 0.08, 0.025]} />
+            <meshStandardMaterial color="#A9998B" />
           </mesh>
-          <mesh scale={0.52}>
-            <icosahedronGeometry args={[0.62, 1]} />
-            <meshStandardMaterial color="#111410" emissive="#d8ff63" emissiveIntensity={0.32} />
+          {[-0.55, 0, 0.55].flatMap((x) => [0.18, -0.28, -0.72].map((y, i) => (
+            <mesh key={`${x}-${y}`} position={[x, y, 0.075]}>
+              <boxGeometry args={[0.3, 0.26, 0.025]} />
+              <meshStandardMaterial color={['#F8D66D', '#8BC6EC', '#E49A83', '#B99CE6'][(i + Math.round((x + 0.6) * 2)) % 4]} />
+            </mesh>
+          )))}
+        </group>
+      </Interactive>
+
+      <Interactive module={MODULES.memory} onOpen={onOpen} labelPosition={[0, 1.55, 0]}>
+        <group position={[4.45, 1.45, -1.15]}>
+          <RoundedBox args={[1.7, 2.85, 1.0]} radius={0.07} smoothness={4} castShadow>
+            <meshStandardMaterial color="#ECE6DE" roughness={0.62} />
+          </RoundedBox>
+          {[-0.65, 0, 0.65].map((y) => (
+            <mesh key={y} position={[0, y, 0.52]}>
+              <boxGeometry args={[1.35, 0.045, 0.03]} />
+              <meshStandardMaterial color="#AFA49A" />
+            </mesh>
+          ))}
+          <mesh position={[0, 0.08, 0.55]}>
+            <torusGeometry args={[0.32, 0.05, 16, 48]} />
+            <meshStandardMaterial color="#8B5CF6" emissive="#8B5CF6" emissiveIntensity={0.12} />
           </mesh>
         </group>
-        <mesh position={[0, 0.08, 0]} receiveShadow>
-          <cylinderGeometry args={[0.82, 1.02, 0.22, 32]} />
-          <meshStandardMaterial color="#141714" metalness={0.62} roughness={0.3} />
-        </mesh>
-        <mesh position={[0, 0.21, 0]}>
-          <torusGeometry args={[0.72, 0.035, 16, 64]} />
-          <meshStandardMaterial color="#d8ff63" emissive="#d8ff63" emissiveIntensity={0.72} />
-        </mesh>
-        <pointLight position={[0, 1.55, 0]} intensity={1.5} distance={4.5} color="#d8ff63" />
-        <Sparkles count={26} scale={[2.1, 2.4, 2.1]} position={[0, 1.55, 0]} size={1.3} speed={0.25} opacity={0.34} color="#d8ff63" />
+      </Interactive>
+
+      <group position={[4.45, 0.78, 1.55]}>
+        <RoundedBox args={[2.35, 1.25, 0.85]} radius={0.07} smoothness={4} castShadow>
+          <meshStandardMaterial color="#9D6A45" roughness={0.55} />
+        </RoundedBox>
+        {[-0.4, 0.2].map((y) => (
+          <mesh key={y} position={[0, y, 0.45]}>
+            <boxGeometry args={[1.95, 0.05, 0.03]} />
+            <meshStandardMaterial color="#DAB18A" />
+          </mesh>
+        ))}
       </group>
-    </Interactive>
+
+      <Interactive module={MODULES.agents} onOpen={onOpen} labelPosition={[0, 1.05, 0]}>
+        <group position={[4.35, 1.0, 2.2]}>
+          <mesh>
+            <sphereGeometry args={[0.52, 32, 32]} />
+            <meshPhysicalMaterial
+              color="#CFCBFF"
+              emissive="#6C63FF"
+              emissiveIntensity={0.3}
+              transparent
+              opacity={0.82}
+              transmission={0.25}
+              roughness={0.1}
+              metalness={0.12}
+            />
+          </mesh>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.72, 0.025, 12, 64]} />
+            <meshStandardMaterial color="#D8A56B" emissive="#D8A56B" emissiveIntensity={0.18} />
+          </mesh>
+          <mesh rotation={[0.45, 0.5, 0]}>
+            <torusGeometry args={[0.78, 0.018, 12, 64]} />
+            <meshStandardMaterial color="#8B5CF6" emissive="#8B5CF6" emissiveIntensity={0.16} />
+          </mesh>
+          <pointLight position={[0, 0, 0]} intensity={1.2} distance={3.2} color="#9B91FF" />
+        </group>
+      </Interactive>
+
+      <Plant position={[5.0, 0.2, 3.0]} scale={1.0} />
+      <Plant position={[4.8, 1.5, 0.8]} scale={0.68} />
+    </group>
   );
 }
 
-function NeonBrand() {
+function Lounge() {
   return (
-    <Html
-      transform
-      position={[0, 4.1, -5.56]}
-      distanceFactor={3.5}
-      style={{ pointerEvents: 'none' }}
-    >
-      <div style={{
-        fontFamily: 'sans-serif',
-        fontWeight: 800,
-        fontSize: 52,
-        letterSpacing: '0.28em',
-        color: '#eef9cf',
-        textShadow: '0 0 12px rgba(216,255,99,.6), 0 0 38px rgba(216,255,99,.28)',
-        whiteSpace: 'nowrap',
-      }}>
-        MENTRA
+    <group>
+      <group position={[-3.8, 0.5, 2.6]} rotation={[0, 0.35, 0]}>
+        <RoundedBox args={[2.45, 0.72, 1.25]} radius={0.18} smoothness={5} castShadow>
+          <meshStandardMaterial color="#D9D1C8" roughness={0.86} />
+        </RoundedBox>
+        <RoundedBox position={[0, 0.72, 0.42]} args={[2.45, 0.95, 0.32]} radius={0.18} smoothness={5} castShadow>
+          <meshStandardMaterial color="#E2DAD2" roughness={0.86} />
+        </RoundedBox>
+      </group>
+
+      <group position={[2.65, 0.38, 2.5]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[0.95, 1.05, 0.18, 42]} />
+          <meshStandardMaterial color="#A8744D" roughness={0.55} />
+        </mesh>
+        <mesh position={[0, -0.42, 0]}>
+          <cylinderGeometry args={[0.08, 0.08, 0.82, 18]} />
+          <meshStandardMaterial color="#6D5140" metalness={0.2} roughness={0.5} />
+        </mesh>
+        <Plant position={[0.32, 0.2, -0.08]} scale={0.45} />
+      </group>
+
+      <Plant position={[-5.15, 0.18, 3.35]} scale={1.25} />
+    </group>
+  );
+}
+
+function TrophyShelf() {
+  return (
+    <group position={[-2.4, 3.55, -5.54]}>
+      <mesh>
+        <boxGeometry args={[2.2, 0.12, 0.5]} />
+        <meshStandardMaterial color="#9D6A45" roughness={0.55} />
+      </mesh>
+      <group position={[-0.4, 0.42, 0]}>
+        <mesh position={[0, 0.3, 0]}>
+          <cylinderGeometry args={[0.18, 0.28, 0.45, 24]} />
+          <meshStandardMaterial color="#E7B74E" metalness={0.65} roughness={0.28} />
+        </mesh>
+        <mesh position={[0, 0.02, 0]}>
+          <cylinderGeometry args={[0.16, 0.2, 0.12, 20]} />
+          <meshStandardMaterial color="#8C623F" roughness={0.6} />
+        </mesh>
+      </group>
+      <Plant position={[0.55, 0.12, 0]} scale={0.48} />
+    </group>
+  );
+}
+
+function WallBrand() {
+  return (
+    <Html transform position={[0.3, 4.35, -5.56]} distanceFactor={3.8} style={{ pointerEvents: 'none' }}>
+      <div style={{ textAlign: 'center', whiteSpace: 'nowrap', color: '#2B2926' }}>
+        <div style={{ fontFamily: 'Arial, sans-serif', fontWeight: 900, fontSize: 48, letterSpacing: '.18em' }}>
+          MENTRA
+        </div>
+        <div style={{ marginTop: 6, fontSize: 10, letterSpacing: '.34em', color: '#766D64', fontWeight: 700 }}>
+          BUILD A BETTER YOU
+        </div>
       </div>
     </Html>
   );
@@ -478,24 +542,28 @@ function NeonBrand() {
 function Scene({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
   return (
     <>
-      <color attach="background" args={['#060806']} />
-      <fog attach="fog" args={['#060806', 9, 19]} />
+      <color attach="background" args={['#F7F1E8']} />
 
-      <ambientLight intensity={0.4} color="#dfe7d8" />
-      <directionalLight position={[4.5, 7, 5]} intensity={1.15} color="#fff1cc" castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-      <pointLight position={[0, 3.5, -4.2]} intensity={1.15} distance={6} color="#d8ff63" />
-      <pointLight position={[4.6, 3.2, -1]} intensity={1.25} distance={6} color="#5fa8ff" />
-      <pointLight position={[-4.6, 2.8, -1.5]} intensity={0.8} distance={5} color="#70e1ff" />
+      <ambientLight intensity={1.45} color="#FFF7EA" />
+      <hemisphereLight intensity={1.25} color="#FFFFFF" groundColor="#C69360" />
+      <directionalLight
+        position={[5.5, 8.5, 5.5]}
+        intensity={2.0}
+        color="#FFF0CD"
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      <pointLight position={[0, 4.2, -3.5]} intensity={0.8} distance={7} color="#FFF7EA" />
 
       <RoomShell />
       <WindowWall />
       <DeskAndChair onOpen={onOpen} />
       <LeftWall onOpen={onOpen} />
-      <RightStorage onOpen={onOpen} />
-      <AgentCore onOpen={onOpen} />
-      <NeonBrand />
-
-      <Sparkles count={44} scale={[11, 5, 9]} position={[0, 2.4, -0.8]} size={0.7} speed={0.08} opacity={0.12} color="#d8ff63" />
+      <RightSide onOpen={onOpen} />
+      <Lounge />
+      <TrophyShelf />
+      <WallBrand />
 
       <OrbitControls
         makeDefault
@@ -503,12 +571,12 @@ function Scene({ onOpen }: { onOpen: (module: ModuleConfig) => void }) {
         enableDamping
         dampingFactor={0.055}
         minDistance={6.6}
-        maxDistance={11.5}
-        minPolarAngle={Math.PI * 0.27}
-        maxPolarAngle={Math.PI * 0.54}
+        maxDistance={11.2}
+        minPolarAngle={Math.PI * 0.25}
+        maxPolarAngle={Math.PI * 0.53}
         minAzimuthAngle={-0.72}
         maxAzimuthAngle={0.72}
-        target={[0, 1.65, -1.25]}
+        target={[0, 1.7, -1.15]}
       />
     </>
   );
@@ -524,12 +592,12 @@ export default function MentraHQScene() {
   };
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-[#060806]">
+    <div className="absolute inset-0 overflow-hidden bg-[#F7F1E8]">
       <Canvas
         shadows
-        dpr={[1, 1.45]}
-        camera={{ position: [0, 4.6, 9.3], fov: 47 }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        dpr={[1, 1.4]}
+        camera={{ position: [0, 4.6, 9.4], fov: 47 }}
+        gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping }}
       >
         <Suspense fallback={null}>
           <Scene onOpen={open} />
@@ -537,12 +605,12 @@ export default function MentraHQScene() {
       </Canvas>
 
       {active && (
-        <div className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 rounded-full border border-white/15 bg-black/75 px-4 py-2 text-[10px] font-mono tracking-[0.16em] text-white backdrop-blur-xl">
-          ENTERING {active.label}...
+        <div className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 rounded-full border border-black/10 bg-white/90 px-4 py-2 text-[10px] font-semibold tracking-[0.12em] text-[#3B332C] shadow-xl backdrop-blur-xl">
+          OPENING {active.label}...
         </div>
       )}
 
-      <div className="pointer-events-none absolute bottom-5 right-5 hidden rounded-full border border-white/10 bg-black/45 px-3 py-2 text-[9px] font-mono tracking-[0.12em] text-white/42 backdrop-blur-xl sm:block">
+      <div className="pointer-events-none absolute bottom-5 right-5 hidden rounded-full border border-black/10 bg-white/75 px-3 py-2 text-[9px] font-semibold tracking-[0.08em] text-[#5C5148] shadow-lg backdrop-blur-xl sm:block">
         DRAG TO LOOK · SCROLL TO ZOOM · CLICK OBJECTS
       </div>
     </div>
