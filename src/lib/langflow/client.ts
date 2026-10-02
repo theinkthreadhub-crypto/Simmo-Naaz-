@@ -24,6 +24,7 @@ export interface LangflowStatus {
   enabled: boolean;
   configured: boolean;
   mode: string;
+  runtime: 'langflow' | 'lfx';
   urlConfigured: boolean;
   flowConfigured: boolean;
   apiKeyConfigured: boolean;
@@ -44,10 +45,16 @@ export function getLangflowStatus(): LangflowStatus {
   const urlConfigured = Boolean(process.env.LANGFLOW_URL?.trim());
   const flowConfigured = Boolean(process.env.LANGFLOW_FLOW_ID?.trim());
 
+  const runtime =
+    (process.env.LANGFLOW_RUNTIME || 'langflow').trim().toLowerCase() === 'lfx'
+      ? 'lfx'
+      : 'langflow';
+
   return {
     enabled,
     configured: enabled && urlConfigured && flowConfigured,
     mode: (process.env.LANGFLOW_MODE || 'advisory').trim().toLowerCase(),
+    runtime,
     urlConfigured,
     flowConfigured,
     apiKeyConfigured: Boolean(process.env.LANGFLOW_API_KEY?.trim())
@@ -87,6 +94,7 @@ function extractLangflowText(payload: unknown): string {
     ['outputs', 0, 'outputs', 0, 'message', 'text'],
     ['result', 'message', 'text'],
     ['result', 'text'],
+    ['result'],
     ['message', 'text'],
     ['text']
   ];
@@ -124,22 +132,31 @@ export async function runLangflow(input: LangflowRunInput): Promise<LangflowRunR
       headers['x-api-key'] = apiKey;
     }
 
-    const response = await fetch(
-      `${baseUrl}/api/v1/run/${encodeURIComponent(flowId)}`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
+    const isLfx = status.runtime === 'lfx';
+    const endpoint = isLfx
+      ? `${baseUrl}/flows/${encodeURIComponent(flowId)}/run`
+      : `${baseUrl}/api/v1/run/${encodeURIComponent(flowId)}`;
+
+    const body = isLfx
+      ? {
+          input_value: input.inputValue,
+          session_id: input.sessionId
+        }
+      : {
           input_value: input.inputValue,
           input_type: 'chat',
           output_type: 'chat',
           session_id: input.sessionId,
           ...(input.tweaks ? { tweaks: input.tweaks } : {})
-        }),
-        cache: 'no-store',
-        signal: controller.signal
-      }
-    );
+        };
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: controller.signal
+    });
 
     const responseText = await response.text();
     let payload: unknown = {};
