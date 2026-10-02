@@ -248,6 +248,8 @@ export default function MentraHQScene() {
       antialias: true,
       powerPreference: 'high-performance',
     });
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.15));
     renderer.setClearColor(0x072446, 1);
     renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, 1), 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -386,20 +388,14 @@ export default function MentraHQScene() {
     };
 
     const loadRoom = async () => {
-      const fallback1 = new THREE.MeshStandardMaterial({
+      const fallback1 = new THREE.MeshBasicMaterial({
         color: '#d7c2a4',
-        roughness: 0.78,
-        metalness: 0.02,
       });
-      const fallback2 = new THREE.MeshStandardMaterial({
+      const fallback2 = new THREE.MeshBasicMaterial({
         color: '#815d46',
-        roughness: 0.72,
-        metalness: 0.03,
       });
-      const fallback3 = new THREE.MeshStandardMaterial({
+      const fallback3 = new THREE.MeshBasicMaterial({
         color: '#264c55',
-        roughness: 0.8,
-        metalness: 0.02,
       });
 
       try {
