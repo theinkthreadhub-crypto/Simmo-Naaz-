@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowRight, Bot, Brain, Layers3, Lock, Mail, ShieldCheck, Sparkles, Terminal, User } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase/client';
@@ -38,6 +39,7 @@ const capabilities = [
 ];
 
 export default function AuthScreen() {
+  const router = useRouter();
   const { signIn, signUp, signInWithGoogle } = useAuth();
   const googleAuthEnabled = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === 'true';
   const [isSignUp, setIsSignUp] = useState(false);
@@ -67,6 +69,7 @@ export default function AuthScreen() {
 
     if (result.error) setErrorMsg(result.error);
     if (result.message) setSuccessMsg(result.message);
+    if (!result.error && !isSignUp) router.replace('/hq');
     setLoading(false);
   };
 
