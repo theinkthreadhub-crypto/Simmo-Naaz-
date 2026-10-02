@@ -16,8 +16,7 @@ type ModuleConfig = {
   pitch: number;
 };
 
-const PANORAMA_URL =
-  'https://cdn.polyhaven.com/asset_img/primary/poly_haven_studio.png?height=1440&quality=95';
+const PANORAMA_URL = '/api/hq-panorama';
 
 const MODULES: ModuleConfig[] = [
   { key: 'ai', label: 'MENTRA AI', href: '/mentra', color: '#19B77A', icon: 'AI', yaw: -28, pitch: -4 },
