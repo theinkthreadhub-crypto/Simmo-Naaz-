@@ -23,3 +23,19 @@ services:
         value: remote
       - key: PORT
         value: 10000
+      # Direct AI fallback when the Vercel backend is unreachable
+      - key: GEMINI_API_KEY
+        sync: false
+      # Direct Supabase fallback for status/heartbeat when the API fails
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      # Optional: comma-separated numbers (with country code) allowed besides self-chat
+      - key: WHATSAPP_ALLOWED_NUMBERS
+        sync: false
+      # Accept messages up to 10 min old (queued while reconnecting)
+      - key: MAX_MESSAGE_AGE_MS
+        value: "600000"

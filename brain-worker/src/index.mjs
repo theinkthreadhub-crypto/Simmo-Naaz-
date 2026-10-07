@@ -8,6 +8,7 @@ import process from 'node:process';
 import makeWASocket, {
   BufferJSON,
   DisconnectReason,
+  fetchLatestBaileysVersion,
   initAuthCreds,
   proto,
   downloadMediaMessage,
@@ -38,6 +39,13 @@ const allowSelfChat =
 const sentByBot = new Set();
 const receivedMessages = createMessageDeduplicator();
 const allowedNumbers = (process.env.WHATSAPP_ALLOWED_NUMBERS || '').split(',').map(value => value.replace(/[^0-9]/g, '')).filter(Boolean);
+// Self-chat only unless explicit numbers are allowed via WHATSAPP_ALLOWED_NUMBERS.
+const selfOnly = allowedNumbers.length === 0;
+// Messages queued while the worker was asleep/reconnecting arrive late; keep a wider window.
+const maxMessageAgeMs = Math.max(120_000, Number(process.env.MAX_MESSAGE_AGE_MS || 600_000));
+// Render injects RENDER_EXTERNAL_URL; pinging it keeps the free instance from idling out.
+const keepAliveUrl = (process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
+const keepAliveInterval = Math.max(60_000, Number(process.env.KEEPALIVE_INTERVAL_MS || 600_000));
 let messageQueue = Promise.resolve();
 
 let activeSocket = null;
@@ -49,10 +57,12 @@ let shuttingDown = false;
 let lastInboundAt = null;
 let lastOutboundAt = null;
 let lastMessageError = '';
+let lastDisconnectCode = null;
 let privateKey = null;
 let configError = '';
 let backendError = '';
 let backendReady = false;
+let cachedWaVersion = null;
 
 function assertConfig() {
   const missing = [];
@@ -296,6 +306,10 @@ const geminiApiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
 const geminiModel = process.env.AI_MODEL_FAST || 'gemini-flash-latest';
 
 async function generateAutonomousAIReply(userText, pushName = '', mediaInfo = null) {
+  if (!geminiApiKey) {
+    console.warn('[Autonomous Gemini] GEMINI_API_KEY not set; direct fallback disabled');
+    return null;
+  }
   try {
     const systemPrompt = `You are MENTRA — the Sovereign AI Fashion & Business Intelligence Agent built for InkThread Hub and Simmo-Naaz.
 Your creator is Shubham (InkThread Hub).
@@ -336,6 +350,7 @@ Tone & Persona:
     );
 
     const data = await response.json();
+    if (!response.ok) console.warn('[Autonomous Gemini]', response.status, JSON.stringify(data).slice(0, 300));
     const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     return reply || null;
   } catch (err) {
@@ -375,8 +390,8 @@ async function handleIncoming(sock, envelope) {
   const jid = envelope.key?.remoteJid || '';
   if (!jid || jid.endsWith('@g.us') || jid.endsWith('@newsletter') || jid === 'status@broadcast') return;
   if (sentByBot.has(envelope.key?.id)) return;
-  if (!isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers })) {
-    console.log('[WhatsApp message skipped]', JSON.stringify({ reason: 'CHAT_NOT_ALLOWED', destinationType: jid.split('@')[1], fromMe: Boolean(envelope.key?.fromMe) }));
+  if (!isAllowedChat(sock, envelope, { allowSelfChat, allowedNumbers, selfOnly })) {
+    console.log('[WhatsApp message skipped]', JSON.stringify({ reason: 'CHAT_NOT_ALLOWED', destinationType: jid.split('@')[1], fromMe: Boolean(envelope.key?.fromMe), selfOnly }));
     return;
   }
   envelope = { ...envelope, message: unwrapMessage(envelope.message) };
@@ -442,6 +457,20 @@ async function getEffectiveAuthState() {
   return useMultiFileAuthState(authDir);
 }
 
+async function resolveWaVersion() {
+  if (cachedWaVersion) return cachedWaVersion;
+  try {
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    if (Array.isArray(version) && version.length) {
+      cachedWaVersion = version;
+      console.log('[WhatsApp version]', version.join('.'), isLatest ? '(latest)' : '(bundled fallback)');
+    }
+  } catch (error) {
+    console.warn('[WhatsApp version] Could not fetch latest version; using Baileys default', error?.message || error);
+  }
+  return cachedWaVersion;
+}
+
 function messageTimestampMs(value) {
   if (!value) return 0;
   const seconds = typeof value === 'number' ? value : Number(value?.low ?? value?.toString?.() ?? 0);
@@ -472,7 +501,9 @@ async function connectWhatsApp() {
       activeSocket = null;
     }
     const { state, saveCreds } = await getEffectiveAuthState();
+    const waVersion = await resolveWaVersion();
     const sock = makeWASocket({
+      ...(waVersion ? { version: waVersion } : {}),
       auth: state,
       emitOwnEvents: true,
       markOnlineOnConnect: true,
@@ -489,7 +520,7 @@ async function connectWhatsApp() {
       try {
         if (update.qr) { console.log('[WhatsApp QR] Fresh QR generated for authenticated dashboard'); await sendWhatsAppEvent('QR_READY', { qr: update.qr }).catch(() => {}); }
         if (update.connection === 'open') {
-          connectionOpenedAtMs = Date.now(); reconnectAttempt = 0; explicitStopRequested = false;
+          connectionOpenedAtMs = Date.now(); reconnectAttempt = 0; explicitStopRequested = false; lastDisconnectCode = null;
           const connectedNumber = String(sock.user?.id || '').split(':')[0].split('@')[0];
           await saveCreds();
           if (!userId) {
@@ -498,15 +529,21 @@ async function connectWhatsApp() {
           }
           await sendWhatsAppEvent('CONNECTED', { connectedNumber }).catch(() => {});
           await sendHeartbeat('ONLINE', { whatsappConnected: true }).catch(() => {});
-          console.log('[MENTRA Brain Worker] WhatsApp CONNECTED; owner self-chat only');
+          console.log('[MENTRA Brain Worker] WhatsApp CONNECTED;', selfOnly ? 'owner self-chat only' : `self-chat + ${allowedNumbers.length} allowed number(s)`);
         }
         if (update.connection === 'close') {
           const statusCode = update.lastDisconnect?.error?.output?.statusCode;
+          lastDisconnectCode = statusCode || 'unknown';
+          console.warn('[WhatsApp] Socket closed', JSON.stringify({ statusCode: lastDisconnectCode, message: update.lastDisconnect?.error?.message || null }));
           const loggedOut = statusCode === DisconnectReason.loggedOut;
           const stopRequested = explicitStopRequested;
           explicitStopRequested = false;
           if (activeSocket === sock) activeSocket = null;
           if (shuttingDown) return;
+          if (statusCode === DisconnectReason.badSession || statusCode === 405) {
+            // Stale or rejected client version: refresh it on the next connect.
+            cachedWaVersion = null;
+          }
           if (loggedOut) {
             const authDir = process.env.WHATSAPP_AUTH_DIR || './data/whatsapp-auth';
             try { if (fs.existsSync(authDir)) fs.rmSync(authDir, { recursive: true, force: true }); } catch {}
@@ -515,6 +552,11 @@ async function connectWhatsApp() {
             await sendWhatsAppEvent('WAITING_QR', { error: update.lastDisconnect?.error?.message || 'WhatsApp session requires re-linking' }).catch(() => {});
             await sendHeartbeat('ONLINE', { whatsappConnected: false }).catch(() => {});
             scheduleReconnect(2_000); return;
+          }
+          if (statusCode === DisconnectReason.restartRequired) {
+            // Normal right after QR scan: reconnect immediately with saved creds.
+            scheduleReconnect(250);
+            return;
           }
           await sendWhatsAppEvent('ERROR', { error: update.lastDisconnect?.error?.message || `Socket closed (${statusCode || 'unknown'})` }).catch(() => {});
           await sendHeartbeat('ONLINE', { whatsappConnected: false }).catch(() => {});
@@ -528,7 +570,7 @@ async function connectWhatsApp() {
       for (const message of messages || []) {
         try {
           const msgTimestamp = messageTimestampMs(message.messageTimestamp);
-          if (msgTimestamp && Date.now() - msgTimestamp > 120_000) continue;
+          if (msgTimestamp && Date.now() - msgTimestamp > maxMessageAgeMs) continue;
           messageQueue = messageQueue.then(() => handleIncoming(sock, message)).catch(error => console.error('[WhatsApp inbound]', error));
           await messageQueue;
         } catch (error) { console.error('[WhatsApp inbound]', error); }
@@ -539,10 +581,10 @@ async function connectWhatsApp() {
       for (const message of historyMessages) {
         try {
           const msgTimestamp = messageTimestampMs(message?.messageTimestamp);
-          if (!msgTimestamp || msgTimestamp < connectionOpenedAtMs - 2_000) continue;
-          if (Date.now() - msgTimestamp > 120_000) continue;
+          if (!msgTimestamp) continue;
+          if (Date.now() - msgTimestamp > maxMessageAgeMs) continue;
           if (!message?.key?.remoteJid || !extractText(message.message).trim()) continue;
-          if (!isAllowedChat(sock, message, { allowSelfChat, allowedNumbers })) continue;
+          if (!isAllowedChat(sock, message, { allowSelfChat, allowedNumbers, selfOnly })) continue;
           messageQueue = messageQueue.then(() => handleIncoming(sock, message)).catch(error => console.error('[WhatsApp inbound history]', error));
           await messageQueue;
         } catch (error) { console.error('[WhatsApp inbound history]', error); }
@@ -587,6 +629,18 @@ async function triggerScheduler() {
   }
 }
 
+function startKeepAlive() {
+  if (!keepAliveUrl) {
+    console.warn('[Keep-alive] RENDER_EXTERNAL_URL/KEEPALIVE_URL not set; free instance may idle out');
+    return;
+  }
+  console.log(`[Keep-alive] Pinging ${keepAliveUrl}/health every ${Math.round(keepAliveInterval / 60_000)} min`);
+  setInterval(() => {
+    fetch(`${keepAliveUrl}/health`, { signal: AbortSignal.timeout(15_000) })
+      .catch(error => console.warn('[Keep-alive]', error?.message || error));
+  }, keepAliveInterval).unref();
+}
+
 function startHealthServer() {
   const server = createServer((req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -612,8 +666,15 @@ function startHealthServer() {
           backendError: backendError || null,
           whatsappConnected: Boolean(activeSocket?.user),
           selfChat: allowSelfChat,
+          selfOnly,
+          allowedNumbersCount: allowedNumbers.length,
           workerId,
-          whatsappMode: 'QR_SELF_ONLY',
+          whatsappMode: selfOnly ? 'QR_SELF_ONLY' : 'QR_SELF_PLUS_ALLOWED',
+          waVersion: cachedWaVersion ? cachedWaVersion.join('.') : null,
+          lastDisconnectCode,
+          aiFallbackConfigured: Boolean(geminiApiKey),
+          supabaseFallbackConfigured: Boolean(supabaseUrl && supabaseKey),
+          keepAlive: Boolean(keepAliveUrl),
           lastInboundAt,
           lastOutboundAt,
           lastMessageError: lastMessageError || null,
@@ -648,6 +709,7 @@ async function startBackendLoop() {
 
 async function main() {
   startHealthServer();
+  startKeepAlive();
   try { assertConfig(); }
   catch (error) { configError = error instanceof Error ? error.message : String(error); console.error('[MENTRA Brain Worker] Configuration required:', configError); return; }
   sendHeartbeat('ONLINE', { workerId, whatsappConnected: false }).catch(() => {});
@@ -666,15 +728,27 @@ async function main() {
     try {
       const desired = await postInternal('/api/worker/whatsapp/pending', {}, 10_000);
       if (desired.status === 'DISCONNECTED') {
-        explicitStopRequested = true;
-        await clearRemoteAuth().catch(() => {});
-        if (activeSocket?.user) await activeSocket.logout();
-        else if (activeSocket) { try { activeSocket.end(new Error('Disconnected by control plane')); } catch {} activeSocket = null; }
+        // Only act if a live session still exists; avoids repeated auth wipes.
+        if (activeSocket?.user) {
+          explicitStopRequested = true;
+          await clearRemoteAuth().catch(() => {});
+          await activeSocket.logout();
+        } else if (activeSocket) {
+          try { activeSocket.end(new Error('Disconnected by control plane')); } catch {}
+          activeSocket = null;
+        }
         return;
       }
       if (desired.status === 'WAITING_QR') {
-        if (activeSocket?.user) { explicitStopRequested = false; await clearRemoteAuth().catch(() => {}); await activeSocket.logout(); }
-        else if (!activeSocket && !connectingWhatsApp) scheduleReconnect(250);
+        if (activeSocket?.user) {
+          // Already linked: the row is stale (CONNECTED event was lost).
+          // Heal the row instead of logging the live session out.
+          const connectedNumber = String(activeSocket.user.id || '').split(':')[0].split('@')[0];
+          console.log('[WhatsApp control] Stale WAITING_QR while connected; re-sending CONNECTED');
+          await sendWhatsAppEvent('CONNECTED', { connectedNumber }).catch(() => {});
+        } else if (!activeSocket && !connectingWhatsApp) {
+          scheduleReconnect(250);
+        }
       }
     } catch (error) { console.warn('[WhatsApp control]', error?.message || error); }
     finally { checkingControl = false; }
