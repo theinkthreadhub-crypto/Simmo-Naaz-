@@ -55,6 +55,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <OnboardingSequence />;
   }
 
+  // The money tracker is a standalone, phone-first app screen without the 3D HQ.
+  if (pathname === '/money' || pathname.startsWith('/money/')) {
+    return <>{children}</>;
+  }
+
   const isRoom = pathname === '/hq';
 
   return (
