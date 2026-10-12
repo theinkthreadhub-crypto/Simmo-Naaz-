@@ -9,7 +9,7 @@ export interface PieSlice {
   value: number;
 }
 
-// Validated categorical slots (dark surface #0b1220) + neutral for the "Baaki" fold.
+// Validated categorical slots (dark surface #0b1220) + neutral for the "more" fold.
 const SLICE_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181'];
 const REST_COLOR = '#6b7280';
 const MAX_SLICES = 5;
@@ -38,7 +38,7 @@ export default function MoneyPie({ slices, title }: { slices: PieSlice[]; title:
     if (rest.length) {
       head.push({
         key: '__rest',
-        label: `Baaki ${rest.length} category`,
+        label: `${rest.length} more ${rest.length === 1 ? 'category' : 'categories'}`,
         emoji: '🧩',
         value: rest.reduce((a, s) => a + s.value, 0),
         color: REST_COLOR,
@@ -52,7 +52,7 @@ export default function MoneyPie({ slices, title }: { slices: PieSlice[]; title:
   if (total <= 0) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center text-sm text-white/60">
-        Is mahine abhi koi entry nahi hai.
+        No entries this month yet.
       </div>
     );
   }

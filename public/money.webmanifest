@@ -1,7 +1,7 @@
 {
-  "name": "Paisa Tracker – Mentra",
-  "short_name": "Paisa",
-  "description": "Amount daalo, AI khud category chunega. Pie chart se dekho paisa kahan gaya.",
+  "name": "Money Tracker – Mentra",
+  "short_name": "Money",
+  "description": "Enter an amount and AI picks the category. See where your money went in a pie chart.",
   "start_url": "/money",
   "scope": "/money",
   "display": "standalone",

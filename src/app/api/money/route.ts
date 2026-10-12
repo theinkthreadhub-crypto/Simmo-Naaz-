@@ -63,18 +63,18 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/money  { text: "500 petrol dala", amount?: 500 }  → AI picks type + category and saves
+// POST /api/money  { text: "500 petrol", amount?: 500 }  → AI picks type + category and saves
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
     const body = addSchema.safeParse(await request.json().catch(() => ({})));
     if (!body.success) {
-      return NextResponse.json({ error: 'Amount aur detail dono likho, jaise "500 petrol".' }, { status: 400 });
+      return NextResponse.json({ error: 'Enter an amount and what it was for, e.g. "500 petrol".' }, { status: 400 });
     }
 
     const parsed = await parseMoneyEntry(body.data.text, body.data.amount);
     if (!parsed) {
-      return NextResponse.json({ error: 'Amount samajh nahi aaya. Number likho, jaise "250 chai".' }, { status: 400 });
+      return NextResponse.json({ error: 'Could not read the amount. Include a number, e.g. "250 tea".' }, { status: 400 });
     }
 
     const supabase = createClient();

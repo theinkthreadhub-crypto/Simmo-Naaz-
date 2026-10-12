@@ -82,7 +82,7 @@ function buildPrompt(text: string, amountOverride?: number): string {
   return [
     'You are a money-tracking assistant for an Indian user who writes in Hindi, Hinglish or English.',
     'Read the entry and return ONLY a JSON object, no markdown, with keys:',
-    '{"amount": number (rupees, positive), "type": "EXPENSE"|"INCOME", "category": one key from the list, "description": short clean title in the user\'s language (max 6 words), "scope": "PERSONAL"|"BUSINESS"}',
+    '{"amount": number (rupees, positive), "type": "EXPENSE"|"INCOME", "category": one key from the list, "description": short clean title in English (max 6 words), "scope": "PERSONAL"|"BUSINESS"}',
     'Rules: money paid, spent, given or lent is EXPENSE. Money received, earned, salary or returned to the user is INCOME.',
     '"k" means thousand (2k = 2000). Pick the closest category; use OTHER / OTHER_INCOME only when nothing fits.',
     amountOverride ? `The user already typed the amount separately: ${amountOverride}. Use exactly this amount.` : '',

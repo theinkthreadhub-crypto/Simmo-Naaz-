@@ -16,7 +16,7 @@ interface Entry {
 }
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
-const EXAMPLES = ['250 chai nashta', '500 petrol', 'Ramesh ko 2000 udhaar', 'salary 30000 aayi', '1200 bijli bill'];
+const EXAMPLES = ['250 breakfast', '500 petrol', 'lent 2000 to Ramesh', 'salary 30000 received', '1200 electricity bill'];
 
 function localDate(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -30,8 +30,8 @@ function dayLabel(iso: string) {
   const today = localDate();
   const y = new Date();
   y.setDate(y.getDate() - 1);
-  if (iso === today) return 'Aaj';
-  if (iso === localDate(y)) return 'Kal';
+  if (iso === today) return 'Today';
+  if (iso === localDate(y)) return 'Yesterday';
   return new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', weekday: 'short' });
 }
 
@@ -56,7 +56,7 @@ export default function MoneyPage() {
     try {
       const res = await fetch(`/api/money?month=${monthKey(month)}`, { cache: 'no-store' });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Load nahi hua');
+      if (!res.ok) throw new Error(json.error || 'Could not load entries');
       setEntries(json.entries);
     } catch (e) {
       setError((e as Error).message);
@@ -125,7 +125,7 @@ export default function MoneyPage() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Save nahi hua');
+      if (!res.ok) throw new Error(json.error || 'Could not save');
       setAmount('');
       setNote('');
       setToast({ entry: json.entry, by: json.parsedBy });
@@ -146,7 +146,7 @@ export default function MoneyPage() {
       body: JSON.stringify({ category: key }),
     });
     if (!res.ok) {
-      setError('Category change nahi hui');
+      setError('Could not change category');
       return;
     }
     setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, category: cat.key, type: cat.type } : e)));
@@ -155,10 +155,10 @@ export default function MoneyPage() {
   }
 
   async function remove(entry: Entry) {
-    if (!confirm(`"${entry.description}" ${inr(entry.amount)} delete karein?`)) return;
+    if (!confirm(`Delete "${entry.description}" (${inr(entry.amount)})?`)) return;
     const res = await fetch(`/api/money/${entry.id}`, { method: 'DELETE' });
     if (!res.ok) {
-      setError('Delete nahi hua');
+      setError('Could not delete');
       return;
     }
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
@@ -176,7 +176,7 @@ export default function MoneyPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex items-center gap-1">
-            <button onClick={() => shiftMonth(-1)} className="rounded-full p-2 hover:bg-white/10" aria-label="Pichhla mahina">
+            <button onClick={() => shiftMonth(-1)} className="rounded-full p-2 hover:bg-white/10" aria-label="Previous month">
               <ChevronLeft className="h-5 w-5" />
             </button>
             <span className="min-w-[120px] text-center text-sm font-semibold">
@@ -186,7 +186,7 @@ export default function MoneyPage() {
               onClick={() => shiftMonth(1)}
               disabled={isCurrentMonth}
               className="rounded-full p-2 hover:bg-white/10 disabled:opacity-30"
-              aria-label="Agla mahina"
+              aria-label="Next month"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -194,7 +194,7 @@ export default function MoneyPage() {
           <button
             onClick={() => setShowChart(true)}
             className="rounded-full p-2 text-white/80 hover:bg-white/10"
-            aria-label="Pie chart dekho"
+            aria-label="Show pie chart"
           >
             <PieChart className="h-5 w-5" />
           </button>
@@ -202,15 +202,15 @@ export default function MoneyPage() {
 
         {/* Totals */}
         <section className="mt-2 rounded-3xl bg-gradient-to-br from-[#16233d] to-[#0f1a2e] p-5 shadow-lg ring-1 ring-white/10">
-          <div className="text-xs uppercase tracking-wider text-white/55">Kul kharcha</div>
+          <div className="text-xs uppercase tracking-wider text-white/55">Total spent</div>
           <div className="mt-1 text-4xl font-bold tabular-nums">{inr(totals.spent)}</div>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-2xl bg-white/5 px-3 py-2">
-              <div className="text-xs text-white/55">Aamdani</div>
+              <div className="text-xs text-white/55">Income</div>
               <div className="font-semibold tabular-nums text-emerald-300">{inr(totals.earned)}</div>
             </div>
             <div className="rounded-2xl bg-white/5 px-3 py-2">
-              <div className="text-xs text-white/55">Bacha</div>
+              <div className="text-xs text-white/55">Balance</div>
               <div className={`font-semibold tabular-nums ${totals.left < 0 ? 'text-rose-300' : 'text-white'}`}>
                 {totals.left < 0 ? '−' : ''}
                 {inr(Math.abs(totals.left))}
@@ -221,14 +221,14 @@ export default function MoneyPage() {
             onClick={() => setShowChart(true)}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white/10 py-2.5 text-sm font-medium hover:bg-white/15"
           >
-            <PieChart className="h-4 w-4" /> Pie chart dekho
+            <PieChart className="h-4 w-4" /> Show pie chart
           </button>
         </section>
 
         {/* Add entry */}
         <form onSubmit={submit} className="mt-5 rounded-3xl bg-white/[0.04] p-4 ring-1 ring-white/10">
           <div className="flex items-center gap-2 text-xs font-medium text-white/60">
-            <Sparkles className="h-4 w-4 text-amber-300" /> Amount aur jagah likho, AI khud category chunega
+            <Sparkles className="h-4 w-4 text-amber-300" /> Enter amount and what it was for. AI picks the category
           </div>
           <div className="mt-3 flex gap-2">
             <div className="flex w-32 items-center rounded-2xl bg-black/30 px-3 ring-1 ring-white/10 focus-within:ring-amber-300/60">
@@ -245,9 +245,9 @@ export default function MoneyPage() {
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="kahan diya? (petrol, chai…)"
+              placeholder="What for? (petrol, tea…)"
               className="min-w-0 flex-1 rounded-2xl bg-black/30 px-3 py-3 outline-none ring-1 ring-white/10 placeholder:text-white/30 focus:ring-amber-300/60"
-              aria-label="Kahan diya"
+              aria-label="What for"
               maxLength={300}
             />
           </div>
@@ -257,7 +257,7 @@ export default function MoneyPage() {
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 py-3 font-semibold text-black transition hover:bg-amber-300 disabled:opacity-40"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {saving ? 'AI soch raha hai…' : 'Add karo'}
+            {saving ? 'AI is categorising…' : 'Add'}
           </button>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1 text-xs">
             {EXAMPLES.map((ex) => (
@@ -287,7 +287,7 @@ export default function MoneyPage() {
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : entries.length === 0 ? (
-            <p className="py-10 text-center text-sm text-white/50">Koi entry nahi. Upar amount daal ke shuru karo.</p>
+            <p className="py-10 text-center text-sm text-white/50">No entries yet. Add an amount above to start.</p>
           ) : (
             grouped.map(([date, list]) => (
               <div key={date} className="mb-4">
@@ -339,17 +339,17 @@ export default function MoneyPage() {
           <span className="flex-1">
             {inr(toast.entry.amount)} →{' '}
             <b>{getMoneyCategory(toast.entry.category, toast.entry.type).label}</b>
-            <span className="block text-xs text-white/50">{toast.by === 'ai' ? 'AI ne category chuni' : 'Auto category'}</span>
+            <span className="block text-xs text-white/50">{toast.by === 'ai' ? 'Category picked by AI' : 'Auto category'}</span>
           </span>
           <button onClick={() => setEditing(toast.entry)} className="rounded-full bg-white/10 px-3 py-1 text-xs">
-            Badlo
+            Change
           </button>
         </div>
       )}
 
       {/* Chart sheet */}
       {showChart && (
-        <Sheet onClose={() => setShowChart(false)} title="Kahan gaya paisa">
+        <Sheet onClose={() => setShowChart(false)} title="Where the money went">
           <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-white/5 p-1 text-sm">
             {(['EXPENSE', 'INCOME'] as MoneyType[]).map((t) => (
               <button
@@ -357,13 +357,13 @@ export default function MoneyPage() {
                 onClick={() => setChartType(t)}
                 className={`rounded-xl py-2 font-medium ${chartType === t ? 'bg-white/15 text-white' : 'text-white/55'}`}
               >
-                {t === 'EXPENSE' ? 'Kharcha' : 'Aamdani'}
+                {t === 'EXPENSE' ? 'Spent' : 'Income'}
               </button>
             ))}
           </div>
           <MoneyPie
             slices={slices}
-            title={`${chartType === 'EXPENSE' ? 'Kharcha' : 'Aamdani'} · ${month.toLocaleDateString('en-IN', { month: 'short' })}`}
+            title={`${chartType === 'EXPENSE' ? 'Spent' : 'Income'} · ${month.toLocaleDateString('en-IN', { month: 'short' })}`}
           />
         </Sheet>
       )}
@@ -371,7 +371,7 @@ export default function MoneyPage() {
       {/* Edit sheet */}
       {editing && (
         <Sheet onClose={() => setEditing(null)} title={`${editing.description} · ${inr(editing.amount)}`}>
-          <p className="mb-3 text-xs text-white/55">Category galat hai? Sahi wali chuno:</p>
+          <p className="mb-3 text-xs text-white/55">Wrong category? Pick the right one:</p>
           <div className="grid grid-cols-2 gap-2">
             {MONEY_CATEGORIES.map((c) => {
               const current = getMoneyCategory(editing.category, editing.type).key === c.key;
@@ -411,7 +411,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="truncate text-base font-semibold">{title}</h2>
-          <button onClick={onClose} className="rounded-full p-1.5 hover:bg-white/10" aria-label="Band karo">
+          <button onClick={onClose} className="rounded-full p-1.5 hover:bg-white/10" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>

@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Paisa Tracker — MENTRA',
-  description: 'Amount daalo, AI khud category chunega. Pie chart se dekho paisa kahan gaya.',
+  title: 'Money Tracker — MENTRA',
+  description: 'Enter an amount and AI picks the category. See where your money went in a pie chart.',
   manifest: '/money.webmanifest',
-  appleWebApp: { capable: true, title: 'Paisa', statusBarStyle: 'black-translucent' },
+  appleWebApp: { capable: true, title: 'Money', statusBarStyle: 'black-translucent' },
   icons: { icon: '/money-icon-192.png', apple: '/money-icon-192.png' },
 };
 
