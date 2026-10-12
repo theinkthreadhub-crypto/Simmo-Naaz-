@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import AuthScreen from '@/components/auth/AuthScreen';
 import OnboardingSequence from '@/components/onboarding/OnboardingSequence';
 import ConfigurationRequired from '@/components/system/ConfigurationRequired';
+import MoneyLogin from '@/components/money/MoneyLogin';
 import { getPublicRuntimeConfig } from '@/lib/config/publicRuntime';
 
 const MentraHQScene = dynamic(() => import('@/components/hq/MentraHQScene'), {
@@ -20,6 +21,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, onboardingCompleted, isLoading } = useAuth();
   const pathname = usePathname();
   const runtimeConfig = getPublicRuntimeConfig();
+  // Only the first session check should blank the money app; sign-in attempts
+  // also toggle isLoading and must keep the login form (and its error) mounted.
+  const [authResolved, setAuthResolved] = React.useState(false);
+  React.useEffect(() => {
+    if (!isLoading) setAuthResolved(true);
+  }, [isLoading]);
 
   if (process.env.NODE_ENV === 'production' && !runtimeConfig.supabaseReady) {
     return <ConfigurationRequired missing={runtimeConfig.missing} />;
@@ -31,6 +38,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     pathname === '/auth/reset-password'
   ) {
     return <>{children}</>;
+  }
+
+  // The money tracker is a standalone, phone-first app: no 3D HQ, no onboarding,
+  // and a password-only login.
+  if (pathname === '/money' || pathname.startsWith('/money/')) {
+    if (!authResolved) return <div className="min-h-[100dvh] bg-[#0b1220]" />;
+    return isAuthenticated ? <>{children}</> : <MoneyLogin />;
   }
 
   if (isLoading) {
@@ -53,11 +67,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!onboardingCompleted) {
     return <OnboardingSequence />;
-  }
-
-  // The money tracker is a standalone, phone-first app screen without the 3D HQ.
-  if (pathname === '/money' || pathname.startsWith('/money/')) {
-    return <>{children}</>;
   }
 
   const isRoom = pathname === '/hq';
